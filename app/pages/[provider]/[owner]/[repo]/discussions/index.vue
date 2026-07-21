@@ -10,6 +10,23 @@ const items = ref<ForgeDiscussion[]>([])
 const loading = ref(false)
 const error = ref<string | null>(null)
 const needsToken = ref(false)
+const q = ref('')
+const answerFilter = ref<'all' | 'answered' | 'unanswered'>('all')
+
+const filtered = computed(() => {
+  let list = items.value
+  if (answerFilter.value === 'answered') list = list.filter(d => d.answered)
+  else if (answerFilter.value === 'unanswered') list = list.filter(d => !d.answered)
+  const term = q.value.trim().toLowerCase()
+  if (term) {
+    list = list.filter(d =>
+      d.title.toLowerCase().includes(term)
+      || (d.category ? d.category.toLowerCase().includes(term) : false)
+      || (d.author ? userLabel(d.author).toLowerCase().includes(term) : false)
+    )
+  }
+  return list
+})
 
 async function load(): Promise<void> {
   if (!forge.value?.listDiscussions) return
@@ -34,6 +51,40 @@ onMounted(load)
 
 <template>
   <div class="space-y-4">
+    <ListToolbar
+      v-if="items.length"
+      v-model:search="q"
+      :count="filtered.length"
+      placeholder="Filter discussions…"
+    >
+      <template #filters>
+        <UButton
+          :color="answerFilter === 'all' ? 'primary' : 'neutral'"
+          :variant="answerFilter === 'all' ? 'soft' : 'ghost'"
+          icon="i-lucide-messages-square"
+          size="sm"
+          label="All"
+          @click="answerFilter = 'all'"
+        />
+        <UButton
+          :color="answerFilter === 'answered' ? 'primary' : 'neutral'"
+          :variant="answerFilter === 'answered' ? 'soft' : 'ghost'"
+          icon="i-lucide-check-circle"
+          size="sm"
+          label="Answered"
+          @click="answerFilter = 'answered'"
+        />
+        <UButton
+          :color="answerFilter === 'unanswered' ? 'primary' : 'neutral'"
+          :variant="answerFilter === 'unanswered' ? 'soft' : 'ghost'"
+          icon="i-lucide-circle-dashed"
+          size="sm"
+          label="Unanswered"
+          @click="answerFilter = 'unanswered'"
+        />
+      </template>
+    </ListToolbar>
+
     <div v-if="loading" class="space-y-2">
       <USkeleton v-for="i in 5" :key="i" class="h-14 w-full" />
     </div>
@@ -48,7 +99,7 @@ onMounted(load)
     >
       <template #actions>
         <UButton
-          to="/settings"
+          to="/settings/tokens"
           size="xs"
           color="neutral"
           variant="soft"
@@ -73,8 +124,15 @@ onMounted(load)
       </p>
     </div>
 
+    <div v-else-if="!filtered.length" class="rounded-lg border border-dashed border-default py-16 text-center">
+      <UIcon name="i-lucide-search-x" class="mx-auto size-8 text-muted" />
+      <p class="mt-3 text-sm text-muted">
+        No discussions match your filter.
+      </p>
+    </div>
+
     <ul v-else class="divide-y divide-default overflow-hidden rounded-lg border border-default">
-      <li v-for="d in items" :key="d.id">
+      <li v-for="d in filtered" :key="d.id">
         <NuxtLink
           :to="`${base}/discussions/${encodeURIComponent(d.id)}`"
           class="flex items-start gap-3 px-4 py-3 transition hover:bg-elevated/40"

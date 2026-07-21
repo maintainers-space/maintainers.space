@@ -9,6 +9,17 @@ const state = ref<ForgeIssueState>('open')
 const items = ref<ForgeIssue[]>([])
 const loading = ref(false)
 const error = ref<string | null>(null)
+const q = ref('')
+
+const filtered = computed(() => {
+  const term = q.value.trim().toLowerCase()
+  if (!term) return items.value
+  return items.value.filter(it =>
+    it.title.toLowerCase().includes(term)
+    || String(it.number ?? '').includes(term)
+    || (it.author ? userLabel(it.author).toLowerCase().includes(term) : false)
+  )
+})
 
 async function load(): Promise<void> {
   if (!forge.value?.listIssues) return
@@ -34,24 +45,26 @@ function itemLink(it: ForgeIssue): string {
 
 <template>
   <div class="space-y-4">
-    <div class="flex items-center gap-1">
-      <UButton
-        :color="state === 'open' ? 'primary' : 'neutral'"
-        :variant="state === 'open' ? 'soft' : 'ghost'"
-        icon="i-lucide-circle-dot"
-        size="sm"
-        label="Open"
-        @click="state = 'open'"
-      />
-      <UButton
-        :color="state === 'closed' ? 'primary' : 'neutral'"
-        :variant="state === 'closed' ? 'soft' : 'ghost'"
-        icon="i-lucide-check-circle"
-        size="sm"
-        label="Closed"
-        @click="state = 'closed'"
-      />
-    </div>
+    <ListToolbar v-model:search="q" :count="filtered.length" placeholder="Filter issues…">
+      <template #filters>
+        <UButton
+          :color="state === 'open' ? 'primary' : 'neutral'"
+          :variant="state === 'open' ? 'soft' : 'ghost'"
+          icon="i-lucide-circle-dot"
+          size="sm"
+          label="Open"
+          @click="state = 'open'"
+        />
+        <UButton
+          :color="state === 'closed' ? 'primary' : 'neutral'"
+          :variant="state === 'closed' ? 'soft' : 'ghost'"
+          icon="i-lucide-check-circle"
+          size="sm"
+          label="Closed"
+          @click="state = 'closed'"
+        />
+      </template>
+    </ListToolbar>
 
     <div v-if="loading" class="space-y-2">
       <USkeleton v-for="i in 5" :key="i" class="h-14 w-full" />
@@ -66,15 +79,15 @@ function itemLink(it: ForgeIssue): string {
       :description="error"
     />
 
-    <div v-else-if="!items.length" class="rounded-lg border border-dashed border-default py-16 text-center">
+    <div v-else-if="!filtered.length" class="rounded-lg border border-dashed border-default py-16 text-center">
       <UIcon name="i-lucide-circle-check" class="mx-auto size-8 text-muted" />
       <p class="mt-3 text-sm text-muted">
-        No {{ state }} issues.
+        {{ q ? 'No issues match your filter.' : `No ${state} issues.` }}
       </p>
     </div>
 
     <ul v-else class="divide-y divide-default overflow-hidden rounded-lg border border-default">
-      <li v-for="it in items" :key="it.id">
+      <li v-for="it in filtered" :key="it.id">
         <NuxtLink :to="itemLink(it)" class="flex items-start gap-3 px-4 py-3 transition hover:bg-elevated/40">
           <UIcon
             :name="it.state === 'open' ? 'i-lucide-circle-dot' : 'i-lucide-check-circle'"
