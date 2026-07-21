@@ -22,6 +22,7 @@ const nav = computed<NavigationMenuItem[]>(() => {
 })
 
 const external: NavigationMenuItem[] = [
+  { label: 'GitHub', icon: 'i-simple-icons-github', to: 'https://github.com', target: '_blank' },
   { label: 'AT Protocol', icon: 'i-lucide-at-sign', to: 'https://atproto.com', target: '_blank' },
   { label: 'Tangled', icon: 'i-lucide-git-branch', to: 'https://tangled.org', target: '_blank' }
 ]
@@ -67,7 +68,7 @@ const external: NavigationMenuItem[] = [
           tooltip
         />
 
-        <ExploreSidebar v-if="isAuthenticated && !collapsed" />
+        <ExploreSidebar v-if="!collapsed" />
 
         <UNavigationMenu
           :collapsed="collapsed"
