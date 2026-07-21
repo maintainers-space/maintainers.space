@@ -16,8 +16,22 @@ const forge = computed(() => getForge(props.repo.provider))
             <ForgeIcon :provider="repo.provider" class="size-3.5" />
             {{ forge?.label ?? repo.provider }}
           </UBadge>
-          <UBadge v-if="repo.isPrivate" color="neutral" variant="outline" size="sm" icon="i-lucide-lock" label="Private" />
-          <UBadge v-if="repo.isFork" color="neutral" variant="outline" size="sm" icon="i-lucide-git-fork" label="Fork" />
+          <UBadge
+            v-if="repo.isPrivate"
+            color="neutral"
+            variant="outline"
+            size="sm"
+            icon="i-lucide-lock"
+            label="Private"
+          />
+          <UBadge
+            v-if="repo.isFork"
+            color="neutral"
+            variant="outline"
+            size="sm"
+            icon="i-lucide-git-fork"
+            label="Fork"
+          />
         </div>
 
         <h1 class="flex items-center gap-1.5 text-xl font-semibold text-highlighted">

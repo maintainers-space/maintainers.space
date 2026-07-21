@@ -41,7 +41,7 @@ const _pending = ref(false)
 const _loaded = ref(false)
 
 export function useForgeAccounts() {
-  const { client, did } = useAuth()
+  const { runAuthed, did } = useAuth()
 
   async function refresh(): Promise<void> {
     if (!did.value) {
@@ -51,13 +51,12 @@ export function useForgeAccounts() {
     }
     _pending.value = true
     try {
-      const rpc = client()
-      const data = await ok(rpc.get('com.atproto.repo.listRecords', {
+      const data = await runAuthed(rpc => ok(rpc.get('com.atproto.repo.listRecords', {
         params: { repo: did.value as Did, collection: COLLECTION, limit: 100 }
-      }))
+      })))
       const records = (data.records ?? []) as unknown as Array<{ uri: string, value: ForgeAccountRecord }>
       _accounts.value = records
-        .map((r) => ({ uri: r.uri, rkey: rkeyFromUri(r.uri), ...r.value }))
+        .map(r => ({ uri: r.uri, rkey: rkeyFromUri(r.uri), ...r.value }))
         .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))
     } finally {
       _pending.value = false
@@ -81,27 +80,26 @@ export function useForgeAccounts() {
       createdAt: input.createdAt ?? new Date().toISOString()
     }
     for (const k of Object.keys(record) as Array<keyof ForgeAccountRecord>) {
+      // eslint-disable-next-line @typescript-eslint/no-dynamic-delete
       if (record[k] === undefined) delete record[k]
     }
-    const rpc = client()
-    await ok(rpc.post('com.atproto.repo.putRecord', {
+    await runAuthed(rpc => ok(rpc.post('com.atproto.repo.putRecord', {
       input: {
         repo: did.value as Did,
         collection: COLLECTION,
         rkey: makeRkey(input.provider, input.username, input.host),
         record: record as unknown as Record<string, unknown>
       }
-    }))
+    })))
     await refresh()
   }
 
   async function unlink(rkey: string): Promise<void> {
     if (!did.value) throw new Error('Not authenticated')
-    const rpc = client()
-    await rpc.post('com.atproto.repo.deleteRecord', {
+    await runAuthed(rpc => rpc.post('com.atproto.repo.deleteRecord', {
       input: { repo: did.value as Did, collection: COLLECTION, rkey },
       as: null
-    })
+    }))
     await refresh()
   }
 

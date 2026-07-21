@@ -36,3 +36,58 @@ export function formatRelativeTime(input?: string | number | Date | null): strin
   }
   return ''
 }
+
+export function formatDate(input?: string | number | Date | null): string {
+  if (!input) return ''
+  const date = new Date(input)
+  if (Number.isNaN(date.getTime())) return ''
+  return new Intl.DateTimeFormat('en', { dateStyle: 'medium' }).format(date)
+}
+
+/** Shorten a DID for display, e.g. did:plc:wshs7t2adsemcrrd4snkeqli → did:plc:wshs…keqli */
+export function shortDid(did?: string | null): string {
+  if (!did) return ''
+  if (!did.startsWith('did:')) return did
+  const rest = did.slice(did.indexOf(':', 4) + 1)
+  const prefix = did.slice(0, did.indexOf(':', 4) + 1)
+  if (rest.length <= 12) return did
+  return `${prefix}${rest.slice(0, 4)}…${rest.slice(-4)}`
+}
+
+/** Best display label for a forge user reference. */
+export function userLabel(user?: { login?: string, displayName?: string | null } | null): string {
+  if (!user) return ''
+  if (user.displayName) return user.displayName
+  const login = user.login ?? ''
+  return login.startsWith('did:') ? shortDid(login) : login
+}
+
+const seg = (s: string): string => encodeURIComponent(s)
+
+/** Encode a slash-delimited path, preserving separators. */
+export function encodePathSegments(path: string): string {
+  return path.split('/').filter(Boolean).map(encodeURIComponent).join('/')
+}
+
+/** Canonical in-app path for a repository. */
+export function repoPath(loc: { provider: string, owner: string, name: string }, sub = ''): string {
+  const base = `/${loc.provider}/${seg(loc.owner)}/${seg(loc.name)}`
+  return sub ? `${base}/${sub.replace(/^\//, '')}` : base
+}
+
+/** Canonical in-app path for a user/org profile. */
+export function userPath(user: { provider: string, login: string }): string {
+  return `/${user.provider}/${seg(user.login)}`
+}
+
+/** Canonical in-app path for an issue or pull request. */
+export function issuePath(issue: {
+  provider: string
+  id: string
+  isPull?: boolean
+  repo?: { owner: string, name: string } | null
+}): string {
+  if (!issue.repo) return '#'
+  const kind = issue.isPull ? 'pulls' : 'issues'
+  return `/${issue.provider}/${seg(issue.repo.owner)}/${seg(issue.repo.name)}/${kind}/${seg(issue.id)}`
+}
