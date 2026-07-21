@@ -6,15 +6,39 @@ export default defineNuxtConfig({
     '@vueuse/nuxt'
   ],
 
+  ssr: false,
+
+  devServer: {
+    host: '127.0.0.1',
+    port: 3000
+  },
+
   devtools: {
     enabled: true
   },
 
-  css: ['~/assets/css/main.css'],
+  css: [
+    '@fontsource-variable/geist/index.css',
+    '@fontsource-variable/geist-mono/index.css',
+    '~/assets/css/main.css'
+  ],
 
   routeRules: {
     '/api/**': {
       cors: true
+    }
+  },
+
+  // Self-hosted Geist via Fontsource — disable @nuxt/fonts remote fetching
+  ui: {
+    fonts: false
+  },
+
+  runtimeConfig: {
+    public: {
+      // OAuth client id for production; overridden per-env. Empty => localhost dev client.
+      atprotoClientId: '',
+      appUrl: ''
     }
   },
 

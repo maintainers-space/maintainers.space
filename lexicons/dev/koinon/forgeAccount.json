@@ -1,0 +1,56 @@
+{
+  "lexicon": 1,
+  "id": "dev.koinon.forgeAccount",
+  "defs": {
+    "main": {
+      "type": "record",
+      "description": "A verified or self-asserted link between the authenticated atproto identity and an external code-forge account (e.g. GitHub, GitLab, Gitea, Forgejo).",
+      "key": "any",
+      "record": {
+        "type": "object",
+        "required": ["provider", "username", "createdAt"],
+        "properties": {
+          "provider": {
+            "type": "string",
+            "description": "Forge provider identifier, e.g. 'github', 'gitlab', 'gitea', 'forgejo', 'tangled'.",
+            "maxLength": 64
+          },
+          "username": {
+            "type": "string",
+            "description": "Account username or handle on the forge.",
+            "maxLength": 128
+          },
+          "host": {
+            "type": "string",
+            "description": "Host for self-hosted instances (e.g. 'codeberg.org'). Omit for the provider's canonical host.",
+            "maxLength": 253
+          },
+          "displayName": {
+            "type": "string",
+            "description": "Human-friendly display name on the forge.",
+            "maxLength": 256
+          },
+          "avatarUrl": {
+            "type": "string",
+            "format": "uri",
+            "description": "URL of the account avatar image."
+          },
+          "profileUrl": {
+            "type": "string",
+            "format": "uri",
+            "description": "URL of the account's public profile page."
+          },
+          "verified": {
+            "type": "boolean",
+            "description": "Whether ownership of the forge account has been cryptographically or otherwise verified."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "datetime",
+            "description": "Timestamp the link was created."
+          }
+        }
+      }
+    }
+  }
+}
