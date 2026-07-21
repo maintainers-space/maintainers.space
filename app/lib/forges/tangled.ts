@@ -272,7 +272,8 @@ export const tangledProvider: ForgeProvider = {
     repoSearch: false,
     issueSearch: false,
     codeSearch: false,
-    userSearch: false
+    userSearch: false,
+    discussionSearch: false
   },
   webUrl: (owner, repo) => `https://tangled.org/${owner}/${repo}`,
   ownerWebUrl: owner => `https://tangled.org/${owner}`,

@@ -34,6 +34,7 @@ const syntax = [
   { q: '"exact phrase"', d: 'match a phrase' },
   { q: 'language:rust stars:>100', d: 'qualifiers' },
   { q: 'provider:github type:issues', d: 'scope providers & types' },
+  { q: 'provider:github type:discussions', d: 'scope to discussions' },
   { q: 'owner:tangled.org parser', d: 'search a Tangled owner' }
 ]
 </script>
@@ -54,7 +55,7 @@ const syntax = [
           v-model="input"
           size="xl"
           icon="i-lucide-search"
-          placeholder="Search repos, code, issues & people across every forge…"
+          placeholder="Search repos, code, issues, discussions & people across every forge…"
           autofocus
           class="w-full"
           :ui="{ trailing: 'pe-1' }"
@@ -149,6 +150,15 @@ const syntax = [
               :total="totals.issues"
             >
               <SearchResultIssue v-for="(it, i) in results.issues" :key="`${it.provider}:${it.id}:${i}`" :issue="it" />
+            </SearchGroup>
+
+            <SearchGroup
+              title="Discussions"
+              icon="i-lucide-messages-square"
+              :count="results.discussions.length"
+              :total="totals.discussions"
+            >
+              <SearchResultDiscussion v-for="(d, i) in results.discussions" :key="`${d.provider}:${d.id}:${i}`" :discussion="d" />
             </SearchGroup>
 
             <SearchGroup

@@ -312,7 +312,8 @@ export const githubProvider: ForgeProvider = {
     repoSearch: true,
     issueSearch: true,
     codeSearch: true,
-    userSearch: true
+    userSearch: true,
+    discussionSearch: true
   },
   webUrl: (owner, repo) => `https://github.com/${owner}/${repo}`,
   ownerWebUrl: owner => `https://github.com/${owner}`,
@@ -575,6 +576,30 @@ export const githubProvider: ForgeProvider = {
       provider: 'github', login: u.login, avatarUrl: u.avatar_url, url: u.html_url
     }))
     return { items, total: data.total_count, cursor: items.length === perPage ? String(page + 1) : undefined }
+  },
+
+  async searchDiscussions(q, opts): Promise<Paginated<ForgeDiscussion>> {
+    // Discussion search is GraphQL-only and requires authentication.
+    if (!opts?.token) return { items: [], incomplete: true }
+    const query = `query($q:String!,$first:Int!,$after:String){
+      search(type:DISCUSSION,query:$q,first:$first,after:$after){
+        discussionCount pageInfo{endCursor hasNextPage}
+        nodes{ ... on Discussion {
+          number title createdAt updatedAt url answerChosenAt
+          category{name} comments{totalCount} author{login avatarUrl url}
+          repository{ name nameWithOwner url owner{login} }
+        } }
+      }
+    }`
+    const res = await ghGraphql<any>(query, { q, first: opts?.limit ?? 20, after: opts?.cursor ?? null }, opts)
+    const conn = res?.search
+    const items = (conn?.nodes ?? []).filter(Boolean).map((d: any): ForgeDiscussion => {
+      const base = mapDiscussion(d)
+      const r = d.repository
+      if (r) base.repo = { provider: 'github', owner: r.owner?.login ?? '', name: r.name ?? '', fullName: r.nameWithOwner ?? '', url: r.url }
+      return base
+    })
+    return { items, total: conn?.discussionCount, cursor: conn?.pageInfo?.hasNextPage ? conn.pageInfo.endCursor : undefined }
   },
 
   async listNotifications(opts): Promise<ForgeNotification[]> {

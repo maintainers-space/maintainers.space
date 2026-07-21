@@ -2,13 +2,14 @@ import { getForge, isForgeId } from '~/lib/forges'
 import { parseQuery, type ParsedQuery, type ResultType } from '~/lib/search/parser'
 import { astToGitHubQuery } from '~/lib/search/adapters/github'
 import { astToTangledPlan, tangledMatches } from '~/lib/search/adapters/tangled'
-import type { ForgeId, ForgeIssue, ForgeRepo, ForgeSearchCode, ForgeSearchOptions, ForgeUser } from '~/types/forge'
+import type { ForgeId, ForgeDiscussion, ForgeIssue, ForgeRepo, ForgeSearchCode, ForgeSearchOptions, ForgeUser } from '~/types/forge'
 
 export interface SearchResults {
   repos: ForgeRepo[]
   issues: ForgeIssue[]
   code: ForgeSearchCode[]
   users: ForgeUser[]
+  discussions: ForgeDiscussion[]
 }
 
 const DEFAULT_PROVIDERS: ForgeId[] = ['github', 'tangled']
@@ -27,7 +28,7 @@ function sortOption(parsed: ParsedQuery): ForgeSearchOptions['sort'] {
 export function useSearch() {
   const { get: getToken } = useForgeTokens()
 
-  const results = reactive<SearchResults>({ repos: [], issues: [], code: [], users: [] })
+  const results = reactive<SearchResults>({ repos: [], issues: [], code: [], users: [], discussions: [] })
   const totals = ref<Partial<Record<ResultType, number>>>({})
   const loading = ref(false)
   const error = ref<string | null>(null)
@@ -43,6 +44,7 @@ export function useSearch() {
     results.issues = []
     results.code = []
     results.users = []
+    results.discussions = []
     totals.value = {}
     notes.value = []
     error.value = null
@@ -58,7 +60,9 @@ export function useSearch() {
     loading.value = true
 
     const providers = (q.providers.length ? q.providers : DEFAULT_PROVIDERS).filter(isForgeId)
-    const types = q.resultTypes.length ? q.resultTypes : DEFAULT_TYPES
+    const hasGithubToken = !!getToken('github')
+    const defaultTypes: ResultType[] = hasGithubToken ? [...DEFAULT_TYPES, 'discussions'] : DEFAULT_TYPES
+    const types = q.resultTypes.length ? q.resultTypes : defaultTypes
     activeProviders.value = providers
     activeTypes.value = types
     const limit = opts?.limit ?? 20
@@ -100,12 +104,23 @@ export function useSearch() {
           }).catch(() => { /* user search is best-effort */ }))
         }
         if (types.includes('code') && forge.searchCode) {
-          if (!base.token) noteSet.add('Add a GitHub token in Settings to enable code search.')
+          if (!base.token) noteSet.add('Add a GitHub token in Settings → Access tokens to enable code search.')
           else tasks.push(forge.searchCode(ghQuery, base).then((r) => {
             if (myToken !== runToken) return
             results.code.push(...r.items)
             if (r.total != null) totals.value = { ...totals.value, code: (totals.value.code ?? 0) + r.total }
           }).catch(() => { noteSet.add('GitHub code search failed.') }))
+        }
+        if (types.includes('discussions') && forge.searchDiscussions) {
+          if (!base.token) {
+            if (q.resultTypes.includes('discussions')) noteSet.add('Add a GitHub token in Settings → Access tokens to search Discussions.')
+          } else {
+            tasks.push(forge.searchDiscussions(ghQuery, base).then((r) => {
+              if (myToken !== runToken) return
+              results.discussions.push(...r.items)
+              if (r.total != null) totals.value = { ...totals.value, discussions: (totals.value.discussions ?? 0) + r.total }
+            }).catch(() => { noteSet.add('GitHub discussion search failed.') }))
+          }
         }
       }
 
@@ -147,7 +162,7 @@ export function useSearch() {
   }
 
   const isEmpty = computed(() =>
-    !loading.value && !results.repos.length && !results.issues.length && !results.code.length && !results.users.length
+    !loading.value && !results.repos.length && !results.issues.length && !results.code.length && !results.users.length && !results.discussions.length
   )
 
   return { results, totals, loading, error, notes, parsed, activeProviders, activeTypes, isEmpty, run }

@@ -243,6 +243,8 @@ export interface ForgeDiscussion {
   createdAt?: string | null
   url?: string | null
   answered?: boolean
+  /** Owning repo (populated in search results). */
+  repo?: { provider: ForgeId, owner: string, name: string, fullName: string, url?: string }
   ref?: Record<string, unknown>
 }
 
@@ -353,6 +355,7 @@ export interface ForgeCapabilities {
   issueSearch: boolean
   codeSearch: boolean
   userSearch: boolean
+  discussionSearch: boolean
 }
 
 export const NO_CAPABILITIES: ForgeCapabilities = {
@@ -364,7 +367,8 @@ export const NO_CAPABILITIES: ForgeCapabilities = {
   repoSearch: false,
   issueSearch: false,
   codeSearch: false,
-  userSearch: false
+  userSearch: false,
+  discussionSearch: false
 }
 
 export interface IssueListOptions extends ForgePageOptions {
@@ -428,6 +432,7 @@ export interface ForgeProvider {
   searchIssues?: (q: string, opts?: ForgeSearchOptions) => Promise<Paginated<ForgeIssue>>
   searchCode?: (q: string, opts?: ForgeSearchOptions) => Promise<Paginated<ForgeSearchCode>>
   searchUsers?: (q: string, opts?: ForgeSearchOptions) => Promise<Paginated<ForgeUser>>
+  searchDiscussions?: (q: string, opts?: ForgeSearchOptions) => Promise<Paginated<ForgeDiscussion>>
 
   // Notifications --------------------------------------------------------
   /** Authenticated notification inbox (requires a forge token). */
