@@ -70,11 +70,11 @@ const kindIcon: Record<ForgeNotificationKind, string> = {
             >
               <template #actions>
                 <UButton
-                  to="/settings"
+                  to="/settings/accounts"
                   size="xs"
                   color="neutral"
                   variant="link"
-                  label="Open settings"
+                  label="Manage accounts"
                 />
               </template>
             </UAlert>

@@ -24,6 +24,11 @@ export default defineNuxtConfig({
   },
 
   runtimeConfig: {
+    // GitHub OAuth (server-only). Set NUXT_GITHUB_CLIENT_ID / NUXT_GITHUB_CLIENT_SECRET.
+    github: {
+      clientId: '',
+      clientSecret: ''
+    },
     public: {
       // OAuth client id for production; overridden per-env. Empty => localhost dev client.
       atprotoClientId: '',
@@ -50,6 +55,21 @@ export default defineNuxtConfig({
         commaDangle: 'never',
         braceStyle: '1tbs'
       }
+    }
+  },
+
+  // Local icon collection (prefix "koinon") for brand marks Iconify doesn't
+  // ship — e.g. the official Tangled "dolly" logo at app/assets/icons/tangled.svg
+  // → usable anywhere as `i-koinon-tangled`.
+  icon: {
+    customCollections: [
+      { prefix: 'koinon', dir: './app/assets/icons' }
+    ],
+    // The Tangled mark is referenced dynamically (via forge.icon), so pin it
+    // into the client bundle — static scanning alone can't discover it.
+    clientBundle: {
+      icons: ['koinon:tangled'],
+      scan: true
     }
   }
 })

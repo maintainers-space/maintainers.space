@@ -102,7 +102,7 @@ onMounted(reload)
             Nothing to explore right now.
           </p>
           <p class="mx-auto mt-1 max-w-md text-xs text-muted">
-            GitHub throttles anonymous discovery to a few requests per minute. Add a personal access token in
+            GitHub throttles anonymous discovery to a few requests per minute. Connect your GitHub account in
             <NuxtLink to="/settings/accounts" class="text-primary hover:underline">settings</NuxtLink>
             to raise the limit, or try again in a moment.
           </p>

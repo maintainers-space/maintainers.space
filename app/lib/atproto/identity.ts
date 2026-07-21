@@ -10,6 +10,7 @@ import {
 import type { HandleResolver, ResolveHandleOptions } from '@atcute/identity-resolver'
 import type { ActorIdentifier } from '@atcute/lexicons'
 import type { AtprotoDid, Handle } from '@atcute/lexicons/syntax'
+import { proxiedFetch } from './proxied-fetch'
 
 /**
  * Public atproto AppView used purely as a *server-side* handle-resolution proxy
@@ -85,14 +86,14 @@ class FallbackHandleResolver implements HandleResolver {
  */
 export const identityResolver = new LocalActorResolver({
   handleResolver: new FallbackHandleResolver([
-    new XrpcHandleResolver({ serviceUrl: APPVIEW_URL }),
-    new DohJsonHandleResolver({ dohUrl: 'https://dns.google/resolve' }),
-    new WellKnownHandleResolver()
+    new XrpcHandleResolver({ serviceUrl: APPVIEW_URL, fetch: proxiedFetch }),
+    new DohJsonHandleResolver({ dohUrl: 'https://dns.google/resolve', fetch: proxiedFetch }),
+    new WellKnownHandleResolver({ fetch: proxiedFetch })
   ]),
   didDocumentResolver: new CompositeDidDocumentResolver({
     methods: {
-      plc: new PlcDidDocumentResolver(),
-      web: new WebDidDocumentResolver()
+      plc: new PlcDidDocumentResolver({ fetch: proxiedFetch }),
+      web: new WebDidDocumentResolver({ fetch: proxiedFetch })
     }
   })
 })

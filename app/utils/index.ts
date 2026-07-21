@@ -91,3 +91,11 @@ export function issuePath(issue: {
   const kind = issue.isPull ? 'pulls' : 'issues'
   return `/${issue.provider}/${seg(issue.repo.owner)}/${seg(issue.repo.name)}/${kind}/${seg(issue.id)}`
 }
+
+/** Lucide icon per pull-request state — shared by StateBadge and the pulls list. */
+export const PULL_STATE_ICON: Record<string, string> = {
+  open: 'i-lucide-git-pull-request',
+  closed: 'i-lucide-git-pull-request-closed',
+  merged: 'i-lucide-git-merge',
+  draft: 'i-lucide-git-pull-request-draft'
+}

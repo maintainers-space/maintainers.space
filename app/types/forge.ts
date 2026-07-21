@@ -6,6 +6,8 @@ export type ForgeId = 'github' | 'tangled' | (string & {})
 export interface ForgeReadOptions {
   /** Optional bearer token for authenticated forge APIs (e.g. GitHub PAT). */
   token?: string
+  /** Signed-in viewer identity (DID/handle) for forges that use atproto sessions instead of a token. */
+  viewer?: string
   signal?: AbortSignal
 }
 
@@ -437,4 +439,11 @@ export interface ForgeProvider {
   // Notifications --------------------------------------------------------
   /** Authenticated notification inbox (requires a forge token). */
   listNotifications?: (opts?: ForgePageOptions) => Promise<ForgeNotification[]>
+
+  // Social graph ---------------------------------------------------------
+  /**
+   * Repositories from the accounts (users/orgs) the authenticated viewer
+   * follows on this forge. Requires auth; returns [] when unavailable.
+   */
+  listFollowedRepos?: (opts?: ForgeReadOptions) => Promise<ForgeRepo[]>
 }

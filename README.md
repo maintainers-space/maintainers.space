@@ -1,64 +1,90 @@
-# Nuxt Dashboard Template
+# koinon
 
 [![Nuxt UI](https://img.shields.io/badge/Made%20with-Nuxt%20UI-00DC82?logo=nuxt&labelColor=020420)](https://ui.nuxt.com)
 
-Get started with the Nuxt dashboard template with multiple pages, collapsible sidebar, keyboard shortcuts, light & dark mode, command palette and more, powered by [Nuxt UI](https://ui.nuxt.com).
+**koinon** is a multi-forge dashboard that brings your work across Git hosts into one place. It aggregates repositories, issues, pull requests and notifications from **GitHub** and **[Tangled](https://tangled.org)**, using your **AT Protocol** (Bluesky) identity to sign in and to discover accounts across platforms.
 
-- [Live demo](https://dashboard-template.nuxt.dev/)
-- [Documentation](https://ui.nuxt.com/docs/getting-started/installation/nuxt)
+Built with [Nuxt](https://nuxt.com) and [Nuxt UI](https://ui.nuxt.com).
 
-<a href="https://dashboard-template.nuxt.dev/" target="_blank">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="https://ui.nuxt.com/assets/templates/nuxt/dashboard-dark.png">
-    <source media="(prefers-color-scheme: light)" srcset="https://ui.nuxt.com/assets/templates/nuxt/dashboard-light.png">
-    <img alt="Nuxt Dashboard Template" src="https://ui.nuxt.com/assets/templates/nuxt/dashboard-light.png">
-  </picture>
-</a>
+## Features
 
-> The dashboard template for Vue is on https://github.com/nuxt-ui-templates/dashboard-vue.
+- **AT Protocol sign-in** — log in with any atproto handle or DID (Bluesky, npmx, self-hosted PDS…). No passwords are ever shared with koinon.
+- **GitHub via OAuth** — link GitHub with a verified OAuth flow (no personal access tokens).
+- **Tangled support** — browse Tangled repos, issues and pulls through a same-origin proxy.
+- **Unified notifications** — GitHub and Tangled notifications mixed into one list, each tagged with its forge logo.
+- **Following** — see repos from the people and orgs you follow, on any platform.
+- **Public profiles** — shareable `/profile/<handle>` pages listing linked accounts, repos and activity.
+- **Personalized home** — a signed-in overview of PRs to jump back into, review requests and assigned issues, plus recent/favourite repos ranked by your visit history.
 
-## Quick Start
+## Architecture
 
-```bash [Terminal]
-npm create nuxt@latest -- -t ui/dashboard
-```
+koinon is a Nuxt SPA (`ssr: false`) **with a Nitro server**. The server side is required — it is not a purely static site. `server/api/**` provides:
 
-## Deploy your own
+- `GET /api/auth/github/{login,callback}` — GitHub OAuth (client secret stays server-side).
+- `ALL /api/tangled/**` — same-origin proxy for Tangled's XRPC aggregator (which sends no CORS headers).
+- `GET /api/atproto/proxy` — guarded relay for public atproto reads (see [Corporate networks](#corporate-networks)).
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-name=dashboard&repository-url=https%3A%2F%2Fgithub.com%2Fnuxt-ui-templates%2Fdashboard&demo-image=https%3A%2F%2Fui.nuxt.com%2Fassets%2Ftemplates%2Fnuxt%2Fdashboard-dark.png&demo-url=https%3A%2F%2Fdashboard-template.nuxt.dev%2F&demo-title=Nuxt%20Dashboard%20Template&demo-description=A%20dashboard%20template%20with%20multi-column%20layout%20for%20building%20sophisticated%20admin%20interfaces.)
+> **Deployment note:** because of these routes you must deploy the **Nitro server** output (`node .output/server/index.mjs` or a Node-capable host/preset). Do **not** deploy with `nuxt generate` / a static-only host — the API routes would be missing and GitHub/Tangled/proxy features would break.
 
 ## Setup
 
-Make sure to install the dependencies:
+Install dependencies:
 
 ```bash
 pnpm install
 ```
 
-## Development Server
+### Environment variables
 
-Start the development server on `http://localhost:3000`:
+GitHub linking requires a GitHub OAuth app. Create one at **GitHub → Settings → Developer settings → OAuth Apps** with:
+
+- **Authorization callback URL:** `<your-origin>/api/auth/github/callback`
+  (e.g. `http://127.0.0.1:3000/api/auth/github/callback` in development)
+
+Then set:
 
 ```bash
-pnpm dev
+NUXT_GITHUB_CLIENT_ID=your_client_id
+NUXT_GITHUB_CLIENT_SECRET=your_client_secret
 ```
+
+The requested scope is `read:user read:org notifications public_repo`. Without these variables the app still runs — GitHub linking is simply disabled.
+
+AT Protocol OAuth needs no secrets: in development it uses the loopback `http://localhost` client on `127.0.0.1`; in production the hosted `client-metadata.json` is the client id.
+
+## Development server
+
+> atproto OAuth rejects `localhost` redirect URIs, so the dev server binds to `127.0.0.1`.
+
+```bash
+NUXT_GITHUB_CLIENT_ID=... NUXT_GITHUB_CLIENT_SECRET=... pnpm dev
+```
+
+Open `http://127.0.0.1:3000`.
 
 ## Production
 
-Build the application for production:
-
 ```bash
 pnpm build
+node .output/server/index.mjs   # serve the Nitro server output
 ```
 
-Locally preview production build:
+Provide `NUXT_GITHUB_CLIENT_ID` / `NUXT_GITHUB_CLIENT_SECRET` in the server environment, and make sure your GitHub OAuth app's callback URL matches the deployed origin.
+
+## Corporate networks
+
+Some corporate proxies block every Bluesky-operated domain. koinon degrades gracefully:
+
+- **Public reads** (identity resolution, profiles, repos, follows) automatically retry through the same-origin relay at `/api/atproto/proxy`, so browsing keeps working even when `*.bsky.*` is blocked in the browser.
+- **Sign-in is the exception.** The AT Protocol OAuth flow redirects your browser directly to your account's provider (e.g. `bsky.social`) — a top-level navigation that cannot be proxied. If your network blocks that host, perform the initial sign-in on a different network, or ask IT to allow your PDS / auth server. The login screen shows a hint when this happens.
+
+## Quality checks
 
 ```bash
-pnpm preview
+pnpm lint       # ESLint
+pnpm typecheck  # nuxt typecheck (vue-tsc)
 ```
-
-Check out the [deployment documentation](https://nuxt.com/docs/getting-started/deployment) for more information.
 
 ## Renovate integration
 
-Install [Renovate GitHub app](https://github.com/apps/renovate/installations/select_target) on your repository and you are good to go.
+Install the [Renovate GitHub app](https://github.com/apps/renovate/installations/select_target) on your repository and you are good to go.

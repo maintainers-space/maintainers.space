@@ -423,6 +423,8 @@ export const githubProvider: ForgeProvider = {
     let items = data.map(mapPull)
     if (opts?.state === 'merged') items = items.filter(p => p.state === 'merged')
     if (opts?.state === 'draft') items = items.filter(p => p.state === 'draft')
+    // GitHub's `state=closed` bundles merged PRs in; "Closed" should mean closed-not-merged.
+    if (opts?.state === 'closed') items = items.filter(p => p.state === 'closed')
     return { items, cursor: data.length === limit ? String(page + 1) : undefined }
   },
 
@@ -645,6 +647,42 @@ export const githubProvider: ForgeProvider = {
         url: n.repository?.html_url
       }
     })
+  },
+
+  async listFollowedRepos(opts): Promise<ForgeRepo[]> {
+    const token = opts?.token ?? getForgeToken('github')
+    if (!token) return []
+    const headers = ghHeaders(opts)
+    const [following, orgs] = await Promise.all([
+      $fetch<any[]>(`${API}/user/following`, { headers, query: { per_page: 50 }, signal: opts?.signal }).catch(() => []),
+      $fetch<any[]>(`${API}/user/orgs`, { headers, query: { per_page: 50 }, signal: opts?.signal }).catch(() => [])
+    ])
+    const owners: { login: string, kind: 'users' | 'orgs' }[] = [
+      ...(orgs as any[]).map(o => ({ login: String(o.login), kind: 'orgs' as const })),
+      ...(following as any[]).map(u => ({ login: String(u.login), kind: 'users' as const }))
+    ]
+    // Pull a few recently-pushed repos from each followed account, bounded so
+    // the feed stays fast even for people who follow hundreds of accounts.
+    const perOwner = await Promise.all(owners.slice(0, 18).map(async (o) => {
+      try {
+        const data = await $fetch<any[]>(`${API}/${o.kind}/${o.login}/repos`, {
+          headers,
+          query: o.kind === 'users'
+            ? { per_page: 5, sort: 'pushed', type: 'owner' }
+            : { per_page: 5, sort: 'pushed', type: 'sources' },
+          signal: opts?.signal
+        })
+        return (data ?? []).map(mapRepo)
+      } catch {
+        return [] as ForgeRepo[]
+      }
+    }))
+    const seen = new Set<string>()
+    return perOwner
+      .flat()
+      .filter(r => !r.isFork && !r.isPrivate)
+      .filter(r => (seen.has(r.fullName) ? false : (seen.add(r.fullName), true)))
+      .sort((a, b) => String(b.updatedAt ?? '').localeCompare(String(a.updatedAt ?? '')))
   }
 }
 

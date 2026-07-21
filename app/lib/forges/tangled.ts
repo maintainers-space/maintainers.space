@@ -11,6 +11,7 @@ import type {
   ForgeFileDiff,
   ForgeIssue,
   ForgeIssueDetail,
+  ForgeNotification,
   ForgePull,
   ForgePullDetail,
   ForgePullState,
@@ -22,8 +23,10 @@ import type {
   ForgeUser
 } from '~/types/forge'
 
-// Bobbin: Tangled's read-only, CORS-friendly XRPC aggregator that accepts AT-URIs.
-const BOBBIN = 'https://api.tangled.org/xrpc'
+// Bobbin: Tangled's read-only XRPC aggregator (api.tangled.org) that accepts
+// AT-URIs. It sends no CORS headers, so we reach it through our same-origin
+// Nitro proxy (server/api/tangled/[...path].ts) instead of calling it directly.
+const BOBBIN = '/api/tangled'
 
 interface TangledRepoValue {
   $type?: string
@@ -75,7 +78,7 @@ function tangledUser(did: string): ForgeUser {
 }
 
 async function bobbin<T>(nsid: string, query: Record<string, unknown>, opts?: ForgeReadOptions): Promise<T> {
-  return await $fetch<T>(`${BOBBIN}/${nsid}`, { query, signal: opts?.signal })
+  return await $fetch(`${BOBBIN}/${nsid}`, { query, signal: opts?.signal }) as T
 }
 
 async function listRepoRecords(did: string, opts?: ForgeReadOptions): Promise<TangledListItem[]> {
@@ -258,7 +261,7 @@ function mapPipeline(p: TangledPipeline): ForgeActionRun {
 export const tangledProvider: ForgeProvider = {
   id: 'tangled',
   label: 'Tangled',
-  icon: 'i-lucide-git-branch',
+  icon: 'i-koinon-tangled',
   color: '#4f46e5',
   ownerLabel: 'Handle',
   ownerPlaceholder: 'e.g. tangled.org',
@@ -422,7 +425,10 @@ export const tangledProvider: ForgeProvider = {
     const query: Record<string, unknown> = { subject: resolved.repoDid, limit: opts?.limit ?? 50, cursor: opts?.cursor }
     if (opts?.state && opts.state !== 'all') query.status = opts.state
     const data = await bobbin<{ items?: any[], cursor?: string }>('sh.tangled.repo.listPulls', query, opts)
-    return { items: (data.items ?? []).map(mapTangledPull), cursor: data.cursor }
+    let items = (data.items ?? []).map(mapTangledPull)
+    // "Closed" means closed-not-merged; never surface merged PRs under it.
+    if (opts?.state === 'closed') items = items.filter(p => p.state === 'closed')
+    return { items, cursor: data.cursor }
   },
 
   async getPull(repo, id, opts): Promise<ForgePullDetail> {
@@ -507,6 +513,79 @@ export const tangledProvider: ForgeProvider = {
       { query: { pipeline: id }, signal: opts?.signal }
     )
     return mapPipeline(data)
+  },
+
+  // Tangled has no anonymous notification inbox (personal notifications live
+  // behind tangled.org's own auth). As a best-effort, surface recent issue and
+  // pull-request activity on the signed-in viewer's own repositories so Tangled
+  // still shows up in the unified inbox.
+  async listNotifications(opts): Promise<ForgeNotification[]> {
+    const viewer = opts?.viewer
+    if (!viewer) return []
+    let did: string
+    try {
+      did = await resolveHandleToDid(viewer)
+    } catch {
+      return []
+    }
+    const ownerHandle = viewer.startsWith('did:') ? did : viewer.trim().replace(/^@/, '')
+
+    let records: TangledListItem[]
+    try {
+      records = await listRepoRecords(did, opts)
+    } catch {
+      return []
+    }
+
+    const cutoff = Date.now() - 30 * 86_400_000
+    const perRepo = await Promise.all(records.slice(0, 10).map(async (rec): Promise<ForgeNotification[]> => {
+      const repoDid = rec.value?.repoDid
+      const name = rec.value?.name || rkeyFromUri(rec.uri)
+      if (!repoDid) return []
+      const [issues, pulls] = await Promise.all([
+        bobbin<{ items?: any[] }>('sh.tangled.repo.listIssues', { subject: repoDid, limit: 12 }, opts).catch(() => ({ items: [] as any[] })),
+        bobbin<{ items?: any[] }>('sh.tangled.repo.listPulls', { subject: repoDid, limit: 12 }, opts).catch(() => ({ items: [] as any[] }))
+      ])
+      const base = `/tangled/${ownerHandle}/${name}`
+      const repoRef = { owner: ownerHandle, name, fullName: `${ownerHandle}/${name}` }
+      const out: ForgeNotification[] = []
+      for (const it of issues.items ?? []) {
+        const m = mapTangledIssue(it)
+        const updated = m.updatedAt ?? m.createdAt
+        if (!updated || new Date(updated).getTime() < cutoff) continue
+        out.push({
+          provider: 'tangled',
+          id: `issue:${name}:${m.id}`,
+          kind: 'issue',
+          title: m.title,
+          reason: m.state === 'closed' ? 'closed issue' : 'issue',
+          unread: false,
+          updatedAt: updated,
+          repo: repoRef,
+          to: `${base}/issues/${m.id}`,
+          url: `https://tangled.org${base}/issues/${m.id}`
+        })
+      }
+      for (const it of pulls.items ?? []) {
+        const m = mapTangledPull(it)
+        const updated = m.updatedAt ?? m.createdAt
+        if (!updated || new Date(updated).getTime() < cutoff) continue
+        out.push({
+          provider: 'tangled',
+          id: `pull:${name}:${m.id}`,
+          kind: 'pull',
+          title: m.title,
+          reason: `${m.state} pull request`,
+          unread: false,
+          updatedAt: updated,
+          repo: repoRef,
+          to: `${base}/pulls/${m.id}`,
+          url: `https://tangled.org${base}/pulls/${m.id}`
+        })
+      }
+      return out
+    }))
+    return perRepo.flat()
   }
 }
 

@@ -94,16 +94,16 @@ onMounted(load)
       color="neutral"
       variant="subtle"
       icon="i-lucide-key-round"
-      title="Discussions need a token"
+      title="Discussions need a connected GitHub account"
       description="GitHub discussions are only available through the authenticated GraphQL API."
     >
       <template #actions>
         <UButton
-          to="/settings/tokens"
+          to="/settings/accounts"
           size="xs"
           color="neutral"
           variant="soft"
-          label="Add a token"
+          label="Connect GitHub"
         />
       </template>
     </UAlert>

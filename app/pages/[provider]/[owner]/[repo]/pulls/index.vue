@@ -43,9 +43,7 @@ function itemLink(it: ForgePull): string {
 }
 
 function icon(s: ForgePullState): string {
-  if (s === 'merged') return 'i-lucide-git-merge'
-  if (s === 'draft') return 'i-lucide-git-pull-request-draft'
-  return 'i-lucide-git-pull-request'
+  return PULL_STATE_ICON[s] ?? 'i-lucide-git-pull-request'
 }
 function color(s: ForgePullState): string {
   if (s === 'open') return 'text-success'

@@ -24,7 +24,16 @@ const MAP: Record<string, { color: string, icon: string, label: string }> = {
   unknown: { color: 'neutral', icon: 'i-lucide-circle-help', label: 'Unknown' }
 }
 
-const meta = computed(() => MAP[props.state] ?? { color: 'neutral', icon: 'i-lucide-circle', label: props.state })
+// Pull requests get their own dedicated icons so the state reads as a PR, not a
+// generic issue. PULL_STATE_ICON is shared (auto-imported from ~/utils) with the
+// pulls list so both always match.
+const meta = computed(() => {
+  const base = MAP[props.state] ?? { color: 'neutral', icon: 'i-lucide-circle', label: props.state }
+  if (props.kind === 'pull' && PULL_STATE_ICON[props.state]) {
+    return { ...base, icon: PULL_STATE_ICON[props.state]! }
+  }
+  return base
+})
 </script>
 
 <template>

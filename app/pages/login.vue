@@ -19,6 +19,7 @@ type Schema = z.output<typeof schema>
 
 const state = reactive<Partial<Schema>>({ handle: '' })
 const loading = ref(false)
+const networkHint = ref(false)
 
 const suggestions = ['bsky.social', 'npmx.social', 'tangled.org']
 
@@ -29,14 +30,18 @@ function useSuggestion(host: string): void {
 
 async function onSubmit(event: FormSubmitEvent<Schema>) {
   loading.value = true
+  networkHint.value = false
   try {
     await loginWithHandle(event.data.handle)
     // The browser is redirected to the identity provider on success.
   } catch (error) {
     loading.value = false
+    const message = error instanceof Error ? error.message : String(error)
+    // A blocked Bluesky auth server surfaces as a generic fetch/network failure.
+    networkHint.value = /fetch|network|load failed|timeout|failed to|blocked/i.test(message)
     toast.add({
       title: 'Sign-in failed',
-      description: error instanceof Error ? error.message : String(error),
+      description: message,
       color: 'error'
     })
   }
@@ -70,6 +75,15 @@ async function onSubmit(event: FormSubmitEvent<Schema>) {
         class="space-y-4"
         @submit="onSubmit"
       >
+        <UAlert
+          v-if="networkHint"
+          color="warning"
+          variant="soft"
+          icon="i-lucide-shield-alert"
+          title="Can't reach your provider"
+          description="Your network may be blocking Bluesky domains. Browsing works through koinon's built-in proxy, but the sign-in redirect must reach your account's provider directly — try a different network for the initial sign-in, or ask IT to allow your PDS (e.g. bsky.social)."
+          class="mb-1"
+        />
         <UFormField name="handle" label="Handle or DID">
           <UInput
             v-model="state.handle"

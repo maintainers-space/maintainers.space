@@ -7,6 +7,7 @@ const { profile, did, isAuthenticated, logout } = useAuth()
 const colorMode = useColorMode()
 
 const displayName = computed(() => profile.value?.displayName || profile.value?.handle || 'Account')
+const profileHandle = computed(() => profile.value?.handle || did.value || '')
 
 async function onSignOut() {
   await logout()
@@ -20,8 +21,9 @@ const items = computed<DropdownMenuItem[][]>(() => [
     avatar: profile.value?.avatar ? { src: profile.value.avatar } : { icon: 'i-lucide-user' }
   }],
   [
-    { label: 'Your profile', icon: 'i-lucide-user', to: '/settings' },
-    { label: 'Linked accounts', icon: 'i-lucide-link', to: '/settings/accounts' }
+    { label: 'Public profile', icon: 'i-lucide-user', to: profileHandle.value ? `/profile/${profileHandle.value}` : '/settings' },
+    { label: 'Linked accounts', icon: 'i-lucide-link', to: '/settings/accounts' },
+    { label: 'Settings', icon: 'i-lucide-settings', to: '/settings' }
   ],
   [{
     label: 'Appearance',

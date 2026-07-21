@@ -5,6 +5,7 @@
 // a best-effort call to the public Bluesky AppView and is never fatal.
 
 import { isVerifiedHandle, resolveIdentity } from './identity'
+import { getJson } from './proxied-fetch'
 
 const PUBLIC_APPVIEW = 'https://public.api.bsky.app'
 
@@ -41,12 +42,12 @@ export async function fetchPublicProfile(actor: string): Promise<PublicProfile> 
   const profile: PublicProfile = { did: ident.did, handle, pds: ident.pds }
 
   try {
-    const p = await $fetch<{
+    const p = await getJson<{
       handle?: string
       displayName?: string
       avatar?: string
       description?: string
-    }>(`${PUBLIC_APPVIEW}/xrpc/app.bsky.actor.getProfile`, { query: { actor: ident.did } })
+    }>(`${PUBLIC_APPVIEW}/xrpc/app.bsky.actor.getProfile`, { actor: ident.did })
     if (!isVerifiedHandle(ident.handle) && p.handle) profile.handle = p.handle
     profile.displayName = p.displayName
     profile.avatar = p.avatar
@@ -56,4 +57,70 @@ export async function fetchPublicProfile(actor: string): Promise<PublicProfile> 
   }
 
   return profile
+}
+
+/**
+ * Public, unauthenticated read of a repository collection from an actor's PDS.
+ * Works for any atproto account regardless of which PDS hosts it. Returns [] on
+ * failure so profile pages degrade gracefully.
+ */
+export async function listPublicRecords<T = Record<string, unknown>>(
+  actor: string,
+  collection: string,
+  limit = 100
+): Promise<Array<{ uri: string, value: T }>> {
+  let ident
+  try {
+    ident = await resolveIdentity(actor)
+  } catch {
+    return []
+  }
+  try {
+    const data = await getJson<{ records?: Array<{ uri: string, value: T }> }>(
+      `${ident.pds}/xrpc/com.atproto.repo.listRecords`,
+      { repo: ident.did, collection, limit }
+    )
+    return data.records ?? []
+  } catch {
+    return []
+  }
+}
+
+export interface FollowedAccount {
+  did: string
+  handle: string
+  displayName?: string
+  avatar?: string
+}
+
+/**
+ * Accounts the given actor follows on the atproto social graph (Bluesky).
+ * Best-effort and paginated up to `limit`; returns [] on any failure so callers
+ * can treat "no follows" and "appview unreachable" identically.
+ */
+export async function fetchFollows(actor: string, limit = 100): Promise<FollowedAccount[]> {
+  let did: string
+  try {
+    did = await resolveHandleToDid(actor)
+  } catch {
+    return []
+  }
+  const out: FollowedAccount[] = []
+  let cursor: string | undefined
+  try {
+    for (let page = 0; page < 5; page++) {
+      const res = await getJson<{ follows?: Array<{ did?: string, handle?: string, displayName?: string, avatar?: string }>, cursor?: string }>(
+        `${PUBLIC_APPVIEW}/xrpc/app.bsky.graph.getFollows`,
+        { actor: did, limit: 100, cursor }
+      )
+      for (const f of res.follows ?? []) {
+        if (f?.did) out.push({ did: f.did, handle: f.handle ?? '', displayName: f.displayName, avatar: f.avatar })
+      }
+      cursor = res.cursor
+      if (!cursor || out.length >= limit) break
+    }
+  } catch {
+    /* best-effort — appview may be blocked or the actor may have no graph */
+  }
+  return out.slice(0, limit)
 }

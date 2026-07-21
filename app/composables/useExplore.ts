@@ -1,4 +1,5 @@
 import { getForge } from '~/lib/forges'
+import { fetchFollows } from '~/lib/atproto/public'
 import type { ForgeRepo } from '~/types/forge'
 
 export type ExploreScope = 'trending' | 'popular' | 'following'
@@ -18,10 +19,46 @@ function sinceDate(period: ExplorePeriod): string {
   return d.toISOString().slice(0, 10)
 }
 
+/** Bounded-concurrency map so "following" fan-out stays responsive. */
+async function mapLimit<T, R>(items: T[], concurrency: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+  const results: R[] = new Array(items.length)
+  let cursor = 0
+  async function worker(): Promise<void> {
+    while (cursor < items.length) {
+      const idx = cursor++
+      results[idx] = await fn(items[idx]!)
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(concurrency, items.length) || 1 }, worker))
+  return results
+}
+
+function dedupe(list: ForgeRepo[]): ForgeRepo[] {
+  const seen = new Set<string>()
+  return list.filter((r) => {
+    const key = `${r.provider}:${r.fullName}`
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+}
+
+/** Rewrite a Tangled repo listed by DID to display the follower's handle. */
+function withOwner(r: ForgeRepo, owner: string): ForgeRepo {
+  if (r.owner === owner) return r
+  return {
+    ...r,
+    owner,
+    fullName: `${owner}/${r.name}`,
+    url: `https://tangled.org/${owner}/${r.name}`,
+    ownerUrl: `https://tangled.org/${owner}`
+  }
+}
+
 /** Cross-provider discovery feed (trending / popular / following). */
 export function useExplore() {
   const { get: getToken } = useForgeTokens()
-  const { isAuthenticated } = useAuth()
+  const { isAuthenticated, did } = useAuth()
 
   const repos = ref<ForgeRepo[]>([])
   const loading = ref(false)
@@ -30,13 +67,95 @@ export function useExplore() {
 
   let token = 0
 
-  function githubQuery(o: Required<Pick<ExploreOptions, 'scope' | 'period'>> & ExploreOptions): string {
+  function githubQuery(scope: Exclude<ExploreScope, 'following'>, period: ExplorePeriod, language?: string): string {
     const parts: string[] = []
-    if (o.scope === 'trending') parts.push(`created:>=${sinceDate(o.period)}`, 'stars:>1')
-    else if (o.scope === 'popular') parts.push('stars:>5000')
-    else parts.push('stars:>1')
-    if (o.language) parts.push(`language:${o.language}`)
+    if (scope === 'trending') parts.push(`created:>=${sinceDate(period)}`, 'stars:>1')
+    else parts.push('stars:>5000')
+    if (language) parts.push(`language:${language}`)
     return parts.join(' ')
+  }
+
+  async function loadDiscovery(
+    scope: Exclude<ExploreScope, 'following'>,
+    period: ExplorePeriod,
+    limit: number,
+    language: string | undefined,
+    collected: ForgeRepo[],
+    noteSet: Set<string>
+  ): Promise<void> {
+    const gh = getForge('github')
+    if (gh?.searchRepos) {
+      try {
+        const res = await gh.searchRepos(githubQuery(scope, period, language), {
+          sort: 'stars',
+          order: 'desc',
+          limit,
+          token: getToken('github')
+        })
+        collected.push(...res.items)
+      } catch {
+        noteSet.add('GitHub discovery is temporarily unavailable (rate limit).')
+      }
+    }
+
+    // Tangled has no search API — surface a small curated set so the feed
+    // still feels cross-provider.
+    const tangled = getForge('tangled')
+    if (tangled?.listRepos) {
+      try {
+        const featured = await tangled.listRepos('tangled.org')
+        collected.push(...featured.slice(0, 4))
+      } catch {
+        /* best-effort */
+      }
+    }
+  }
+
+  async function loadFollowing(collected: ForgeRepo[], noteSet: Set<string>): Promise<void> {
+    if (!isAuthenticated.value) {
+      noteSet.add('Sign in to see repositories from the people and orgs you follow.')
+      return
+    }
+
+    // GitHub: accounts you follow + orgs you belong to.
+    const gh = getForge('github')
+    if (gh?.listFollowedRepos) {
+      const ghToken = getToken('github')
+      if (ghToken) {
+        try {
+          collected.push(...await gh.listFollowedRepos({ token: ghToken }))
+        } catch {
+          noteSet.add('Could not load repositories from your GitHub follows.')
+        }
+      } else {
+        noteSet.add('Connect your GitHub account to include the people you follow there.')
+      }
+    }
+
+    // Tangled / atproto: accounts you follow on the social graph.
+    const tangled = getForge('tangled')
+    const viewer = did.value
+    if (tangled?.listRepos && viewer) {
+      try {
+        const follows = await fetchFollows(viewer, 60)
+        const chunks = await mapLimit(follows, 6, async (f) => {
+          try {
+            const list = await tangled.listRepos!(f.did)
+            const owner = f.handle && !f.handle.endsWith('.invalid') ? f.handle : f.did
+            return list.map(r => withOwner(r, owner))
+          } catch {
+            return [] as ForgeRepo[]
+          }
+        })
+        collected.push(...chunks.flat())
+      } catch {
+        /* best-effort */
+      }
+    }
+
+    if (!collected.length && !noteSet.size) {
+      noteSet.add('No repositories from the accounts you follow yet.')
+    }
   }
 
   async function load(opts: ExploreOptions = {}): Promise<void> {
@@ -50,42 +169,13 @@ export function useExplore() {
     const collected: ForgeRepo[] = []
 
     try {
-      const gh = getForge('github')
-      if (gh?.searchRepos) {
-        if (scope === 'following' && !isAuthenticated.value) {
-          noteSet.add('Sign in to see repositories from people you follow.')
-        } else {
-          const q = githubQuery({ scope, period, language: opts.language })
-          try {
-            const res = await gh.searchRepos(q, {
-              sort: 'stars',
-              order: 'desc',
-              limit,
-              token: getToken('github')
-            })
-            if (my !== token) return
-            collected.push(...res.items)
-          } catch {
-            noteSet.add('GitHub discovery is temporarily unavailable (rate limit).')
-          }
-        }
+      if (scope === 'following') {
+        await loadFollowing(collected, noteSet)
+      } else {
+        await loadDiscovery(scope, period, limit, opts.language, collected, noteSet)
       }
-
-      // Tangled has no search API — surface a small curated set so the feed
-      // still feels cross-provider.
-      const tangled = getForge('tangled')
-      if (tangled?.listRepos && scope !== 'following') {
-        try {
-          const featured = await tangled.listRepos('tangled.org')
-          if (my !== token) return
-          collected.push(...featured.slice(0, 4))
-        } catch {
-          /* best-effort */
-        }
-      }
-
       if (my !== token) return
-      repos.value = collected
+      repos.value = dedupe(collected)
       notes.value = [...noteSet]
     } finally {
       if (my === token) loading.value = false

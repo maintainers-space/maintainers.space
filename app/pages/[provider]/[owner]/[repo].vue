@@ -22,6 +22,12 @@ const defaultBranch = computed(() => meta.value?.defaultBranch ?? 'main')
 
 provideRepoContext({ provider, owner, name, forge, locator, meta, defaultBranch })
 
+// Track visits locally so signed-in users get a personal recent/favourite feed.
+const { record } = useRepoVisits()
+watch(meta, (m) => {
+  if (m) record(m)
+}, { immediate: true })
+
 const base = computed(() => repoPath({ provider: provider.value, owner: owner.value, name: name.value }))
 const caps = computed(() => forge.value?.capabilities)
 
