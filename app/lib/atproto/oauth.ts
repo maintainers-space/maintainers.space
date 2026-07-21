@@ -1,11 +1,5 @@
 import { configureOAuth } from '@atcute/oauth-browser-client'
-import {
-  CompositeDidDocumentResolver,
-  LocalActorResolver,
-  PlcDidDocumentResolver,
-  WebDidDocumentResolver,
-  XrpcHandleResolver
-} from '@atcute/identity-resolver'
+import { identityResolver } from './identity'
 
 export const OAUTH_SCOPE = 'atproto transition:generic'
 
@@ -28,8 +22,8 @@ export function getOAuthMetadata(): { client_id: string, redirect_uri: string } 
   if (isLoopback) {
     const client_id
       = `http://localhost`
-      + `?redirect_uri=${encodeURIComponent(redirect_uri)}`
-      + `&scope=${encodeURIComponent(OAUTH_SCOPE)}`
+        + `?redirect_uri=${encodeURIComponent(redirect_uri)}`
+        + `&scope=${encodeURIComponent(OAUTH_SCOPE)}`
     return { client_id, redirect_uri }
   }
 
@@ -43,14 +37,6 @@ export function configureAtprotoOAuth(): void {
 
   configureOAuth({
     metadata: getOAuthMetadata(),
-    identityResolver: new LocalActorResolver({
-      handleResolver: new XrpcHandleResolver({ serviceUrl: 'https://public.api.bsky.app' }),
-      didDocumentResolver: new CompositeDidDocumentResolver({
-        methods: {
-          plc: new PlcDidDocumentResolver(),
-          web: new WebDidDocumentResolver()
-        }
-      })
-    })
+    identityResolver
   })
 }

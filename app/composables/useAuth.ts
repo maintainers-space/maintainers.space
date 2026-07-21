@@ -1,6 +1,7 @@
 import { Client } from '@atcute/client'
 import {
   OAuthUserAgent,
+  TokenRefreshError,
   createAuthorizationUrl,
   deleteStoredSession,
   finalizeAuthorization,
@@ -37,6 +38,38 @@ async function activate(agent: OAuthUserAgent): Promise<void> {
   }
 }
 
+/** Tear down local session state and drop the stored session for `sub`. */
+function clearLocalSession(sub?: Did | null): void {
+  _agent.value = null
+  _did.value = null
+  _profile.value = null
+  const dead = sub ?? (import.meta.client ? (localStorage.getItem(CURRENT_DID_KEY) as Did | null) : null)
+  if (dead) {
+    try {
+      deleteStoredSession(dead)
+    } catch { /* ignore */ }
+  }
+  if (import.meta.client) localStorage.removeItem(CURRENT_DID_KEY)
+}
+
+/** True when an error means the atproto session is permanently dead (revoked/expired). */
+export function isSessionExpired(err: unknown): boolean {
+  return err instanceof TokenRefreshError
+}
+
+/**
+ * Validate/refresh the stored token in the background. Only a *definitively*
+ * dead session (revoked or expired refresh token) tears the session down;
+ * transient/offline errors are ignored so the user stays logged in.
+ */
+async function revalidateSession(sub: Did): Promise<void> {
+  try {
+    await getSession(sub, { allowStale: false })
+  } catch (err) {
+    if (err instanceof TokenRefreshError) clearLocalSession(sub)
+  }
+}
+
 export function useAuth() {
   const isAuthenticated = computed(() => !!_agent.value)
 
@@ -49,7 +82,7 @@ export function useAuth() {
       scope: OAUTH_SCOPE
     })
     // Give freshly-stored PKCE/DPoP state a tick to persist before navigating away.
-    await new Promise((resolve) => setTimeout(resolve, 200))
+    await new Promise(resolve => setTimeout(resolve, 200))
     window.location.assign(url.toString())
   }
 
@@ -69,14 +102,15 @@ export function useAuth() {
       if (!dids.length) return
       const stored = localStorage.getItem(CURRENT_DID_KEY) as Did | null
       const target = (stored && dids.includes(stored) ? stored : dids[0]) as Did
+      // allowStale → instant restore straight from localStorage, no network.
       const session = await getSession(target, { allowStale: true })
       await activate(new OAuthUserAgent(session))
-    } catch {
-      const stale = localStorage.getItem(CURRENT_DID_KEY) as Did | null
-      if (stale) {
-        try { deleteStoredSession(stale) } catch { /* ignore */ }
-      }
-      localStorage.removeItem(CURRENT_DID_KEY)
+      // Refresh/validate in the background without blocking first paint.
+      void revalidateSession(target)
+    } catch (err) {
+      // Only a revoked/expired refresh token clears the session. Transient
+      // errors keep it so the next boot can retry — no weekly re-login.
+      if (err instanceof TokenRefreshError) clearLocalSession(err.sub)
     } finally {
       _restoring.value = false
     }
@@ -84,23 +118,35 @@ export function useAuth() {
 
   async function logout(): Promise<void> {
     const agent = _agent.value
+    const sub = _did.value as Did | null
     try {
       if (agent) await agent.signOut()
     } catch {
-      if (_did.value) {
-        try { deleteStoredSession(_did.value as Did) } catch { /* ignore */ }
-      }
+      /* best effort — fall through to local cleanup */
     }
-    if (import.meta.client) localStorage.removeItem(CURRENT_DID_KEY)
-    _agent.value = null
-    _did.value = null
-    _profile.value = null
+    clearLocalSession(sub)
   }
 
   /** Authenticated XRPC client bound to the current session (DPoP-signed). */
   function client(): Client {
     if (!_agent.value) throw new Error('Not authenticated')
     return new Client({ handler: _agent.value })
+  }
+
+  /**
+   * Run an authenticated XRPC call. If the session's refresh token is dead the
+   * user is signed out and a friendly error is surfaced; other errors bubble up.
+   */
+  async function runAuthed<T>(fn: (rpc: Client) => Promise<T>): Promise<T> {
+    try {
+      return await fn(client())
+    } catch (err) {
+      if (err instanceof TokenRefreshError) {
+        await logout()
+        throw new Error('Your session expired. Please sign in again.', { cause: err })
+      }
+      throw err
+    }
   }
 
   return {
@@ -113,6 +159,7 @@ export function useAuth() {
     completeCallback,
     restore,
     logout,
-    client
+    client,
+    runAuthed
   }
 }

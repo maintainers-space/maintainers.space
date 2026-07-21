@@ -48,12 +48,21 @@ async function onSubmit(event: FormSubmitEvent<Schema>) {
     <UCard class="w-full max-w-sm">
       <template #header>
         <div class="text-center">
-          <h1 class="text-lg font-semibold text-highlighted">Sign in with atproto</h1>
-          <p class="mt-1 text-sm text-muted">Enter your handle to continue. You can browse without signing in.</p>
+          <h1 class="text-lg font-semibold text-highlighted">
+            Sign in with atproto
+          </h1>
+          <p class="mt-1 text-sm text-muted">
+            Enter your handle to continue. You can browse without signing in.
+          </p>
         </div>
       </template>
 
-      <UForm :schema="schema" :state="state" class="space-y-4" @submit="onSubmit">
+      <UForm
+        :schema="schema"
+        :state="state"
+        class="space-y-4"
+        @submit="onSubmit"
+      >
         <UFormField name="handle" label="Handle or DID">
           <UInput
             v-model="state.handle"
@@ -66,11 +75,24 @@ async function onSubmit(event: FormSubmitEvent<Schema>) {
           />
         </UFormField>
 
-        <UButton type="submit" label="Continue" trailing-icon="i-lucide-arrow-right" block :loading="loading" />
+        <UButton
+          type="submit"
+          label="Continue"
+          trailing-icon="i-lucide-arrow-right"
+          block
+          :loading="loading"
+        />
       </UForm>
 
       <template #footer>
-        <UButton to="/" variant="link" color="neutral" label="Back to browsing" icon="i-lucide-arrow-left" class="px-0" />
+        <UButton
+          to="/"
+          variant="link"
+          color="neutral"
+          label="Back to browsing"
+          icon="i-lucide-arrow-left"
+          class="px-0"
+        />
       </template>
     </UCard>
 
