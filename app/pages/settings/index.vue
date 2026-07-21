@@ -5,18 +5,31 @@ const { profile, did } = useAuth()
 <template>
   <div class="space-y-6">
     <div class="flex items-center gap-4">
-      <UAvatar :src="profile?.avatar" :alt="profile?.handle" icon="i-lucide-user" size="xl" />
+      <UAvatar
+        :src="profile?.avatar"
+        :alt="profile?.handle"
+        icon="i-lucide-user"
+        size="xl"
+      />
       <div class="min-w-0">
-        <h2 class="truncate text-lg font-semibold text-highlighted">{{ profile?.displayName || profile?.handle }}</h2>
-        <p class="truncate text-sm text-muted">@{{ profile?.handle }}</p>
+        <h2 class="truncate text-lg font-semibold text-highlighted">
+          {{ profile?.displayName || profile?.handle }}
+        </h2>
+        <p class="truncate text-sm text-muted">
+          @{{ profile?.handle }}
+        </p>
       </div>
     </div>
 
     <UCard>
       <template #header>
         <div>
-          <h3 class="font-semibold text-highlighted">Identity</h3>
-          <p class="text-sm text-muted">Your AT Protocol account details.</p>
+          <h3 class="font-semibold text-highlighted">
+            Identity
+          </h3>
+          <p class="text-sm text-muted">
+            Your AT Protocol account details.
+          </p>
         </div>
       </template>
 

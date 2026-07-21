@@ -52,7 +52,12 @@ const { data, pending, error, refresh } = useAsyncData(
           :description="error?.statusMessage || error?.message || `No repositories found for ${owner}.`"
         >
           <template #actions>
-            <UButton color="error" variant="soft" label="Retry" @click="refresh()" />
+            <UButton
+              color="error"
+              variant="soft"
+              label="Retry"
+              @click="refresh()"
+            />
           </template>
         </UAlert>
 
@@ -73,7 +78,15 @@ const { data, pending, error, refresh } = useAsyncData(
             </div>
             <p v-if="r.description" class="mt-1 line-clamp-2 text-sm text-muted">{{ r.description }}</p>
             <div v-if="r.topics?.length" class="mt-2 flex flex-wrap gap-1">
-              <UBadge v-for="t in r.topics.slice(0, 4)" :key="t" :label="t" color="primary" variant="subtle" size="sm" class="rounded-full" />
+              <UBadge
+                v-for="t in r.topics.slice(0, 4)"
+                :key="t"
+                :label="t"
+                color="primary"
+                variant="subtle"
+                size="sm"
+                class="rounded-full"
+              />
             </div>
           </NuxtLink>
         </div>

@@ -97,9 +97,20 @@ async function onSubmit(event: FormSubmitEvent<Schema>) {
     :ui="{ footer: 'justify-end' }"
   >
     <template #body>
-      <UForm id="link-account-form" :schema="schema" :state="state" class="space-y-4" @submit="onSubmit">
+      <UForm
+        id="link-account-form"
+        :schema="schema"
+        :state="state"
+        class="space-y-4"
+        @submit="onSubmit"
+      >
         <UFormField name="provider" label="Provider">
-          <USelect v-model="state.provider" :items="providerItems" value-key="value" class="w-full" />
+          <USelect
+            v-model="state.provider"
+            :items="providerItems"
+            value-key="value"
+            class="w-full"
+          />
         </UFormField>
 
         <UFormField
@@ -107,7 +118,13 @@ async function onSubmit(event: FormSubmitEvent<Schema>) {
           label="Username"
           :description="state.provider === 'github' ? 'We\'ll fetch your avatar and profile from GitHub.' : undefined"
         >
-          <UInput v-model="state.username" placeholder="octocat" autofocus autocapitalize="none" class="w-full" />
+          <UInput
+            v-model="state.username"
+            placeholder="octocat"
+            autofocus
+            autocapitalize="none"
+            class="w-full"
+          />
         </UFormField>
 
         <UFormField
@@ -123,8 +140,18 @@ async function onSubmit(event: FormSubmitEvent<Schema>) {
     </template>
 
     <template #footer="{ close }">
-      <UButton label="Cancel" color="neutral" variant="outline" @click="close" />
-      <UButton type="submit" form="link-account-form" label="Link account" :loading="loading" />
+      <UButton
+        label="Cancel"
+        color="neutral"
+        variant="outline"
+        @click="close"
+      />
+      <UButton
+        type="submit"
+        form="link-account-form"
+        label="Link account"
+        :loading="loading"
+      />
     </template>
   </UModal>
 </template>

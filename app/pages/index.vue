@@ -35,7 +35,9 @@ const examples = [
     <template #body>
       <div class="mx-auto w-full max-w-3xl space-y-10 py-6">
         <div class="space-y-3 text-center">
-          <h1 class="text-3xl font-semibold tracking-tight text-highlighted">One place for every forge.</h1>
+          <h1 class="text-3xl font-semibold tracking-tight text-highlighted">
+            One place for every forge.
+          </h1>
           <p class="text-muted">
             Browse repositories across GitHub and Tangled — and link your forge accounts to your atproto identity.
           </p>
@@ -44,13 +46,28 @@ const examples = [
         <UCard>
           <div class="flex flex-col gap-3 sm:flex-row sm:items-end">
             <UFormField label="Provider" class="sm:w-40">
-              <USelect v-model="provider" :items="providerItems" value-key="value" class="w-full" />
+              <USelect
+                v-model="provider"
+                :items="providerItems"
+                value-key="value"
+                class="w-full"
+              />
             </UFormField>
             <UFormField :label="current?.ownerLabel ?? 'Owner'" class="flex-1">
-              <UInput v-model="owner" :placeholder="current?.ownerPlaceholder" class="w-full" @keydown.enter="go" />
+              <UInput
+                v-model="owner"
+                :placeholder="current?.ownerPlaceholder"
+                class="w-full"
+                @keydown.enter="go"
+              />
             </UFormField>
             <UFormField label="Repository" class="flex-1">
-              <UInput v-model="repo" :placeholder="current?.repoPlaceholder" class="w-full" @keydown.enter="go" />
+              <UInput
+                v-model="repo"
+                :placeholder="current?.repoPlaceholder"
+                class="w-full"
+                @keydown.enter="go"
+              />
             </UFormField>
             <UButton
               label="View"
@@ -63,7 +80,9 @@ const examples = [
         </UCard>
 
         <div class="space-y-3">
-          <h2 class="text-sm font-medium text-muted">Try an example</h2>
+          <h2 class="text-sm font-medium text-muted">
+            Try an example
+          </h2>
           <div class="grid gap-3 sm:grid-cols-3">
             <NuxtLink
               v-for="ex in examples"

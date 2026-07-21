@@ -28,8 +28,12 @@ async function onUnlink(account: ForgeAccount) {
   <div class="space-y-4">
     <div class="flex items-center justify-between gap-4">
       <div>
-        <h2 class="font-semibold text-highlighted">Linked accounts</h2>
-        <p class="text-sm text-muted">Forge accounts connected to your atproto identity.</p>
+        <h2 class="font-semibold text-highlighted">
+          Linked accounts
+        </h2>
+        <p class="text-sm text-muted">
+          Forge accounts connected to your atproto identity.
+        </p>
       </div>
       <UButton icon="i-lucide-plus" label="Link account" @click="showLink = true" />
     </div>
@@ -41,8 +45,15 @@ async function onUnlink(account: ForgeAccount) {
 
     <div v-else-if="!accounts.length" class="rounded-lg border border-dashed border-default p-8 text-center">
       <UIcon name="i-lucide-link-2-off" class="mx-auto size-8 text-muted" />
-      <p class="mt-2 text-sm text-muted">No linked accounts yet.</p>
-      <UButton class="mt-3" icon="i-lucide-plus" label="Link your first account" @click="showLink = true" />
+      <p class="mt-2 text-sm text-muted">
+        No linked accounts yet.
+      </p>
+      <UButton
+        class="mt-3"
+        icon="i-lucide-plus"
+        label="Link your first account"
+        @click="showLink = true"
+      />
     </div>
 
     <div v-else class="space-y-2">

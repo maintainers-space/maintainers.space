@@ -8,11 +8,6 @@ export default defineNuxtConfig({
 
   ssr: false,
 
-  devServer: {
-    host: '127.0.0.1',
-    port: 3000
-  },
-
   devtools: {
     enabled: true
   },
@@ -22,12 +17,6 @@ export default defineNuxtConfig({
     '@fontsource-variable/geist-mono/index.css',
     '~/assets/css/main.css'
   ],
-
-  routeRules: {
-    '/api/**': {
-      cors: true
-    }
-  },
 
   // Self-hosted Geist via Fontsource — disable @nuxt/fonts remote fetching
   ui: {
@@ -40,6 +29,17 @@ export default defineNuxtConfig({
       atprotoClientId: '',
       appUrl: ''
     }
+  },
+
+  routeRules: {
+    '/api/**': {
+      cors: true
+    }
+  },
+
+  devServer: {
+    host: '127.0.0.1',
+    port: 3000
   },
 
   compatibilityDate: '2026-06-30',

@@ -19,7 +19,13 @@ const forge = computed(() => getForge(props.account.provider))
     <div class="min-w-0 flex-1">
       <div class="flex items-center gap-1.5">
         <span class="truncate font-medium text-default">{{ account.displayName || account.username }}</span>
-        <UBadge v-if="account.verified" label="Verified" color="primary" variant="subtle" size="sm" />
+        <UBadge
+          v-if="account.verified"
+          label="Verified"
+          color="primary"
+          variant="subtle"
+          size="sm"
+        />
       </div>
       <div class="flex items-center gap-1 text-sm text-muted">
         <ForgeIcon :provider="account.provider" class="size-3.5" />
