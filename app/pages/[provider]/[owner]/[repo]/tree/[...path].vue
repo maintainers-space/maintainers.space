@@ -38,7 +38,7 @@ const { data, pending, error } = useAsyncData<ForgeTreeEntry[]>(
       title="Could not load directory"
       :description="(error as any)?.message"
     />
-    <RepoBrowser
+    <ForgeRepoBrowser
       v-else
       :entries="data ?? []"
       :base="base"

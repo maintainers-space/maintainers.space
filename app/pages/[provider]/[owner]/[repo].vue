@@ -60,7 +60,7 @@ const tabs = computed(() => {
     </template>
 
     <template #body>
-      <div class="mx-auto w-full max-w-6xl space-y-5 py-2">
+      <div class="mx-auto w-full max-w-6xl px-1 py-4">
         <div v-if="pending && !meta" class="space-y-4">
           <USkeleton class="h-7 w-64" />
           <USkeleton class="h-4 w-96" />
@@ -86,8 +86,10 @@ const tabs = computed(() => {
 
         <template v-else-if="meta">
           <ForgeRepoHeader :repo="meta" />
-          <UNavigationMenu :items="tabs" highlight class="-mb-px border-b border-default" />
-          <NuxtPage />
+          <UNavigationMenu :items="tabs" highlight class="mt-5 border-b border-default" />
+          <div class="mt-6">
+            <NuxtPage />
+          </div>
         </template>
       </div>
     </template>

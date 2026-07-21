@@ -55,6 +55,6 @@ const { data, pending, error } = useAsyncData<ForgeBlob | null>(
       title="Could not load file"
       :description="(error as any)?.message"
     />
-    <BlobView v-else-if="data" :blob="data" />
+    <ForgeBlobView v-else-if="data" :blob="data" />
   </div>
 </template>
