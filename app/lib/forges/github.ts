@@ -28,6 +28,8 @@ import type {
   Paginated
 } from '~/types/forge'
 
+import { getForgeToken } from '~/lib/forges/token-store'
+
 const API = 'https://api.github.com'
 
 function ghHeaders(opts?: ForgeReadOptions, accept = 'application/vnd.github+json'): Record<string, string> {
@@ -35,7 +37,8 @@ function ghHeaders(opts?: ForgeReadOptions, accept = 'application/vnd.github+jso
     'Accept': accept,
     'X-GitHub-Api-Version': '2022-11-28'
   }
-  if (opts?.token) headers.Authorization = 'Bearer ' + opts.token
+  const token = opts?.token ?? getForgeToken('github')
+  if (token) headers.Authorization = 'Bearer ' + token
   return headers
 }
 

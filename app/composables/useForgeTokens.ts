@@ -5,6 +5,7 @@
 // localStorage on the user's device and are never sent anywhere but the forge.
 
 import type { ForgeId } from '~/types/forge'
+import { syncForgeTokens } from '~/lib/forges/token-store'
 
 const STORAGE_PREFIX = 'koinon:forge-token:'
 
@@ -22,6 +23,7 @@ function load(): void {
     }
   }
   _tokens.value = out
+  syncForgeTokens(out)
   _loaded = true
 }
 
@@ -37,6 +39,7 @@ export function useForgeTokens() {
     if (!clean) return remove(provider)
     localStorage.setItem(STORAGE_PREFIX + provider, clean)
     _tokens.value = { ..._tokens.value, [provider]: clean }
+    syncForgeTokens(_tokens.value)
   }
 
   function remove(provider: ForgeId): void {
@@ -45,6 +48,7 @@ export function useForgeTokens() {
     // eslint-disable-next-line @typescript-eslint/no-dynamic-delete
     delete next[provider]
     _tokens.value = next
+    syncForgeTokens(next)
   }
 
   return { tokens: readonly(_tokens), get, set, remove }

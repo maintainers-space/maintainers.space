@@ -5,7 +5,8 @@ definePageMeta({ middleware: 'auth' })
 
 const links: NavigationMenuItem[] = [
   { label: 'Profile', icon: 'i-lucide-user', to: '/settings', exact: true },
-  { label: 'Linked accounts', icon: 'i-lucide-link', to: '/settings/accounts' }
+  { label: 'Linked accounts', icon: 'i-lucide-link', to: '/settings/accounts' },
+  { label: 'Access tokens', icon: 'i-lucide-key-round', to: '/settings/tokens' }
 ]
 </script>
 
