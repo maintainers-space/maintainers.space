@@ -7,7 +7,7 @@ const { isAuthenticated } = useAuth()
 const route = useRoute()
 const scope = ref<ExploreScope>('trending')
 const period = ref<ExplorePeriod>('weekly')
-const language = ref(String(route.query.lang ?? ''))
+const language = ref(String(route.query.lang || 'all'))
 
 const scopeItems = computed(() => [
   { label: 'Trending', value: 'trending', icon: 'i-lucide-flame' },
@@ -21,10 +21,11 @@ const periodItems = [
   { label: 'This month', value: 'monthly' }
 ]
 
-const languages = ['', 'TypeScript', 'JavaScript', 'Python', 'Rust', 'Go', 'Vue', 'C++', 'Zig']
+const languages = ['all', 'TypeScript', 'JavaScript', 'Python', 'Rust', 'Go', 'Vue', 'C++', 'Zig']
 
 function reload(): void {
-  load({ scope: scope.value, period: period.value, language: language.value || undefined, limit: 30 })
+  const lang = language.value && language.value !== 'all' ? language.value : undefined
+  load({ scope: scope.value, period: period.value, language: lang, limit: 30 })
 }
 
 watch([scope, period, language], reload)
@@ -39,7 +40,15 @@ onMounted(reload)
           <UDashboardSidebarCollapse />
         </template>
         <template #trailing>
-          <UIcon name="i-lucide-compass" class="size-5 text-muted" />
+          <UButton
+            icon="i-lucide-refresh-cw"
+            color="neutral"
+            variant="ghost"
+            size="sm"
+            :loading="loading"
+            aria-label="Refresh"
+            @click="reload"
+          />
         </template>
       </UDashboardNavbar>
     </template>
@@ -64,7 +73,7 @@ onMounted(reload)
             />
             <USelect
               v-model="language"
-              :items="languages.map((l) => ({ label: l || 'Any language', value: l }))"
+              :items="languages.map((l) => ({ label: l === 'all' ? 'Any language' : l, value: l }))"
               size="sm"
               class="w-40"
             />
@@ -90,8 +99,23 @@ onMounted(reload)
         <div v-else-if="!repos.length" class="rounded-lg border border-dashed border-default py-16 text-center">
           <UIcon name="i-lucide-telescope" class="mx-auto size-8 text-muted" />
           <p class="mt-3 text-sm text-muted">
-            Nothing to explore right now. Try another filter.
+            Nothing to explore right now.
           </p>
+          <p class="mx-auto mt-1 max-w-md text-xs text-muted">
+            GitHub throttles anonymous discovery to a few requests per minute. Add a personal access token in
+            <NuxtLink to="/settings/accounts" class="text-primary hover:underline">settings</NuxtLink>
+            to raise the limit, or try again in a moment.
+          </p>
+          <UButton
+            class="mt-4"
+            icon="i-lucide-refresh-cw"
+            color="neutral"
+            variant="subtle"
+            size="sm"
+            label="Try again"
+            :loading="loading"
+            @click="reload"
+          />
         </div>
 
         <div v-else class="grid gap-3 sm:grid-cols-2">
