@@ -20,6 +20,13 @@ type Schema = z.output<typeof schema>
 const state = reactive<Partial<Schema>>({ handle: '' })
 const loading = ref(false)
 
+const suggestions = ['bsky.social', 'npmx.social', 'tangled.org']
+
+function useSuggestion(host: string): void {
+  const current = (state.handle ?? '').split('.')[0]?.replace(/^@/, '') ?? ''
+  state.handle = current ? `${current}.${host}` : `you.${host}`
+}
+
 async function onSubmit(event: FormSubmitEvent<Schema>) {
   loading.value = true
   try {
@@ -75,6 +82,19 @@ async function onSubmit(event: FormSubmitEvent<Schema>) {
           />
         </UFormField>
 
+        <div class="flex flex-wrap items-center gap-1.5">
+          <span class="text-xs text-dimmed">Try:</span>
+          <UButton
+            v-for="host in suggestions"
+            :key="host"
+            :label="host"
+            color="neutral"
+            variant="soft"
+            size="xs"
+            @click="useSuggestion(host)"
+          />
+        </div>
+
         <UButton
           type="submit"
           label="Continue"
@@ -84,15 +104,44 @@ async function onSubmit(event: FormSubmitEvent<Schema>) {
         />
       </UForm>
 
-      <template #footer>
+      <USeparator label="New to AT Protocol?" class="my-4" />
+
+      <div class="space-y-2">
         <UButton
-          to="/"
-          variant="link"
+          to="https://bsky.app"
+          target="_blank"
           color="neutral"
-          label="Back to browsing"
-          icon="i-lucide-arrow-left"
-          class="px-0"
+          variant="outline"
+          block
+          icon="i-lucide-user-plus"
+          label="Create an atproto account"
+          trailing-icon="i-lucide-external-link"
         />
+        <p class="text-center text-xs text-dimmed">
+          koinon uses your AT Protocol identity — create one on any PDS (Bluesky, npmx, or self-hosted) and sign in here.
+        </p>
+      </div>
+
+      <template #footer>
+        <div class="flex items-center justify-between">
+          <UButton
+            to="/"
+            variant="link"
+            color="neutral"
+            label="Back to browsing"
+            icon="i-lucide-arrow-left"
+            class="px-0"
+          />
+          <UButton
+            to="https://github.com"
+            target="_blank"
+            variant="link"
+            color="neutral"
+            label="GitHub"
+            icon="i-simple-icons-github"
+            class="px-0"
+          />
+        </div>
       </template>
     </UCard>
 

@@ -31,11 +31,14 @@ async function activate(agent: OAuthUserAgent): Promise<void> {
   _agent.value = agent
   _did.value = agent.sub
   if (import.meta.client) localStorage.setItem(CURRENT_DID_KEY, agent.sub)
-  try {
-    _profile.value = await fetchPublicProfile(agent.sub)
-  } catch {
+  // Auth state is live immediately; enrich the profile in the background so a
+  // slow identity/profile lookup never blocks app boot or first paint.
+  if (!_profile.value || _profile.value.did !== agent.sub) {
     _profile.value = { did: agent.sub, handle: agent.sub }
   }
+  void fetchPublicProfile(agent.sub)
+    .then((p) => { _profile.value = p })
+    .catch(() => { /* keep the did-as-handle fallback */ })
 }
 
 /** Tear down local session state and drop the stored session for `sub`. */

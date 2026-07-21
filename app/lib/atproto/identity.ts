@@ -1,24 +1,81 @@
 import {
   CompositeDidDocumentResolver,
-  CompositeHandleResolver,
   DohJsonHandleResolver,
   LocalActorResolver,
   PlcDidDocumentResolver,
   WebDidDocumentResolver,
-  WellKnownHandleResolver
+  WellKnownHandleResolver,
+  XrpcHandleResolver
 } from '@atcute/identity-resolver'
+import type { HandleResolver, ResolveHandleOptions } from '@atcute/identity-resolver'
 import type { ActorIdentifier } from '@atcute/lexicons'
+import type { AtprotoDid, Handle } from '@atcute/lexicons/syntax'
+
+/**
+ * Public atproto AppView used purely as a *server-side* handle-resolution proxy
+ * (`com.atproto.identity.resolveHandle`). This is the one method that works from
+ * a browser for EVERY handle regardless of PDS — see FallbackHandleResolver.
+ */
+const APPVIEW_URL = 'https://public.api.bsky.app'
+
+/**
+ * Races several handle-resolution methods and returns the first to *succeed*.
+ * Resolution only fails if every method fails. This is what makes koinon able to
+ * sign in ANY handle from ANY PDS directly in the browser:
+ *
+ *   - XRPC (AppView): delegates DNS/well-known lookup to a server, so it is not
+ *     subject to browser CORS. This is the workhorse — it resolves handles that
+ *     are verified via the HTTP `.well-known/atproto-did` method (e.g. PDS
+ *     subdomain handles like `*.npmx.social`), which a browser cannot fetch
+ *     cross-origin itself.
+ *   - DNS-over-HTTPS (dns.google): resolves handles verified via the
+ *     `_atproto.<handle>` TXT record, independently of any AppView.
+ *   - HTTP well-known: last-ditch direct fetch, only succeeds for the rare
+ *     handle domain that sets permissive CORS, but harmless to try.
+ */
+class FallbackHandleResolver implements HandleResolver {
+  #methods: HandleResolver[]
+
+  constructor(methods: HandleResolver[]) {
+    this.#methods = methods
+  }
+
+  resolve(handle: Handle, options?: ResolveHandleOptions): Promise<AtprotoDid> {
+    const methods = this.#methods
+    return new Promise<AtprotoDid>((resolve, reject) => {
+      if (!methods.length) {
+        reject(new Error('no handle resolvers configured'))
+        return
+      }
+      let pending = methods.length
+      let firstError: unknown
+      let settled = false
+      for (const method of methods) {
+        method.resolve(handle, options).then(
+          (did) => {
+            if (!settled) {
+              settled = true
+              resolve(did)
+            }
+          },
+          (err) => {
+            if (firstError === undefined) firstError = err
+            pending -= 1
+            if (pending === 0 && !settled) reject(firstError)
+          }
+        )
+      }
+    })
+  }
+}
 
 /**
  * A single, robust, fully-decentralized identity resolver shared across the app
  * (OAuth login + every public read). This is the backbone that lets koinon
  * support *any* atproto account regardless of which PDS hosts it.
  *
- * Handle -> DID resolution races two independent methods so any handle resolves:
- *   - DNS-over-HTTPS: reads the `_atproto.<handle>` TXT record (via dns.google)
- *   - HTTPS well-known: fetches `https://<handle>/.well-known/atproto-did`
- * With the `race` strategy the first method to *succeed* wins, and resolution
- * only fails if BOTH methods fail — maximally tolerant of a single point failing.
+ * Handle -> DID resolution races the methods described on FallbackHandleResolver
+ * so any handle resolves from the browser, and fails only if all methods fail.
  *
  * DID -> document resolution supports did:plc (plc.directory) and did:web.
  *
@@ -27,13 +84,11 @@ import type { ActorIdentifier } from '@atcute/lexicons'
  * preventing handle spoofing.
  */
 export const identityResolver = new LocalActorResolver({
-  handleResolver: new CompositeHandleResolver({
-    strategy: 'race',
-    methods: {
-      dns: new DohJsonHandleResolver({ dohUrl: 'https://dns.google/resolve' }),
-      http: new WellKnownHandleResolver()
-    }
-  }),
+  handleResolver: new FallbackHandleResolver([
+    new XrpcHandleResolver({ serviceUrl: APPVIEW_URL }),
+    new DohJsonHandleResolver({ dohUrl: 'https://dns.google/resolve' }),
+    new WellKnownHandleResolver()
+  ]),
   didDocumentResolver: new CompositeDidDocumentResolver({
     methods: {
       plc: new PlcDidDocumentResolver(),
