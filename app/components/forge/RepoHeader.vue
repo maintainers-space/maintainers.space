@@ -61,9 +61,7 @@ const forge = computed(() => getForge(props.repo.provider))
       <span v-if="repo.language" class="inline-flex items-center gap-1.5">
         <span class="size-2.5 rounded-full bg-primary" />{{ repo.language }}
       </span>
-      <span v-if="repo.stars !== undefined" class="inline-flex items-center gap-1">
-        <UIcon name="i-lucide-star" class="size-4" />{{ formatCompactNumber(repo.stars) }}
-      </span>
+      <ForgeRepoStarButton :repo="repo" />
       <span v-if="repo.forks !== undefined" class="inline-flex items-center gap-1">
         <UIcon name="i-lucide-git-fork" class="size-4" />{{ formatCompactNumber(repo.forks) }}
       </span>

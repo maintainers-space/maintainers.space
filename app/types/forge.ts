@@ -463,6 +463,8 @@ export interface ForgeCapabilities {
   codeSearch: boolean
   userSearch: boolean
   discussionSearch: boolean
+  /** The signed-in viewer can star/unstar repositories. */
+  star: boolean
 }
 
 export const NO_CAPABILITIES: ForgeCapabilities = {
@@ -475,7 +477,8 @@ export const NO_CAPABILITIES: ForgeCapabilities = {
   issueSearch: false,
   codeSearch: false,
   userSearch: false,
-  discussionSearch: false
+  discussionSearch: false,
+  star: false
 }
 
 export interface IssueListOptions extends ForgePageOptions {
@@ -560,6 +563,10 @@ export interface ForgeProvider {
   createReview?: (repo: RepoLocator, id: string, input: ForgeReviewInput, opts?: ForgeReadOptions) => Promise<void>
   /** Merge a pull request. Falls back across merge methods the repo allows. */
   mergePull?: (repo: RepoLocator, id: string, opts?: ForgeReadOptions & { method?: ForgeMergeMethod }) => Promise<ForgeMergeResult>
+  /** Whether the authenticated viewer has starred this repository. */
+  isStarred?: (repo: RepoLocator, opts?: ForgeReadOptions) => Promise<boolean>
+  /** Star or unstar a repository; returns the resulting state and star count when known. */
+  setStar?: (repo: RepoLocator, starred: boolean, opts?: ForgeReadOptions) => Promise<{ starred: boolean, stars?: number }>
 
   // Social graph ---------------------------------------------------------
   /**

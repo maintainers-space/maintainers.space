@@ -396,7 +396,8 @@ export const gitlabProvider: ForgeProvider = {
     issueSearch: true,
     codeSearch: true,
     userSearch: true,
-    discussionSearch: false
+    discussionSearch: false,
+    star: true
   },
   webUrl: (owner, repo) => `${WEB}/${owner}/${repo}`,
   ownerWebUrl: owner => `${WEB}/${owner}`,
@@ -713,6 +714,28 @@ export const gitlabProvider: ForgeProvider = {
       method: 'PUT', headers: glHeaders(opts), signal: opts?.signal
     })
     return { merged: r.state === 'merged', message: r.merge_error }
+  },
+
+  async isStarred(repo, opts): Promise<boolean> {
+    const token = opts?.token ?? getForgeToken('gitlab')
+    if (!token) return false
+    const me = await glFetch<any>('/user', undefined, opts).catch(() => null)
+    if (!me?.id) return false
+    const starrers = await glFetch<any[]>(`/projects/${projectId(repo)}/starrers`, { search: me.username }, opts).catch(() => [])
+    return (starrers ?? []).some((s: any) => s?.user?.id === me.id)
+  },
+
+  async setStar(repo, starred, opts): Promise<{ starred: boolean, stars?: number }> {
+    try {
+      const proj = await $fetch<any>(`${API}/projects/${projectId(repo)}/${starred ? 'star' : 'unstar'}`, {
+        method: 'POST', headers: glHeaders(opts), signal: opts?.signal
+      })
+      return { starred, stars: typeof proj?.star_count === 'number' ? proj.star_count : undefined }
+    } catch (e) {
+      // GitLab responds 304 Not Modified when the repo is already in the target state.
+      if (errStatus(e) === 304) return { starred }
+      throw e
+    }
   },
 
   async listFollowedRepos(opts): Promise<ForgeRepo[]> {

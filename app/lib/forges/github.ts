@@ -459,7 +459,8 @@ export const githubProvider: ForgeProvider = {
     issueSearch: true,
     codeSearch: true,
     userSearch: true,
-    discussionSearch: true
+    discussionSearch: true,
+    star: true
   },
   webUrl: (owner, repo) => `https://github.com/${owner}/${repo}`,
   ownerWebUrl: owner => `https://github.com/${owner}`,
@@ -941,6 +942,30 @@ export const githubProvider: ForgeProvider = {
       }
     }
     throw lastErr
+  },
+
+  async isStarred(repo, opts): Promise<boolean> {
+    const token = opts?.token ?? getForgeToken('github')
+    if (!token) return false
+    try {
+      await $fetch(`${API}/user/starred/${repo.owner}/${repo.name}`, {
+        headers: ghHeaders(opts),
+        signal: opts?.signal
+      })
+      return true
+    } catch (e) {
+      if (errStatus(e) === 404) return false
+      throw e
+    }
+  },
+
+  async setStar(repo, starred, opts): Promise<{ starred: boolean }> {
+    await $fetch(`${API}/user/starred/${repo.owner}/${repo.name}`, {
+      method: starred ? 'PUT' : 'DELETE',
+      headers: ghHeaders(opts),
+      signal: opts?.signal
+    })
+    return { starred }
   },
 
   async listFollowedRepos(opts): Promise<ForgeRepo[]> {
