@@ -28,6 +28,9 @@ const { data: accounts } = useAsyncData(
   { watch: [handle], default: () => [] as ForgeAccountRecord[] }
 )
 
+const { did: myDid } = useAuth()
+const isOwn = computed(() => !!myDid.value && myDid.value === profile.value?.did)
+
 const githubLogins = computed(() =>
   (accounts.value ?? []).filter(a => a.provider === 'github').map(a => a.username)
 )
@@ -40,6 +43,30 @@ watch(
   () => { check(profile.value?.did, accounts.value ?? []) },
   { immediate: true }
 )
+
+interface LinkedAccountView { provider: string, username: string, url?: string, verified: boolean }
+
+// Unified linked-accounts list. The atproto identity itself *is* a Tangled
+// account, so it leads the list and is inherently verified — we resolved the DID
+// to render this page. Other forges (GitHub, …) are verified only when their
+// server-signed attestation checks out.
+const linkedAccounts = computed<LinkedAccountView[]>(() => {
+  const out: LinkedAccountView[] = []
+  const p = profile.value
+  if (p) {
+    const tangled = getForge('tangled')
+    out.push({
+      provider: 'tangled',
+      username: p.handle,
+      url: tangled?.ownerWebUrl ? tangled.ownerWebUrl(p.handle) : undefined,
+      verified: true
+    })
+  }
+  for (const a of accounts.value ?? []) {
+    out.push({ provider: a.provider, username: a.username, url: accountUrl(a), verified: isVerified(p?.did, a) })
+  }
+  return out
+})
 
 // 3) Repositories across the atproto (Tangled) identity + linked GitHub accounts.
 const { data: repos, pending: reposPending } = useAsyncData(
@@ -149,16 +176,27 @@ useHead(() => ({ title: `${displayName.value} · koinon` }))
                 {{ profile.description }}
               </p>
             </div>
-            <UButton
-              v-if="bskyUrl"
-              :to="bskyUrl"
-              target="_blank"
-              icon="i-lucide-external-link"
-              color="neutral"
-              variant="subtle"
-              size="sm"
-              label="Bluesky"
-            />
+            <div class="flex items-center gap-2">
+              <UButton
+                v-if="isOwn"
+                to="/settings"
+                icon="i-lucide-settings"
+                color="neutral"
+                variant="subtle"
+                size="sm"
+                label="Settings"
+              />
+              <UButton
+                v-if="bskyUrl"
+                :to="bskyUrl"
+                target="_blank"
+                icon="i-lucide-external-link"
+                color="neutral"
+                variant="subtle"
+                size="sm"
+                label="Bluesky"
+              />
+            </div>
           </div>
 
           <!-- Linked accounts -->
@@ -166,12 +204,12 @@ useHead(() => ({ title: `${displayName.value} · koinon` }))
             <h2 class="text-sm font-semibold uppercase tracking-wide text-muted">
               Linked accounts
             </h2>
-            <div v-if="accounts && accounts.length" class="flex flex-wrap gap-2">
+            <div v-if="linkedAccounts.length" class="flex flex-wrap gap-2">
               <UButton
-                v-for="a in accounts"
+                v-for="a in linkedAccounts"
                 :key="`${a.provider}:${a.username}`"
-                :to="accountUrl(a)"
-                :target="accountUrl(a) ? '_blank' : undefined"
+                :to="a.url"
+                :target="a.url ? '_blank' : undefined"
                 color="neutral"
                 variant="outline"
                 size="md"
@@ -180,7 +218,7 @@ useHead(() => ({ title: `${displayName.value} · koinon` }))
                 <ForgeIcon :provider="a.provider" class="size-4" />
                 <span>{{ a.username }}</span>
                 <UIcon
-                  v-if="isVerified(profile?.did, a)"
+                  v-if="a.verified"
                   name="i-lucide-shield-check"
                   class="size-4 text-primary"
                 />

@@ -1,12 +1,5 @@
 <script setup lang="ts">
-import type { NavigationMenuItem } from '@nuxt/ui'
-
 definePageMeta({ middleware: 'auth' })
-
-const links: NavigationMenuItem[] = [
-  { label: 'Profile', icon: 'i-lucide-user', to: '/settings', exact: true },
-  { label: 'Linked accounts', icon: 'i-lucide-link', to: '/settings/accounts' }
-]
 </script>
 
 <template>
@@ -17,9 +10,6 @@ const links: NavigationMenuItem[] = [
           <UDashboardSidebarCollapse />
         </template>
       </UDashboardNavbar>
-      <UDashboardToolbar>
-        <UNavigationMenu :items="links" highlight class="-mx-1 flex-1" />
-      </UDashboardToolbar>
     </template>
 
     <template #body>
