@@ -14,7 +14,8 @@ const {
   loadedOnce,
   load,
   markRead,
-  markManyRead
+  markManyRead,
+  completeCiGroup
 } = useNotifications()
 const { isAuthenticated } = useAuth()
 
@@ -65,7 +66,7 @@ function resolvedMeta(item: ForgeInboxItem): { icon: string, class: string } {
             variant="ghost"
             size="sm"
             :loading="loading"
-            @click="load"
+            @click="load(true)"
           />
         </template>
       </UDashboardNavbar>
@@ -204,17 +205,27 @@ function resolvedMeta(item: ForgeInboxItem): { icon: string, class: string } {
             >
               <ul class="divide-y divide-default">
                 <li v-for="g in ciGroups" :key="g.key">
-                  <NuxtLink
-                    :to="g.to || undefined"
-                    :href="!g.to ? (g.url || undefined) : undefined"
-                    :target="!g.to ? '_blank' : undefined"
-                    class="flex items-center gap-3 px-4 py-2.5 text-sm transition hover:bg-elevated/40"
-                  >
+                  <div class="flex items-center gap-3 px-4 py-2.5 text-sm">
                     <UIcon name="i-lucide-git-branch" class="size-4 shrink-0 text-muted" />
-                    <span class="min-w-0 flex-1 truncate text-default">{{ g.repo.fullName }}</span>
+                    <NuxtLink
+                      :to="g.to || undefined"
+                      :href="!g.to ? (g.url || undefined) : undefined"
+                      :target="!g.to ? '_blank' : undefined"
+                      class="min-w-0 flex-1 truncate text-default transition hover:text-primary"
+                    >
+                      {{ g.repo.fullName }}
+                    </NuxtLink>
                     <span class="shrink-0 text-xs font-medium text-error">failed {{ g.count }}&times;</span>
                     <span v-if="g.latestAt" class="hidden shrink-0 text-xs text-muted sm:inline">{{ formatRelativeTime(g.latestAt) }}</span>
-                  </NuxtLink>
+                    <UButton
+                      icon="i-lucide-check"
+                      color="neutral"
+                      variant="ghost"
+                      size="xs"
+                      aria-label="Mark resolved"
+                      @click="completeCiGroup(g)"
+                    />
+                  </div>
                 </li>
               </ul>
             </NotificationsGroupCard>

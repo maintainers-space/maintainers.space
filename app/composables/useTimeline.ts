@@ -1,4 +1,6 @@
-import { getForge } from '~/lib/forges'
+import { forgeList } from '~/lib/forges'
+import { fetchFollows } from '~/lib/atproto/public'
+import { cached, TTL } from '~/lib/cache'
 import type { ForgeContribution } from '~/types/forge'
 
 /** Bounded-concurrency map so the friends fan-out stays responsive. */
@@ -53,6 +55,7 @@ function selectFriends(items: ForgeContribution[], cap = 6, max = 80): ForgeCont
 export function useTimeline() {
   const { get: getToken } = useForgeTokens()
   const { accounts, loaded, refresh } = useForgeAccounts()
+  const { did, profile } = useAuth()
 
   const meItems = ref<ForgeContribution[]>([])
   const friendsItems = ref<ForgeContribution[]>([])
@@ -63,63 +66,91 @@ export function useTimeline() {
   const meNote = ref<string | null>(null)
   const friendsNote = ref<string | null>(null)
 
-  const githubLogins = computed(() =>
-    (accounts.value ?? []).filter(a => a.provider === 'github').map(a => a.username)
-  )
+  function loginsFor(provider: string): string[] {
+    return (accounts.value ?? []).filter(a => a.provider === provider).map(a => a.username)
+  }
 
-  async function loadMe(): Promise<void> {
-    const gh = getForge('github')
-    const token = getToken('github')
+  /** The viewer's Tangled identity (handle preferred, DID fallback). */
+  function tangledSelf(): string | null {
+    const h = profile.value?.handle
+    if (h && !h.startsWith('did:')) return h
+    return did.value ?? null
+  }
+
+  /** Pool "my recent activity" across every forge that exposes an events feed. */
+  async function gatherMe(): Promise<ForgeContribution[]> {
+    if (!loaded.value) await refresh()
+    const jobs: Promise<ForgeContribution[]>[] = []
+    for (const forge of forgeList) {
+      if (!forge.listUserEvents) continue
+      if (forge.id === 'tangled') {
+        const self = tangledSelf()
+        if (self) jobs.push(forge.listUserEvents(self, { limit: 100 }).catch(() => [] as ForgeContribution[]))
+        continue
+      }
+      const token = getToken(forge.id)
+      if (!token) continue
+      for (const login of loginsFor(forge.id)) {
+        jobs.push(forge.listUserEvents(login, { token, limit: 100 }).catch(() => [] as ForgeContribution[]))
+      }
+    }
+    const chunks = await Promise.all(jobs)
+    return dedupe(chunks.flat())
+      .filter(meaningful)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+  }
+
+  /** Pool "activity from people you follow" across every forge. */
+  async function gatherFriends(): Promise<ForgeContribution[]> {
+    if (!loaded.value) await refresh()
+    const buckets = await Promise.all(forgeList.map(async (forge) => {
+      if (!forge.listUserEvents) return [] as ForgeContribution[]
+
+      // Tangled/atproto: follow graph comes from the social identity.
+      if (forge.id === 'tangled') {
+        const self = did.value
+        if (!self) return [] as ForgeContribution[]
+        const follows = await fetchFollows(self, 60).catch(() => [])
+        const chunks = await mapLimit(follows.slice(0, 20), 6, f =>
+          forge.listUserEvents!(f.did, { limit: 100 }).catch(() => [] as ForgeContribution[])
+        )
+        return chunks.flat()
+      }
+
+      // Forge-native follow graph (GitHub, GitLab, …).
+      const token = getToken(forge.id)
+      if (!token || !forge.listFollowing) return [] as ForgeContribution[]
+      const users = await forge.listFollowing({ token, limit: 100 }).catch(() => [])
+      const chunks = await mapLimit(users.slice(0, 20), 6, u =>
+        forge.listUserEvents!(u.login, { token, limit: 100 }).catch(() => [] as ForgeContribution[])
+      )
+      return chunks.flat()
+    }))
+    return dedupe(buckets.flat()).filter(meaningful)
+  }
+
+  async function loadMe(force = false): Promise<void> {
     meLoading.value = true
     meNote.value = null
     try {
-      if (!gh?.listUserEvents || !token) {
-        meNote.value = 'Connect your GitHub account to see your recent activity.'
-        meItems.value = []
-        return
-      }
-      if (!loaded.value) await refresh()
-      const logins = githubLogins.value
-      if (!logins.length) {
-        meNote.value = 'Link a GitHub account to see your recent activity.'
-        meItems.value = []
-        return
-      }
-      const chunks = await Promise.all(
-        logins.map(l => gh.listUserEvents!(l, { token, limit: 100 }).catch(() => [] as ForgeContribution[]))
-      )
-      meItems.value = dedupe(chunks.flat())
-        .filter(meaningful)
-        .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      const items = await cached('timeline:me', gatherMe, { ttl: TTL.MEDIUM, force })
+      meItems.value = items
+      if (!items.length) meNote.value = 'Connect a forge account to see your recent activity.'
     } finally {
       meLoading.value = false
       meLoaded.value = true
     }
   }
 
-  async function loadFriends(): Promise<void> {
-    const gh = getForge('github')
-    const token = getToken('github')
+  async function loadFriends(force = false): Promise<void> {
     friendsLoading.value = true
     friendsNote.value = null
     try {
-      if (!gh?.listFollowing || !gh.listUserEvents || !token) {
-        friendsNote.value = 'Connect your GitHub account to see what the people you follow are building.'
-        friendsItems.value = []
-        return
-      }
-      const users = await gh.listFollowing({ token, limit: 100 }).catch(() => [])
-      if (!users.length) {
-        friendsNote.value = 'You don\u2019t follow anyone on GitHub yet — follow a few people to build your feed.'
-        friendsItems.value = []
-        return
-      }
-      const chunks = await mapLimit(users.slice(0, 20), 6, u =>
-        gh.listUserEvents!(u.login, { token, limit: 100 }).catch(() => [] as ForgeContribution[])
-      )
-      const all = dedupe(chunks.flat()).filter(meaningful)
+      const all = await cached('timeline:friends', gatherFriends, { ttl: TTL.MEDIUM, force })
       friendsItems.value = selectFriends(all)
-      if (!friendsItems.value.length) friendsNote.value = 'No recent activity from the people you follow.'
+      if (!friendsItems.value.length) {
+        friendsNote.value = 'No recent activity from the people you follow — follow a few people to build your feed.'
+      }
     } finally {
       friendsLoading.value = false
       friendsLoaded.value = true

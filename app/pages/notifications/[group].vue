@@ -71,7 +71,7 @@ async function onMergeAll(): Promise<void> {
             variant="ghost"
             size="sm"
             :loading="loading"
-            @click="load"
+            @click="load(true)"
           />
         </template>
       </UDashboardNavbar>

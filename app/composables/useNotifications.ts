@@ -1,5 +1,33 @@
 import { forgeList, getForge } from '~/lib/forges'
+import { cached, invalidate, TTL } from '~/lib/cache'
 import type { ForgeInboxItem, ForgeNotification } from '~/types/forge'
+
+/** localStorage key holding thread ids the user has completed. */
+const DISMISSED_KEY = 'koinon:inbox-dismissed'
+const DISMISS_TTL = 30 * 86_400_000
+
+/**
+ * Persist completed notifications locally. Providers like Tangled have no
+ * server-side read state, and even GitHub/GitLab benefit from an instant,
+ * durable "done" that survives a reload — so every completion is remembered
+ * here (pruned after 30 days) and filtered out of future loads.
+ */
+function loadDismissed(): Record<string, number> {
+  if (!import.meta.client) return {}
+  try {
+    const raw = JSON.parse(localStorage.getItem(DISMISSED_KEY) || '{}') as Record<string, number>
+    const now = Date.now()
+    const kept: Record<string, number> = {}
+    for (const [k, exp] of Object.entries(raw)) if (exp > now) kept[k] = exp
+    return kept
+  } catch {
+    return {}
+  }
+}
+
+function saveDismissed(map: Record<string, number>): void {
+  if (import.meta.client) localStorage.setItem(DISMISSED_KEY, JSON.stringify(map))
+}
 
 /** A repo whose CI is failing repeatedly, collapsed from many check notifications. */
 export interface CiFailureGroup {
@@ -83,9 +111,9 @@ export function useNotifications() {
   })
   const ciCount = computed(() => ciItems.value.length)
 
-  const hasSources = computed(() => !!getToken('github') || !!did.value)
+  const hasSources = computed(() => !!getToken('github') || !!getToken('gitlab') || !!did.value)
 
-  async function load(): Promise<void> {
+  async function load(force = false): Promise<void> {
     loading.value = true
     const noteSet = new Set<string>()
     const collected: ForgeInboxItem[] = []
@@ -94,28 +122,50 @@ export function useNotifications() {
     await Promise.all(
       forgeList.map(async (forge) => {
         const token = getToken(forge.id)
-        if (forge.id === 'github' && !token) {
-          if (viewer) noteSet.add('Connect your GitHub account to include GitHub notifications.')
+        // GitHub & GitLab need an OAuth token; nudge the user to connect when a
+        // signed-in viewer is missing one, so their forge isn't silently absent.
+        const needsToken = forge.id === 'github' || forge.id === 'gitlab'
+        if (needsToken && !token) {
+          if (viewer) noteSet.add(`Connect your ${forge.label} account to include ${forge.label} notifications.`)
           return
         }
+        if (!forge.listInbox && !forge.listNotifications) return
         try {
-          if (forge.listInbox) {
-            collected.push(...await forge.listInbox({ token, viewer, limit: 50 }))
-          } else if (forge.listNotifications) {
-            const ns = await forge.listNotifications({ token, viewer, limit: 50 })
-            collected.push(...ns.map(toInbox))
-          }
+          const list = await cached(
+            `inbox:${forge.id}:${viewer ?? 'anon'}`,
+            async () => {
+              if (forge.listInbox) return await forge.listInbox({ token, viewer, limit: 50 })
+              const ns = await forge.listNotifications!({ token, viewer, limit: 50 })
+              return ns.map(toInbox)
+            },
+            { ttl: TTL.SHORT, force }
+          )
+          collected.push(...list)
         } catch {
           noteSet.add(`Could not load ${forge.label} notifications.`)
         }
       })
     )
 
-    collected.sort((a, b) => new Date(b.updatedAt ?? 0).getTime() - new Date(a.updatedAt ?? 0).getTime())
-    items.value = collected
+    // Drop anything the user already completed on this device.
+    const dismissed = loadDismissed()
+    const visible = collected.filter(i => !dismissed[`${i.provider}:${i.id}`])
+
+    // Aggregate first, then sort by recency, so providers interleave with no
+    // per-forge sectioning anywhere in the inbox.
+    visible.sort((a, b) => new Date(b.updatedAt ?? 0).getTime() - new Date(a.updatedAt ?? 0).getTime())
+    items.value = visible
     notes.value = [...noteSet]
     loading.value = false
     loadedOnce.value = true
+  }
+
+  /** Record a completion so it stays gone across reloads (all providers). */
+  function rememberDismissed(list: ForgeInboxItem[]): void {
+    const map = loadDismissed()
+    const exp = Date.now() + DISMISS_TTL
+    for (const it of list) map[`${it.provider}:${it.id}`] = exp
+    saveDismissed(map)
   }
 
   function removeItem(item: ForgeInboxItem): void {
@@ -129,6 +179,8 @@ export function useNotifications() {
     const forge = getForge(item.provider)
     const token = getToken(item.provider)
     removeItem(item)
+    rememberDismissed([item])
+    invalidate(`inbox:${item.provider}:${did.value ?? 'anon'}`)
     if (forge?.markNotificationRead) await forge.markNotificationRead(item.id, { token }).catch(() => {})
   }
 
@@ -136,11 +188,18 @@ export function useNotifications() {
   async function markManyRead(list: ForgeInboxItem[]): Promise<void> {
     const targets = list.slice()
     for (const it of targets) removeItem(it)
+    rememberDismissed(targets)
+    for (const p of new Set(targets.map(t => t.provider))) invalidate(`inbox:${p}:${did.value ?? 'anon'}`)
     await Promise.all(targets.map((it) => {
       const forge = getForge(it.provider)
       const token = getToken(it.provider)
       return forge?.markNotificationRead ? forge.markNotificationRead(it.id, { token }).catch(() => {}) : Promise.resolve()
     }))
+  }
+
+  /** Complete an entire failing-CI group (every collapsed check) at once. */
+  async function completeCiGroup(group: CiFailureGroup): Promise<void> {
+    await markManyRead(group.items)
   }
 
   async function reply(item: ForgeInboxItem, body: string): Promise<boolean> {
@@ -169,6 +228,7 @@ export function useNotifications() {
       const res = await forge.mergePull(loc, String(item.number), { token })
       if (!res.merged) throw new Error(res.message || 'Merge was not completed')
       if (forge.markNotificationRead) await forge.markNotificationRead(item.id, { token }).catch(() => {})
+      rememberDismissed([item])
       removeItem(item)
       toast.add({ title: `Merged ${item.repo.fullName} #${item.number}`, color: 'success', icon: 'i-lucide-git-merge' })
       return true
@@ -205,6 +265,7 @@ export function useNotifications() {
     reply,
     markRead,
     markManyRead,
+    completeCiGroup,
     approveAndMerge,
     mergeAll,
     isMerging

@@ -13,7 +13,7 @@ const greetingName = computed(() => {
   return p.handle?.startsWith('did:') ? shortDid(p.handle) : p.handle
 })
 
-const recentRepos = computed(() => recent.value.slice(0, 6))
+const recentRepos = computed(() => recent.value.slice(0, 3))
 const followingRepos = computed(() => following.repos.value.slice(0, 6))
 
 // Quick-search: start typing and jump straight into the search page.
@@ -117,14 +117,14 @@ const examples = [
           </div>
         </section>
 
-        <!-- Connect GitHub prompt -->
+        <!-- Connect account prompt -->
         <UAlert
-          v-if="!home.ghConnected.value"
+          v-if="!home.connected.value"
           color="primary"
           variant="subtle"
-          icon="i-simple-icons-github"
-          title="Connect your GitHub account"
-          description="See your open pull requests, review requests and assigned issues in one place."
+          icon="i-lucide-plug"
+          title="Connect a forge account"
+          description="Link GitHub or GitLab to see your open pull requests, review requests and assigned issues in one place."
         >
           <template #actions>
             <UButton
@@ -132,13 +132,13 @@ const examples = [
               color="primary"
               variant="solid"
               size="xs"
-              label="Connect GitHub"
+              label="Connect account"
             />
           </template>
         </UAlert>
 
         <!-- Actionable feed -->
-        <section v-if="home.ghConnected.value" class="grid gap-4 lg:grid-cols-2">
+        <section v-if="home.connected.value" class="grid gap-4 lg:grid-cols-2">
           <HomeActionList
             title="Your pull requests"
             icon="i-lucide-git-pull-request"

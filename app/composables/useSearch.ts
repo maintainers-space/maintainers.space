@@ -1,5 +1,5 @@
 import { getForge, isForgeId } from '~/lib/forges'
-import { parseQuery, type ParsedQuery, type ResultType } from '~/lib/search/parser'
+import { parseQuery, type ParsedQuery, type QueryNode, type ResultType } from '~/lib/search/parser'
 import { astToGitHubQuery } from '~/lib/search/adapters/github'
 import { astToTangledPlan, tangledMatches } from '~/lib/search/adapters/tangled'
 import type { ForgeId, ForgeDiscussion, ForgeIssue, ForgeRepo, ForgeSearchCode, ForgeSearchOptions, ForgeUser } from '~/types/forge'
@@ -12,8 +12,20 @@ export interface SearchResults {
   discussions: ForgeDiscussion[]
 }
 
-const DEFAULT_PROVIDERS: ForgeId[] = ['github', 'tangled']
+const DEFAULT_PROVIDERS: ForgeId[] = ['github', 'gitlab', 'tangled']
 const DEFAULT_TYPES: ResultType[] = ['repos', 'issues', 'users']
+
+/** Flatten an AST to its free-text terms — GitLab's search takes plain text. */
+function astToPlainText(node: QueryNode | null): string {
+  if (!node) return ''
+  switch (node.type) {
+    case 'term': return node.value
+    case 'qualifier': return ''
+    case 'not': return ''
+    case 'and':
+    case 'or': return node.nodes.map(astToPlainText).filter(Boolean).join(' ')
+  }
+}
 
 function sortOption(parsed: ParsedQuery): ForgeSearchOptions['sort'] {
   switch (parsed.sortKey) {
@@ -121,6 +133,39 @@ export function useSearch() {
               if (r.total != null) totals.value = { ...totals.value, discussions: (totals.value.discussions ?? 0) + r.total }
             }).catch(() => { noteSet.add('GitHub discussion search failed.') }))
           }
+        }
+      }
+
+      if (pid === 'gitlab') {
+        const text = astToPlainText(q.root).trim()
+        if (!text) continue
+        const base: ForgeSearchOptions = { limit, token: getToken('gitlab'), sort: sortOption(q), order: q.sortOrder }
+        if (types.includes('repos') && forge.searchRepos) {
+          tasks.push(forge.searchRepos(text, base).then((r) => {
+            if (myToken !== runToken) return
+            results.repos.push(...r.items)
+          }).catch(() => { noteSet.add('GitLab repository search failed.') }))
+        }
+        if (types.includes('issues') && forge.searchIssues) {
+          if (!base.token) noteSet.add('Connect your GitLab account to search GitLab issues.')
+          else {
+            tasks.push(forge.searchIssues(text, base).then((r) => {
+              if (myToken !== runToken) return
+              results.issues.push(...r.items)
+            }).catch(() => { /* best-effort */ }))
+          }
+        }
+        if (types.includes('users') && forge.searchUsers) {
+          tasks.push(forge.searchUsers(text, base).then((r) => {
+            if (myToken !== runToken) return
+            results.users.push(...r.items)
+          }).catch(() => { /* user search is best-effort */ }))
+        }
+        if (types.includes('code') && forge.searchCode && base.token) {
+          tasks.push(forge.searchCode(text, base).then((r) => {
+            if (myToken !== runToken) return
+            results.code.push(...r.items)
+          }).catch(() => { /* best-effort */ }))
         }
       }
 

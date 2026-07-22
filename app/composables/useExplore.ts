@@ -1,5 +1,6 @@
-import { getForge } from '~/lib/forges'
+import { forgeList, getForge } from '~/lib/forges'
 import { fetchFollows } from '~/lib/atproto/public'
+import { cached, TTL } from '~/lib/cache'
 import type { ForgeRepo } from '~/types/forge'
 
 export type ExploreScope = 'trending' | 'following'
@@ -10,6 +11,8 @@ export interface ExploreOptions {
   period?: ExplorePeriod
   language?: string
   limit?: number
+  /** Bypass the client cache and refetch from every provider. */
+  force?: boolean
 }
 
 function sinceDate(period: ExplorePeriod): string {
@@ -41,6 +44,18 @@ function dedupe(list: ForgeRepo[]): ForgeRepo[] {
     seen.add(key)
     return true
   })
+}
+
+/**
+ * Sort a pooled cross-provider list so the grid reads as one mixed feed with no
+ * per-provider sectioning: trending ranks by stars, following by recency.
+ */
+function sortRepos(list: ForgeRepo[], scope: ExploreScope): ForgeRepo[] {
+  if (scope === 'trending') {
+    return list.sort((a, b) => (b.stars ?? 0) - (a.stars ?? 0)
+      || String(b.updatedAt ?? '').localeCompare(String(a.updatedAt ?? '')))
+  }
+  return list.sort((a, b) => String(b.updatedAt ?? '').localeCompare(String(a.updatedAt ?? '')))
 }
 
 /** Rewrite a Tangled repo listed by DID to display the follower's handle. */
@@ -96,13 +111,30 @@ export function useExplore() {
       }
     }
 
+    // GitLab: most-starred public projects. GitLab's /projects search has no
+    // language facet, so language filtering only narrows the GitHub slice.
+    const gl = getForge('gitlab')
+    if (gl?.searchRepos) {
+      try {
+        const res = await gl.searchRepos(language && language !== 'all' ? language : '', {
+          sort: 'stars',
+          order: 'desc',
+          limit: Math.min(limit, 12),
+          token: getToken('gitlab')
+        })
+        collected.push(...res.items)
+      } catch {
+        /* best-effort */
+      }
+    }
+
     // Tangled has no search API — surface a small curated set so the feed
     // still feels cross-provider.
     const tangled = getForge('tangled')
     if (tangled?.listRepos) {
       try {
         const featured = await tangled.listRepos('tangled.org')
-        collected.push(...featured.slice(0, 4))
+        collected.push(...featured.slice(0, 6))
       } catch {
         /* best-effort */
       }
@@ -115,20 +147,22 @@ export function useExplore() {
       return
     }
 
-    // GitHub: people you follow (users only, no orgs).
-    const gh = getForge('github')
-    if (gh?.listFollowedRepos) {
-      const ghToken = getToken('github')
-      if (ghToken) {
-        try {
-          collected.push(...await gh.listFollowedRepos({ token: ghToken }))
-        } catch {
-          noteSet.add('Could not load repositories from your GitHub follows.')
-        }
-      } else {
-        noteSet.add('Connect your GitHub account to include the people you follow there.')
+    // Every forge that exposes a "repos from people you follow" endpoint
+    // (GitHub, GitLab, …), gathered in parallel and pooled with the rest.
+    await Promise.all(forgeList.map(async (forge) => {
+      if (!forge.listFollowedRepos) return
+      const t = getToken(forge.id)
+      if (!t) {
+        if (forge.id === 'github') noteSet.add('Connect your GitHub account to include the people you follow there.')
+        if (forge.id === 'gitlab') noteSet.add('Connect your GitLab account to include the people you follow there.')
+        return
       }
-    }
+      try {
+        collected.push(...await forge.listFollowedRepos({ token: t }))
+      } catch {
+        noteSet.add(`Could not load repositories from your ${forge.label} follows.`)
+      }
+    }))
 
     // Tangled / atproto: accounts you follow on the social graph.
     const tangled = getForge('tangled')
@@ -163,18 +197,24 @@ export function useExplore() {
     const my = ++token
     loading.value = true
     error.value = null
-    const noteSet = new Set<string>()
-    const collected: ForgeRepo[] = []
 
+    const key = `explore:${scope}:${period}:${opts.language ?? 'all'}`
     try {
-      if (scope === 'following') {
-        await loadFollowing(collected, noteSet)
-      } else {
-        await loadDiscovery(period, limit, opts.language, collected, noteSet)
-      }
+      const result = await cached(key, async () => {
+        const noteSet = new Set<string>()
+        const collected: ForgeRepo[] = []
+        if (scope === 'following') {
+          await loadFollowing(collected, noteSet)
+        } else {
+          await loadDiscovery(period, limit, opts.language, collected, noteSet)
+        }
+        // Aggregate first, then sort, so providers interleave with no sectioning.
+        return { repos: sortRepos(dedupe(collected), scope), notes: [...noteSet] }
+      }, { ttl: TTL.MEDIUM, force: opts.force })
+
       if (my !== token) return
-      repos.value = dedupe(collected)
-      notes.value = [...noteSet]
+      repos.value = result.repos
+      notes.value = result.notes
     } finally {
       if (my === token) loading.value = false
     }
