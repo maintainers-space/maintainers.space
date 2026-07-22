@@ -112,12 +112,11 @@ async function submitReply(): Promise<void> {
     <!-- Inline reply -->
     <div v-if="canReply" class="border-t border-default px-4 py-2">
       <template v-if="replyOpen">
-        <UTextarea
+        <MarkdownEditor
           v-model="draft"
           :rows="3"
-          autoresize
           placeholder="Write a reply…"
-          class="w-full"
+          @submit="submitReply"
         />
         <div class="mt-2 flex items-center gap-2">
           <UButton
