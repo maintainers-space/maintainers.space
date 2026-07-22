@@ -365,9 +365,14 @@ function mapEvent(e: any): ForgeContribution | null {
     case 'PushEvent': {
       kind = 'push'
       count = p.size ?? p.commits?.length
-      title = p.commits?.[p.commits.length - 1]?.message?.split('\n')[0]
-      const branch = String(p.ref ?? '').replace('refs/heads/', '')
-      url = `https://github.com/${repoFull}/commits/${branch}`
+      const commits = Array.isArray(p.commits) ? p.commits : []
+      const head = commits[commits.length - 1]
+      title = head?.message?.split('\n')[0]
+      const headSha = p.head ?? head?.sha
+      // Link to the exact commit that was pushed, not the branch's commit list.
+      url = headSha
+        ? `https://github.com/${repoFull}/commit/${headSha}`
+        : `https://github.com/${repoFull}/commits/${String(p.ref ?? '').replace('refs/heads/', '')}`
       break
     }
     case 'PullRequestEvent': {
@@ -405,7 +410,11 @@ function mapEvent(e: any): ForgeContribution | null {
       kind = 'create'
       refType = p.ref_type
       title = p.ref ? `${p.ref_type} ${p.ref}` : p.ref_type
-      url = `https://github.com/${repoFull}`
+      // Link to the created branch/tag directly; fall back to the repo for a
+      // whole-repository create event.
+      url = p.ref && p.ref_type !== 'repository'
+        ? `https://github.com/${repoFull}/tree/${p.ref}`
+        : `https://github.com/${repoFull}`
       break
     }
     case 'ReleaseEvent': {
@@ -851,7 +860,7 @@ export const githubProvider: ForgeProvider = {
           if (kind === 'pull') {
             item.stat = { additions: subj.additions, deletions: subj.deletions, filesChanged: subj.changed_files }
           }
-          if (n.unread && (subj.comments ?? 0) > 0) {
+          if (!resolved && n.unread && (subj.comments ?? 0) > 0) {
             const since = n.last_read_at
             const cs = await $fetch<any[]>(`${API}/repos/${owner}/${name}/issues/${number}/comments`, {
               headers,

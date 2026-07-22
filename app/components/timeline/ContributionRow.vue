@@ -5,22 +5,23 @@ const props = withDefaults(defineProps<{ contribution: ForgeContribution, showAc
   showActor: false
 })
 
-interface KindStyle { icon: string, chip: string }
+interface KindStyle { icon: string, chip: string, tone: string }
 
-// Icon + tinted chip per event kind. Static class strings so Tailwind keeps them.
+// Icon + tinted chip (for the "Me" leading) and a plain text tone (for the small
+// kind marker on the "Friends" feed). Static class strings so Tailwind keeps them.
 const KIND_STYLE: Record<ForgeEventKind, KindStyle> = {
-  push: { icon: 'i-lucide-git-commit-horizontal', chip: 'bg-elevated text-muted' },
-  pr_opened: { icon: 'i-lucide-git-pull-request', chip: 'bg-success/10 text-success' },
-  pr_merged: { icon: 'i-lucide-git-merge', chip: 'bg-primary/10 text-primary' },
-  pr_review: { icon: 'i-lucide-eye', chip: 'bg-info/10 text-info' },
-  issue_opened: { icon: 'i-lucide-circle-dot', chip: 'bg-success/10 text-success' },
-  issue_closed: { icon: 'i-lucide-circle-check', chip: 'bg-primary/10 text-primary' },
-  comment: { icon: 'i-lucide-message-square', chip: 'bg-info/10 text-info' },
-  create: { icon: 'i-lucide-git-branch', chip: 'bg-warning/10 text-warning' },
-  release: { icon: 'i-lucide-tag', chip: 'bg-warning/10 text-warning' },
-  fork: { icon: 'i-lucide-git-fork', chip: 'bg-elevated text-muted' },
-  star: { icon: 'i-lucide-star', chip: 'bg-warning/10 text-warning' },
-  other: { icon: 'i-lucide-activity', chip: 'bg-elevated text-muted' }
+  push: { icon: 'i-lucide-git-commit-horizontal', chip: 'bg-elevated text-muted', tone: 'text-muted' },
+  pr_opened: { icon: 'i-lucide-git-pull-request', chip: 'bg-success/10 text-success', tone: 'text-success' },
+  pr_merged: { icon: 'i-lucide-git-merge', chip: 'bg-primary/10 text-primary', tone: 'text-primary' },
+  pr_review: { icon: 'i-lucide-eye', chip: 'bg-info/10 text-info', tone: 'text-info' },
+  issue_opened: { icon: 'i-lucide-circle-dot', chip: 'bg-success/10 text-success', tone: 'text-success' },
+  issue_closed: { icon: 'i-lucide-circle-check', chip: 'bg-primary/10 text-primary', tone: 'text-primary' },
+  comment: { icon: 'i-lucide-message-square', chip: 'bg-info/10 text-info', tone: 'text-info' },
+  create: { icon: 'i-lucide-git-branch', chip: 'bg-warning/10 text-warning', tone: 'text-warning' },
+  release: { icon: 'i-lucide-tag', chip: 'bg-warning/10 text-warning', tone: 'text-warning' },
+  fork: { icon: 'i-lucide-git-fork', chip: 'bg-elevated text-muted', tone: 'text-muted' },
+  star: { icon: 'i-lucide-star', chip: 'bg-warning/10 text-warning', tone: 'text-warning' },
+  other: { icon: 'i-lucide-activity', chip: 'bg-elevated text-muted', tone: 'text-muted' }
 }
 
 const c = computed(() => props.contribution)
@@ -60,7 +61,16 @@ const verbText = computed(() => (props.showActor ? verb.value : verb.value.charA
 
 <template>
   <div class="flex items-start gap-3 px-3 py-3 sm:px-4">
-    <div class="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full" :class="style.chip">
+    <!-- Friends: the person's avatar leads (minimalistic). Me: a tinted kind chip. -->
+    <NuxtLink v-if="showActor" :to="actorTo" class="mt-0.5 shrink-0">
+      <UAvatar
+        :src="c.actor.avatarUrl ?? undefined"
+        :alt="userLabel(c.actor)"
+        size="md"
+        class="ring-1 ring-default"
+      />
+    </NuxtLink>
+    <div v-else class="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full" :class="style.chip">
       <UIcon :name="style.icon" class="size-4" />
     </div>
 
@@ -79,6 +89,12 @@ const verbText = computed(() => (props.showActor ? verb.value : verb.value.charA
         >{{ subject }}</NuxtLink>
       </p>
       <div class="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted">
+        <UIcon
+          v-if="showActor"
+          :name="style.icon"
+          class="size-3.5 shrink-0"
+          :class="style.tone"
+        />
         <NuxtLink v-if="showRepoMeta" :to="repoTo" class="hover:text-primary">{{ c.repo.fullName }}</NuxtLink>
         <span v-if="showRepoMeta && c.kind === 'push' && c.count">·</span>
         <span v-if="c.kind === 'push' && c.count">{{ c.count }} commit{{ c.count === 1 ? '' : 's' }}</span>
