@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any -- XRPC responses are untyped JSON */
 import { resolveHandleToDid } from '~/lib/atproto/public'
+import { noCacheHeaders } from '~/lib/reload-nav'
 import type {
   ForgeActionJob,
   ForgeActionRun,
@@ -80,7 +81,7 @@ function tangledUser(did: string): ForgeUser {
 }
 
 async function bobbin<T>(nsid: string, query: Record<string, unknown>, opts?: ForgeReadOptions): Promise<T> {
-  return await $fetch(`${BOBBIN}/${nsid}`, { query, signal: opts?.signal }) as T
+  return await $fetch(`${BOBBIN}/${nsid}`, { query, signal: opts?.signal, headers: noCacheHeaders() }) as T
 }
 
 async function listRepoRecords(did: string, opts?: ForgeReadOptions): Promise<TangledListItem[]> {

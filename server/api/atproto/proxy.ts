@@ -71,7 +71,7 @@ export default defineEventHandler(async (event) => {
   // Public atproto reads (identity, profiles, repos, follows) are identical for
   // every viewer, so let the browser/CDN/Netlify hold them for a few minutes.
   // Writes and non-200s are never shared-cached.
-  if (!hasBody && upstream.ok) setCacheHeaders(event, CACHE_MEDIUM)
+  if (!hasBody && upstream.ok && !(getHeader(event, 'cache-control') || '').toLowerCase().includes('no-cache')) setCacheHeaders(event, CACHE_MEDIUM)
   else setNoStore(event)
   return await upstream.text()
 })

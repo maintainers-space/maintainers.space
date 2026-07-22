@@ -12,6 +12,8 @@
 // retried through the relay; requests to any other host fall straight through so
 // this never changes behaviour for self-hosted PDSes or unrelated domains.
 
+import { noCacheHeaders } from '~/lib/reload-nav'
+
 const PROXY_ENDPOINT = '/api/atproto/proxy'
 
 const ALLOW_EXACT = new Set([
@@ -68,7 +70,7 @@ export const proxiedFetch: typeof fetch = async (input, init) => {
 
   return fetch(relayUrl(target), {
     method: init?.method,
-    headers: init?.headers,
+    headers: { ...(init?.headers as Record<string, string> | undefined), ...noCacheHeaders() },
     body: init?.body,
     signal: init?.signal
   })

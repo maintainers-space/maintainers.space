@@ -17,8 +17,9 @@ import { setCacheHeaders, setNoStore } from './cache'
 export async function proxyJson(event: H3Event, targetUrl: string, cachePolicy?: CachePolicy): Promise<unknown> {
   const method = event.method.toUpperCase()
   const hasBody = method !== 'GET' && method !== 'HEAD'
-  if (cachePolicy && !hasBody) setCacheHeaders(event, cachePolicy)
-  else if (hasBody) setNoStore(event)
+  const noCache = (getHeader(event, 'cache-control') || '').toLowerCase().includes('no-cache')
+  if (cachePolicy && !hasBody && !noCache) setCacheHeaders(event, cachePolicy)
+  else if (hasBody || noCache) setNoStore(event)
   try {
     return await $fetch(targetUrl, {
       method: method as 'GET' | 'POST',
