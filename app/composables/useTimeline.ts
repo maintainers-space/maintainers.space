@@ -31,14 +31,12 @@ function dedupe(items: ForgeContribution[]): ForgeContribution[] {
 }
 
 /**
- * Rank a pooled friends feed by impact (merged PRs > releases > opened PRs > …),
- * breaking ties by recency and capping each author so one prolific person can't
- * dominate the highlights.
+ * Turn a pooled friends feed into a real chronological timeline: newest first,
+ * but capped per author so one prolific person can't flood the feed, and bounded
+ * to a sane maximum. Low-signal noise (stars) is already filtered upstream.
  */
-function rankFriends(items: ForgeContribution[], cap = 5, max = 60): ForgeContribution[] {
-  const sorted = [...items].sort((a, b) =>
-    (b.impact ?? 0) - (a.impact ?? 0) || b.createdAt.localeCompare(a.createdAt)
-  )
+function selectFriends(items: ForgeContribution[], cap = 6, max = 80): ForgeContribution[] {
+  const sorted = [...items].sort((a, b) => b.createdAt.localeCompare(a.createdAt))
   const perAuthor = new Map<string, number>()
   const out: ForgeContribution[] = []
   for (const it of sorted) {
@@ -120,7 +118,7 @@ export function useTimeline() {
         gh.listUserEvents!(u.login, { token, limit: 100 }).catch(() => [] as ForgeContribution[])
       )
       const all = dedupe(chunks.flat()).filter(meaningful)
-      friendsItems.value = rankFriends(all)
+      friendsItems.value = selectFriends(all)
       if (!friendsItems.value.length) friendsNote.value = 'No recent activity from the people you follow.'
     } finally {
       friendsLoading.value = false

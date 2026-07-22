@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import type { ForgeContribution } from '~/types/forge'
+
 const { isAuthenticated } = useAuth()
 const {
   meItems,
@@ -35,6 +37,36 @@ onMounted(() => ensureLoaded('me'))
 watch(tab, t => ensureLoaded(t))
 
 const activeLoading = computed(() => (tab.value === 'me' ? meLoading.value : friendsLoading.value))
+
+// --- Day grouping: turn the flat, date-sorted feed into a real timeline. ---
+interface DayGroup { key: string, label: string, items: ForgeContribution[] }
+
+function dayLabel(d: Date): string {
+  const startOfDay = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime()
+  const diffDays = Math.round((startOfDay(new Date()) - startOfDay(d)) / 86400000)
+  if (diffDays <= 0) return 'Today'
+  if (diffDays === 1) return 'Yesterday'
+  if (diffDays < 7) return new Intl.DateTimeFormat('en', { weekday: 'long' }).format(d)
+  return formatDate(d)
+}
+
+function groupByDay(items: ForgeContribution[]): DayGroup[] {
+  const groups: DayGroup[] = []
+  let cur: DayGroup | null = null
+  for (const it of items) {
+    const d = new Date(it.createdAt)
+    const key = Number.isNaN(d.getTime()) ? 'unknown' : `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`
+    if (!cur || cur.key !== key) {
+      cur = { key, label: Number.isNaN(d.getTime()) ? 'Earlier' : dayLabel(d), items: [] }
+      groups.push(cur)
+    }
+    cur.items.push(it)
+  }
+  return groups
+}
+
+const meGroups = computed(() => groupByDay(meItems.value))
+const friendsGroups = computed(() => groupByDay(friendsItems.value))
 </script>
 
 <template>
@@ -80,12 +112,12 @@ const activeLoading = computed(() => (tab.value === 'me' ? meLoading.value : fri
               Your recent contributions across GitHub, newest first.
             </template>
             <template v-else>
-              The most impactful recent work from the people you follow on GitHub.
+              Recent activity from the people you follow on GitHub, newest first.
             </template>
           </p>
 
           <!-- Me -->
-          <div v-show="tab === 'me'" class="space-y-4">
+          <div v-show="tab === 'me'" class="space-y-6">
             <UAlert
               v-if="meNote"
               color="neutral"
@@ -119,15 +151,25 @@ const activeLoading = computed(() => (tab.value === 'me' ? meLoading.value : fri
               </p>
             </div>
 
-            <ul v-else-if="meItems.length" class="divide-y divide-default overflow-hidden rounded-lg border border-default">
-              <li v-for="c in meItems" :key="`${c.provider}:${c.id}`">
-                <TimelineContributionRow :contribution="c" />
-              </li>
-            </ul>
+            <section
+              v-for="g in meGroups"
+              v-else
+              :key="g.key"
+              class="space-y-2"
+            >
+              <h3 class="px-1 text-xs font-semibold uppercase tracking-wide text-muted">
+                {{ g.label }}
+              </h3>
+              <ul class="divide-y divide-default overflow-hidden rounded-lg border border-default">
+                <li v-for="c in g.items" :key="`${c.provider}:${c.id}`">
+                  <TimelineContributionRow :contribution="c" />
+                </li>
+              </ul>
+            </section>
           </div>
 
           <!-- Friends -->
-          <div v-show="tab === 'friends'" class="space-y-4">
+          <div v-show="tab === 'friends'" class="space-y-6">
             <UAlert
               v-if="friendsNote"
               color="neutral"
@@ -161,11 +203,21 @@ const activeLoading = computed(() => (tab.value === 'me' ? meLoading.value : fri
               </p>
             </div>
 
-            <ul v-else-if="friendsItems.length" class="divide-y divide-default overflow-hidden rounded-lg border border-default">
-              <li v-for="c in friendsItems" :key="`${c.provider}:${c.id}`">
-                <TimelineContributionRow :contribution="c" show-actor />
-              </li>
-            </ul>
+            <section
+              v-for="g in friendsGroups"
+              v-else
+              :key="g.key"
+              class="space-y-2"
+            >
+              <h3 class="px-1 text-xs font-semibold uppercase tracking-wide text-muted">
+                {{ g.label }}
+              </h3>
+              <ul class="divide-y divide-default overflow-hidden rounded-lg border border-default">
+                <li v-for="c in g.items" :key="`${c.provider}:${c.id}`">
+                  <TimelineContributionRow :contribution="c" show-actor />
+                </li>
+              </ul>
+            </section>
           </div>
         </template>
       </div>

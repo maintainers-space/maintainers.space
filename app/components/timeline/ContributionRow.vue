@@ -5,85 +5,83 @@ const props = withDefaults(defineProps<{ contribution: ForgeContribution, showAc
   showActor: false
 })
 
-const ICON: Record<ForgeEventKind, string> = {
-  push: 'i-lucide-git-commit-horizontal',
-  pr_opened: 'i-lucide-git-pull-request',
-  pr_merged: 'i-lucide-git-merge',
-  pr_review: 'i-lucide-eye',
-  issue_opened: 'i-lucide-circle-dot',
-  issue_closed: 'i-lucide-circle-check',
-  comment: 'i-lucide-message-square',
-  create: 'i-lucide-git-branch',
-  release: 'i-lucide-tag',
-  fork: 'i-lucide-git-fork',
-  star: 'i-lucide-star',
-  other: 'i-lucide-activity'
+interface KindStyle { icon: string, chip: string }
+
+// Icon + tinted chip per event kind. Static class strings so Tailwind keeps them.
+const KIND_STYLE: Record<ForgeEventKind, KindStyle> = {
+  push: { icon: 'i-lucide-git-commit-horizontal', chip: 'bg-elevated text-muted' },
+  pr_opened: { icon: 'i-lucide-git-pull-request', chip: 'bg-success/10 text-success' },
+  pr_merged: { icon: 'i-lucide-git-merge', chip: 'bg-primary/10 text-primary' },
+  pr_review: { icon: 'i-lucide-eye', chip: 'bg-info/10 text-info' },
+  issue_opened: { icon: 'i-lucide-circle-dot', chip: 'bg-success/10 text-success' },
+  issue_closed: { icon: 'i-lucide-circle-check', chip: 'bg-primary/10 text-primary' },
+  comment: { icon: 'i-lucide-message-square', chip: 'bg-info/10 text-info' },
+  create: { icon: 'i-lucide-git-branch', chip: 'bg-warning/10 text-warning' },
+  release: { icon: 'i-lucide-tag', chip: 'bg-warning/10 text-warning' },
+  fork: { icon: 'i-lucide-git-fork', chip: 'bg-elevated text-muted' },
+  star: { icon: 'i-lucide-star', chip: 'bg-warning/10 text-warning' },
+  other: { icon: 'i-lucide-activity', chip: 'bg-elevated text-muted' }
 }
 
 const c = computed(() => props.contribution)
-
+const style = computed(() => KIND_STYLE[c.value.kind])
 const repoTo = computed(() => repoPath({ provider: c.value.provider, owner: c.value.repo.owner, name: c.value.repo.name }))
 const actorTo = computed(() => userPath(c.value.actor))
 
+// Action word; the subject (PR/issue/release/commit) follows as a deep link.
 const verb = computed(() => {
-  const x = c.value
-  switch (x.kind) {
-    case 'push': return x.count ? `pushed ${x.count} commit${x.count === 1 ? '' : 's'} to` : 'pushed to'
-    case 'pr_opened': return 'opened a pull request in'
-    case 'pr_merged': return 'merged a pull request in'
-    case 'pr_review': return 'reviewed a pull request in'
-    case 'issue_opened': return 'opened an issue in'
-    case 'issue_closed': return 'closed an issue in'
-    case 'comment': return 'commented in'
-    case 'create': return `created ${x.refType ?? 'something'} in`
-    case 'release': return 'published a release in'
+  switch (c.value.kind) {
+    case 'push': return 'pushed'
+    case 'pr_opened': return 'opened'
+    case 'pr_merged': return 'merged'
+    case 'pr_review': return 'reviewed'
+    case 'issue_opened': return 'opened'
+    case 'issue_closed': return 'closed'
+    case 'comment': return 'commented on'
+    case 'create': return 'created'
+    case 'release': return 'released'
     case 'fork': return 'forked'
     default: return 'was active in'
   }
 })
 
-const numbered = computed(() => {
+// Subject text: the PR/issue title (+ number), commit message, tag… or the repo
+// itself when the event has no more specific subject.
+const subject = computed(() => {
   const x = c.value
-  if (!x.title) return null
-  return x.number ? `#${x.number} ${x.title}` : x.title
+  if (x.title) return x.number ? `#${x.number} ${x.title}` : x.title
+  return x.repo.fullName
 })
+// Show the repo separately only when the subject isn't already the repo.
+const showRepoMeta = computed(() => !!c.value.title)
+// On the "Me" feed there's no actor prefix, so start the sentence capitalized.
+const verbText = computed(() => (props.showActor ? verb.value : verb.value.charAt(0).toUpperCase() + verb.value.slice(1)))
 </script>
 
 <template>
-  <div class="flex items-start gap-3 px-4 py-3">
-    <UAvatar
-      v-if="showActor"
-      :src="c.actor.avatarUrl ?? undefined"
-      :alt="c.actor.login"
-      icon="i-lucide-user"
-      size="xs"
-      class="mt-0.5 shrink-0"
-    />
-    <UIcon v-else :name="ICON[c.kind]" class="mt-1 size-4 shrink-0 text-muted" />
+  <div class="flex items-start gap-3 px-3 py-3 sm:px-4">
+    <div class="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full" :class="style.chip">
+      <UIcon :name="style.icon" class="size-4" />
+    </div>
 
     <div class="min-w-0 flex-1">
       <p class="text-sm text-default">
         <NuxtLink
           v-if="showActor"
           :to="actorTo"
-          class="font-medium hover:text-primary"
+          class="font-medium text-highlighted hover:text-primary"
         >{{ userLabel(c.actor) }}</NuxtLink>
-        <span class="text-muted">{{ showActor ? ' ' : '' }}{{ verb }} </span>
+        <span class="text-muted">{{ showActor ? ' ' : '' }}{{ verbText }}&nbsp;</span>
         <NuxtLink
-          v-if="numbered && c.url"
-          :to="c.url"
-          target="_blank"
+          :to="c.url ? c.url : repoTo"
+          :target="c.url ? '_blank' : undefined"
           class="font-medium text-highlighted hover:text-primary"
-        >{{ numbered }}</NuxtLink>
-        <NuxtLink
-          v-else
-          :to="repoTo"
-          class="font-medium text-highlighted hover:text-primary"
-        >{{ c.repo.fullName }}</NuxtLink>
+        >{{ subject }}</NuxtLink>
       </p>
       <div class="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted">
-        <UIcon v-if="showActor" :name="ICON[c.kind]" class="size-3.5" />
-        <NuxtLink :to="repoTo" class="hover:text-primary">{{ c.repo.fullName }}</NuxtLink>
+        <NuxtLink v-if="showRepoMeta" :to="repoTo" class="hover:text-primary">{{ c.repo.fullName }}</NuxtLink>
+        <span v-if="showRepoMeta && c.kind === 'push' && c.count">·</span>
+        <span v-if="c.kind === 'push' && c.count">{{ c.count }} commit{{ c.count === 1 ? '' : 's' }}</span>
         <span v-if="c.createdAt">· {{ formatRelativeTime(c.createdAt) }}</span>
       </div>
     </div>
