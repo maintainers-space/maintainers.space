@@ -68,5 +68,10 @@ export default defineEventHandler(async (event) => {
   setResponseStatus(event, upstream.status)
   const contentType = upstream.headers.get('content-type')
   if (contentType) setResponseHeader(event, 'content-type', contentType)
+  // Public atproto reads (identity, profiles, repos, follows) are identical for
+  // every viewer, so let the browser/CDN/Netlify hold them for a few minutes.
+  // Writes and non-200s are never shared-cached.
+  if (!hasBody && upstream.ok) setCacheHeaders(event, CACHE_MEDIUM)
+  else setNoStore(event)
   return await upstream.text()
 })

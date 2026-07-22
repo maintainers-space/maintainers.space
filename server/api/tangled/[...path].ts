@@ -10,5 +10,5 @@
 export default defineEventHandler(async (event) => {
   const path = getRouterParam(event, 'path')
   if (!path) throw createError({ statusCode: 400, statusMessage: 'Missing Tangled XRPC method' })
-  return await proxyJson(event, `https://api.tangled.org/xrpc/${path}`)
+  return await proxyJson(event, `https://api.tangled.org/xrpc/${path}`, policyForNsid(path))
 })
