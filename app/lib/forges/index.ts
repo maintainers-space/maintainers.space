@@ -1,9 +1,11 @@
 import type { ForgeProvider } from '~/types/forge'
 import { githubProvider } from './github'
+import { gitlabProvider } from './gitlab'
 import { tangledProvider } from './tangled'
 
 export const forges = {
   github: githubProvider,
+  gitlab: gitlabProvider,
   tangled: tangledProvider
 } satisfies Record<string, ForgeProvider>
 

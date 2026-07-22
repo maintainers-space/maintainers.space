@@ -8,7 +8,9 @@ import type {
   ForgeCommit,
   ForgeCommitDetail,
   ForgeComment,
+  ForgeContribution,
   ForgeFileDiff,
+  ForgeInboxItem,
   ForgeIssue,
   ForgeIssueDetail,
   ForgeNotification,
@@ -516,77 +518,176 @@ export const tangledProvider: ForgeProvider = {
   },
 
   // Tangled has no anonymous notification inbox (personal notifications live
-  // behind tangled.org's own auth). As a best-effort, surface recent issue and
-  // pull-request activity on the signed-in viewer's own repositories so Tangled
-  // still shows up in the unified inbox.
+  // behind tangled.org's own auth). As a best-effort, surface recent issue,
+  // pull-request and CI activity on the signed-in viewer's own repositories so
+  // Tangled participates in the unified inbox like every other forge.
   async listNotifications(opts): Promise<ForgeNotification[]> {
-    const viewer = opts?.viewer
-    if (!viewer) return []
+    const items = await collectTangledInbox(opts)
+    return items.map((it): ForgeNotification => ({
+      provider: 'tangled',
+      id: it.id,
+      kind: it.kind,
+      title: it.title,
+      reason: it.reason,
+      unread: it.unread,
+      updatedAt: it.updatedAt,
+      repo: it.repo,
+      to: it.to,
+      url: it.url
+    }))
+  },
+
+  async listInbox(opts): Promise<ForgeInboxItem[]> {
+    return collectTangledInbox(opts)
+  },
+
+  // Best-effort activity feed: the repos a Tangled identity has created. Cheap
+  // (one list call) and deterministic, so Tangled shows up in the timeline
+  // alongside GitHub/GitLab without guessing at private feed endpoints.
+  async listUserEvents(login, opts): Promise<ForgeContribution[]> {
     let did: string
     try {
-      did = await resolveHandleToDid(viewer)
+      did = await resolveHandleToDid(login)
     } catch {
       return []
     }
-    const ownerHandle = viewer.startsWith('did:') ? did : viewer.trim().replace(/^@/, '')
-
+    const handle = login.startsWith('did:') ? did : login.trim().replace(/^@/, '')
     let records: TangledListItem[]
     try {
       records = await listRepoRecords(did, opts)
     } catch {
       return []
     }
-
-    const cutoff = Date.now() - 30 * 86_400_000
-    const perRepo = await Promise.all(records.slice(0, 10).map(async (rec): Promise<ForgeNotification[]> => {
-      const repoDid = rec.value?.repoDid
-      const name = rec.value?.name || rkeyFromUri(rec.uri)
-      if (!repoDid) return []
-      const [issues, pulls] = await Promise.all([
-        bobbin<{ items?: any[] }>('sh.tangled.repo.listIssues', { subject: repoDid, limit: 12 }, opts).catch(() => ({ items: [] as any[] })),
-        bobbin<{ items?: any[] }>('sh.tangled.repo.listPulls', { subject: repoDid, limit: 12 }, opts).catch(() => ({ items: [] as any[] }))
-      ])
-      const base = `/tangled/${ownerHandle}/${name}`
-      const repoRef = { owner: ownerHandle, name, fullName: `${ownerHandle}/${name}` }
-      const out: ForgeNotification[] = []
-      for (const it of issues.items ?? []) {
-        const m = mapTangledIssue(it)
-        const updated = m.updatedAt ?? m.createdAt
-        if (!updated || new Date(updated).getTime() < cutoff) continue
-        out.push({
+    return records
+      .map((rec): ForgeContribution | null => {
+        const value = rec.value ?? {}
+        const name = value.name || rkeyFromUri(rec.uri)
+        const createdAt = value.createdAt
+        if (!createdAt) return null
+        return {
           provider: 'tangled',
-          id: `issue:${name}:${m.id}`,
-          kind: 'issue',
-          title: m.title,
-          reason: m.state === 'closed' ? 'closed issue' : 'issue',
-          unread: false,
-          updatedAt: updated,
-          repo: repoRef,
-          to: `${base}/issues/${m.id}`,
-          url: `https://tangled.org${base}/issues/${m.id}`
-        })
-      }
-      for (const it of pulls.items ?? []) {
-        const m = mapTangledPull(it)
-        const updated = m.updatedAt ?? m.createdAt
-        if (!updated || new Date(updated).getTime() < cutoff) continue
-        out.push({
-          provider: 'tangled',
-          id: `pull:${name}:${m.id}`,
-          kind: 'pull',
-          title: m.title,
-          reason: `${m.state} pull request`,
-          unread: false,
-          updatedAt: updated,
-          repo: repoRef,
-          to: `${base}/pulls/${m.id}`,
-          url: `https://tangled.org${base}/pulls/${m.id}`
-        })
-      }
-      return out
-    }))
-    return perRepo.flat()
+          id: `repo:${rec.uri}`,
+          kind: 'create',
+          actor: { provider: 'tangled', login: handle, ref: { did } },
+          repo: { owner: handle, name, fullName: `${handle}/${name}`, url: `https://tangled.org/${handle}/${name}` },
+          title: name,
+          url: `/tangled/${handle}/${name}`,
+          createdAt,
+          refType: 'repository',
+          impact: 3
+        }
+      })
+      .filter((c): c is ForgeContribution => !!c)
   }
+}
+
+/**
+ * Build Tangled's inbox: recent issues, pull requests and — importantly —
+ * failing CI pipelines on the viewer's own repos, each as an actionable,
+ * completable {@link ForgeInboxItem}. Resolved (closed/merged) subjects are kept
+ * but tagged so the inbox can file them under "recently resolved".
+ */
+async function collectTangledInbox(opts?: ForgeReadOptions): Promise<ForgeInboxItem[]> {
+  const viewer = opts?.viewer
+  if (!viewer) return []
+  let did: string
+  try {
+    did = await resolveHandleToDid(viewer)
+  } catch {
+    return []
+  }
+  const ownerHandle = viewer.startsWith('did:') ? did : viewer.trim().replace(/^@/, '')
+
+  let records: TangledListItem[]
+  try {
+    records = await listRepoRecords(did, opts)
+  } catch {
+    return []
+  }
+
+  const cutoff = Date.now() - 30 * 86_400_000
+  const recent = (ts?: string | null): boolean => !!ts && new Date(ts).getTime() >= cutoff
+
+  const perRepo = await Promise.all(records.slice(0, 10).map(async (rec): Promise<ForgeInboxItem[]> => {
+    const repoDid = rec.value?.repoDid
+    const spindle = rec.value?.spindle
+    const name = rec.value?.name || rkeyFromUri(rec.uri)
+    if (!repoDid) return []
+    const base = `/tangled/${ownerHandle}/${name}`
+    const repoRef = { owner: ownerHandle, name, fullName: `${ownerHandle}/${name}` }
+
+    const [issues, pulls, pipelines] = await Promise.all([
+      bobbin<{ items?: any[] }>('sh.tangled.repo.listIssues', { subject: repoDid, limit: 12 }, opts).catch(() => ({ items: [] as any[] })),
+      bobbin<{ items?: any[] }>('sh.tangled.repo.listPulls', { subject: repoDid, limit: 12 }, opts).catch(() => ({ items: [] as any[] })),
+      spindle
+        ? $fetch<{ pipelines?: TangledPipeline[] }>(`https://${spindle}/xrpc/sh.tangled.ci.queryPipelines`, { query: { repo: repoDid, limit: 20 }, signal: opts?.signal }).catch(() => ({ pipelines: [] as TangledPipeline[] }))
+        : Promise.resolve({ pipelines: [] as TangledPipeline[] })
+    ])
+
+    const out: ForgeInboxItem[] = []
+    for (const it of issues.items ?? []) {
+      const m = mapTangledIssue(it)
+      const updated = m.updatedAt ?? m.createdAt
+      if (!recent(updated)) continue
+      const resolved = m.state === 'closed'
+      out.push({
+        provider: 'tangled',
+        id: `issue:${name}:${m.id}`,
+        kind: 'issue',
+        title: m.title,
+        reason: resolved ? 'closed issue' : 'issue',
+        unread: false,
+        updatedAt: updated,
+        repo: repoRef,
+        to: `${base}/issues/${m.id}`,
+        url: `https://tangled.org${base}/issues/${m.id}`,
+        state: resolved ? 'closed' : 'open',
+        resolved,
+        author: m.author
+      })
+    }
+    for (const it of pulls.items ?? []) {
+      const m = mapTangledPull(it)
+      const updated = m.updatedAt ?? m.createdAt
+      if (!recent(updated)) continue
+      const resolved = m.state === 'closed' || m.state === 'merged'
+      out.push({
+        provider: 'tangled',
+        id: `pull:${name}:${m.id}`,
+        kind: 'pull',
+        title: m.title,
+        reason: `${m.state} pull request`,
+        unread: false,
+        updatedAt: updated,
+        repo: repoRef,
+        to: `${base}/pulls/${m.id}`,
+        url: `https://tangled.org${base}/pulls/${m.id}`,
+        state: m.state,
+        resolved,
+        author: m.author
+      })
+    }
+    for (const p of pipelines.pipelines ?? []) {
+      const run = mapPipeline(p)
+      if (run.status !== 'failure' && run.status !== 'timed_out') continue
+      if (!recent(run.createdAt)) continue
+      out.push({
+        provider: 'tangled',
+        id: `ci:${name}:${run.id}`,
+        kind: 'ci',
+        title: `CI failed${run.branch ? ` on ${run.branch}` : ''} · ${name}`,
+        reason: 'pipeline failed',
+        unread: false,
+        updatedAt: run.createdAt,
+        repo: repoRef,
+        to: `${base}/actions`,
+        url: `https://tangled.org${base}/actions`,
+        resolved: false
+      })
+    }
+    return out
+  }))
+  return perRepo.flat()
 }
 
 /* eslint-disable @typescript-eslint/no-explicit-any */

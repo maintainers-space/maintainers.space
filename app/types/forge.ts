@@ -1,7 +1,7 @@
 // Shared types for the multi-forge abstraction layer.
 // A "forge" is any code host (GitHub, Tangled, GitLab, Gitea, Forgejo, ...).
 
-export type ForgeId = 'github' | 'tangled' | (string & {})
+export type ForgeId = 'github' | 'gitlab' | 'tangled' | (string & {})
 
 export interface ForgeReadOptions {
   /** Optional bearer token for authenticated forge APIs (e.g. GitHub PAT). */
@@ -441,6 +441,16 @@ export interface ForgeContribution {
 
 // --- Capabilities ----------------------------------------------------------
 
+/** The signed-in viewer's actionable work, used by the home dashboard. */
+export interface ForgeMyWork {
+  /** Open pull/merge requests the viewer authored. */
+  authoredPulls: ForgeIssue[]
+  /** Open pull/merge requests awaiting the viewer's review. */
+  reviewRequests: ForgeIssue[]
+  /** Open issues assigned to the viewer. */
+  assignedIssues: ForgeIssue[]
+}
+
 export interface ForgeCapabilities {
   /** Browse repos, tree, blobs, commits. */
   code: boolean
@@ -563,4 +573,11 @@ export interface ForgeProvider {
   // Activity -------------------------------------------------------------
   /** Recent public activity for a user, newest first (bounded by the forge). */
   listUserEvents?: (login: string, opts?: ForgePageOptions) => Promise<ForgeContribution[]>
+
+  /**
+   * The signed-in viewer's actionable work on this forge: pull/merge requests
+   * they authored, ones awaiting their review, and issues assigned to them.
+   * Powers the home dashboard. Requires a forge token.
+   */
+  listMyWork?: (opts?: ForgeReadOptions) => Promise<ForgeMyWork>
 }

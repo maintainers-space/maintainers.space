@@ -17,6 +17,7 @@ import type {
   ForgeIssue,
   ForgeIssueDetail,
   ForgeMergeResult,
+  ForgeMyWork,
   ForgeNotification,
   ForgePull,
   ForgePullDetail,
@@ -1003,6 +1004,23 @@ export const githubProvider: ForgeProvider = {
       signal: opts?.signal
     }).catch(() => [])
     return (data ?? []).map(mapEvent).filter((c): c is ForgeContribution => !!c)
+  },
+
+  async listMyWork(opts): Promise<ForgeMyWork> {
+    const token = opts?.token ?? getForgeToken('github')
+    if (!token) return { authoredPulls: [], reviewRequests: [], assignedIssues: [] }
+    // `@me` resolves server-side from the token, so this works without knowing
+    // the login. Bounded to the freshest few of each bucket.
+    const run = (q: string): Promise<ForgeIssue[]> =>
+      githubProvider.searchIssues!(q, { token, sort: 'updated', order: 'desc', limit: 8 })
+        .then(r => r.items)
+        .catch(() => [] as ForgeIssue[])
+    const [authoredPulls, reviewRequests, assignedIssues] = await Promise.all([
+      run('is:open is:pr author:@me archived:false'),
+      run('is:open is:pr review-requested:@me archived:false'),
+      run('is:open is:issue assignee:@me archived:false')
+    ])
+    return { authoredPulls, reviewRequests, assignedIssues }
   }
 }
 
