@@ -16,6 +16,7 @@ export interface RepoMetadataTarget {
   provider: string
   owner: string
   name: string
+  host?: string
   /** Tangled owner DID (from repo.ref.repoDid); enables atproto-native ownership. */
   repoDid?: string
 }

@@ -20,6 +20,7 @@ export function useGithubAuth() {
   const { get, set, remove } = useForgeTokens()
   const { did, restoring } = useAuth()
   const { link } = useForgeAccounts()
+  const { finishClaim } = useRepoMetadataEditor()
 
   const isConnected = computed(() => !!get('github'))
 
@@ -71,6 +72,8 @@ export function useGithubAuth() {
         attestedBy
       }).catch(() => { /* token is stored regardless; linking is best-effort */ })
     }
+
+    await finishClaim('github', params)
 
     const returnTo = params.get('return')
     return returnTo && returnTo.startsWith('/') && !returnTo.startsWith('//') ? returnTo : '/settings/accounts'
