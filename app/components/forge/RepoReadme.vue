@@ -18,6 +18,6 @@ const html = computed(() => {
       <span class="font-medium text-default">{{ readme.filename }}</span>
     </div>
     <!-- eslint-disable-next-line vue/no-v-html -->
-    <div class="prose prose-sm max-w-none p-6 dark:prose-invert" v-html="html" />
+    <div :class="[PROSE_CLASSES, 'p-6']" v-html="html" />
   </div>
 </template>

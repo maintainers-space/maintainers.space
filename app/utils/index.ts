@@ -99,3 +99,14 @@ export const PULL_STATE_ICON: Record<string, string> = {
   merged: 'i-lucide-git-merge',
   draft: 'i-lucide-git-pull-request-draft'
 }
+
+/**
+ * Tailwind Typography classes shared by every rendered-markdown surface. Code
+ * blocks and inline code use theme tokens (not typography's dark-only defaults)
+ * so they read correctly in both light and dark mode.
+ */
+export const PROSE_CLASSES = [
+  'prose prose-sm max-w-none dark:prose-invert',
+  'prose-pre:bg-muted prose-pre:text-highlighted prose-pre:border prose-pre:border-default',
+  'prose-code:text-highlighted'
+].join(' ')

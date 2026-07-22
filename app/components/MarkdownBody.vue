@@ -16,7 +16,7 @@ const html = computed(() => {
 </script>
 
 <template>
-  <div v-if="html" class="prose prose-sm max-w-none dark:prose-invert prose-pre:bg-elevated/60">
+  <div v-if="html" :class="PROSE_CLASSES">
     <!-- eslint-disable-next-line vue/no-v-html -->
     <div v-html="html" />
   </div>
