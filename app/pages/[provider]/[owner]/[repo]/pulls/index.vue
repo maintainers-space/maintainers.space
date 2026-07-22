@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import type { ForgePull, ForgePullState } from '~/types/forge'
+import type { ForgeMergeQueueStats, ForgePull, ForgePullState } from '~/types/forge'
 import { useRepoContext } from '~/composables/useRepoContext'
 
-const { provider, owner, name, forge, locator } = useRepoContext()
+const { provider, owner, name, forge, locator, meta } = useRepoContext()
 const base = computed(() => repoPath({ provider: provider.value, owner: owner.value, name: name.value }))
 
 const state = ref<'open' | 'closed' | 'merged'>('open')
@@ -10,6 +10,7 @@ const items = ref<ForgePull[]>([])
 const loading = ref(false)
 const error = ref<string | null>(null)
 const q = ref('')
+const mergeQueue = ref<ForgeMergeQueueStats | null>(null)
 
 const filtered = computed(() => {
   const term = q.value.trim().toLowerCase()
@@ -38,6 +39,37 @@ async function load(): Promise<void> {
 watch([provider, owner, name, state], load)
 onMounted(load)
 
+async function loadMergeQueue(): Promise<void> {
+  mergeQueue.value = null
+  const f = forge.value
+  if (!f?.getMergeQueue || !f.capabilities.mergeQueue) return
+  if (!meta.value) return
+  try {
+    mergeQueue.value = await f.getMergeQueue(locator.value, meta.value.defaultBranch || undefined)
+  } catch {
+    mergeQueue.value = null
+  }
+}
+
+watch([provider, owner, name, meta], loadMergeQueue, { immediate: true })
+
+const mergeQueueIcon = computed(() =>
+  mergeQueue.value?.kind === 'train' ? 'i-lucide-train-front' : 'i-lucide-list-ordered'
+)
+
+function formatMqStatus(s: string): string {
+  const t = s.replace(/_/g, ' ').toLowerCase().trim()
+  return t.charAt(0).toUpperCase() + t.slice(1)
+}
+
+function mqStatusColor(s: string): 'error' | 'warning' | 'success' | 'neutral' {
+  const t = s.toUpperCase()
+  if (t === 'UNMERGEABLE' || t === 'INVALID') return 'error'
+  if (t === 'STALE' || t === 'AWAITING_CHECKS' || t === 'LOCKED') return 'warning'
+  if (t === 'MERGEABLE' || t === 'FRESH') return 'success'
+  return 'neutral'
+}
+
 function itemLink(it: ForgePull): string {
   return `${base.value}/pulls/${encodeURIComponent(it.id)}`
 }
@@ -54,6 +86,45 @@ function color(s: ForgePullState): string {
 
 <template>
   <div class="space-y-4">
+    <div
+      v-if="mergeQueue?.entries.length"
+      class="rounded-lg border border-default bg-elevated/30 p-4"
+    >
+      <div class="flex flex-wrap items-center gap-2 text-sm font-medium text-default">
+        <UIcon :name="mergeQueueIcon" class="size-4 text-primary" />
+        {{ mergeQueue.kind === 'train' ? 'Merge train' : 'Merge queue' }}
+        <span v-if="mergeQueue.branch" class="font-mono text-xs text-muted">→ {{ mergeQueue.branch }}</span>
+        <UBadge color="neutral" variant="soft" size="sm">
+          {{ mergeQueue.entries.length }}
+        </UBadge>
+      </div>
+      <ol class="mt-3 space-y-1.5">
+        <li v-for="e in mergeQueue.entries" :key="e.position" class="flex items-center gap-2 text-sm">
+          <span class="inline-flex size-5 shrink-0 items-center justify-center rounded-full bg-elevated text-xs font-medium text-muted">
+            {{ e.position }}
+          </span>
+          <NuxtLink
+            v-if="e.number"
+            :to="`${base}/pulls/${e.number}`"
+            class="min-w-0 flex-1 truncate font-medium text-default transition hover:text-primary"
+          >
+            {{ e.title }}
+          </NuxtLink>
+          <span v-else class="min-w-0 flex-1 truncate font-medium text-default">{{ e.title }}</span>
+          <span v-if="e.number" class="shrink-0 text-xs text-muted">#{{ e.number }}</span>
+          <UBadge
+            v-if="e.status"
+            :color="mqStatusColor(e.status)"
+            variant="subtle"
+            size="sm"
+            class="shrink-0"
+          >
+            {{ formatMqStatus(e.status) }}
+          </UBadge>
+        </li>
+      </ol>
+    </div>
+
     <ListToolbar v-model:search="q" :count="filtered.length" placeholder="Filter pull requests…">
       <template #filters>
         <UButton

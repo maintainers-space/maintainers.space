@@ -16,6 +16,8 @@ import type {
   ForgeInboxItem,
   ForgeIssue,
   ForgeIssueDetail,
+  ForgeMergeQueueEntry,
+  ForgeMergeQueueStats,
   ForgeMergeResult,
   ForgeMyWork,
   ForgeNotification,
@@ -457,7 +459,8 @@ export const githubProvider: ForgeProvider = {
     codeSearch: true,
     userSearch: true,
     discussionSearch: true,
-    star: true
+    star: true,
+    mergeQueue: true
   },
   webUrl: (owner, repo) => `https://github.com/${owner}/${repo}`,
   ownerWebUrl: owner => `https://github.com/${owner}`,
@@ -597,6 +600,46 @@ export const githubProvider: ForgeProvider = {
       headers: ghHeaders(opts), query: { per_page: 100 }, signal: opts?.signal
     })
     return data.map(mapCommit)
+  },
+
+  async getMergeQueue(repo, branch, opts): Promise<ForgeMergeQueueStats | null> {
+    const query = `query($owner:String!,$name:String!,$branch:String){
+      repository(owner:$owner,name:$name){
+        mergeQueue(branch:$branch){
+          entries(first:50){
+            nodes{
+              state
+              enqueuedAt
+              pullRequest{ number title url author{ login avatarUrl url } }
+            }
+          }
+        }
+      }
+    }`
+    let data: any
+    try {
+      data = await ghGraphql<any>(query, { owner: repo.owner, name: repo.name, branch: branch ?? null }, opts)
+    } catch {
+      return null
+    }
+    const mq = data?.repository?.mergeQueue
+    if (!mq) return null
+    const nodes: any[] = (mq.entries?.nodes ?? []).filter(Boolean)
+    const entries: ForgeMergeQueueEntry[] = nodes.map((n, i) => {
+      const a = n.pullRequest?.author
+      return {
+        position: i + 1,
+        number: n.pullRequest?.number,
+        title: n.pullRequest?.title ?? '',
+        author: a ? { provider: 'github', login: a.login ?? '', avatarUrl: a.avatarUrl ?? null, url: a.url ?? null } : undefined,
+        status: n.state ?? undefined,
+        enqueuedAt: n.enqueuedAt ?? null,
+        url: n.pullRequest?.url ?? null,
+        ref: n.pullRequest?.number != null ? { number: n.pullRequest.number } : undefined
+      }
+    })
+    if (!entries.length) return null
+    return { branch: branch ?? '', kind: 'queue', entries }
   },
 
   async listActionRuns(repo, opts) {

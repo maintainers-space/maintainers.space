@@ -495,7 +495,8 @@ export const codebergProvider: ForgeProvider = {
     codeSearch: false,
     userSearch: true,
     discussionSearch: false,
-    star: true
+    star: true,
+    mergeQueue: false
   },
   webUrl: (owner, repo) => `${WEB}/${owner}/${repo}`,
   ownerWebUrl: owner => `${WEB}/${owner}`,

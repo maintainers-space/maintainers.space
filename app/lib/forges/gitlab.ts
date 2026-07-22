@@ -15,6 +15,8 @@ import type {
   ForgeInboxItem,
   ForgeIssue,
   ForgeIssueDetail,
+  ForgeMergeQueueEntry,
+  ForgeMergeQueueStats,
   ForgeMergeResult,
   ForgeMyWork,
   ForgeNotification,
@@ -397,7 +399,8 @@ export const gitlabProvider: ForgeProvider = {
     codeSearch: true,
     userSearch: true,
     discussionSearch: false,
-    star: true
+    star: true,
+    mergeQueue: true
   },
   webUrl: (owner, repo) => `${WEB}/${owner}/${repo}`,
   ownerWebUrl: owner => `${WEB}/${owner}`,
@@ -542,6 +545,40 @@ export const gitlabProvider: ForgeProvider = {
   async getPullCommits(repo, id, opts) {
     const data = await glFetch<any[]>(`/projects/${projectId(repo)}/merge_requests/${id}/commits`, { per_page: 100 }, opts)
     return (data ?? []).map(mapCommit)
+  },
+
+  async getMergeQueue(repo, branch, opts): Promise<ForgeMergeQueueStats | null> {
+    const pid = projectId(repo)
+    const path = branch
+      ? `/projects/${pid}/merge_trains/${enc(branch)}`
+      : `/projects/${pid}/merge_trains`
+    let cars: any[]
+    try {
+      cars = await glFetch<any[]>(path, { scope: 'active', per_page: 50 }, opts)
+    } catch {
+      return null
+    }
+    let list = (cars ?? []).filter(Boolean)
+    if (!list.length) return null
+    // The branch-less endpoint mixes every train; a train is per target branch,
+    // so collapse to the busiest branch to present a single coherent queue.
+    const target = branch ?? list[0]?.target_branch
+    if (target) list = list.filter(c => (c.target_branch ?? target) === target)
+    const entries: ForgeMergeQueueEntry[] = list.map((c, i) => {
+      const mr = c.merge_request ?? {}
+      return {
+        position: i + 1,
+        number: mr.iid,
+        title: mr.title ?? '',
+        author: mapUser(mr.author ?? c.user),
+        status: c.status ?? undefined,
+        enqueuedAt: c.created_at ?? null,
+        url: mr.web_url ?? null,
+        ref: mr.iid != null ? { iid: mr.iid } : undefined
+      }
+    })
+    if (!entries.length) return null
+    return { branch: target ?? '', kind: 'train', entries }
   },
 
   async listActionRuns(repo, opts) {

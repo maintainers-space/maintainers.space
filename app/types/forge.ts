@@ -225,6 +225,29 @@ export interface ForgePullDetail extends ForgePull {
   comments: ForgeComment[]
 }
 
+/** A single pull/merge request waiting in a merge queue (GitHub) or merge train (GitLab). */
+export interface ForgeMergeQueueEntry {
+  /** 1-based position in the queue/train. */
+  position: number
+  number?: number
+  title: string
+  author?: ForgeUser
+  /** Provider status of this entry (e.g. 'QUEUED', 'MERGEABLE', 'idle', 'stale'). */
+  status?: string
+  enqueuedAt?: string | null
+  url?: string | null
+  /** Opaque provider handle so the UI can deep-link into the in-app PR view. */
+  ref?: Record<string, unknown>
+}
+
+export interface ForgeMergeQueueStats {
+  /** Target branch the queue/train is merging into. */
+  branch: string
+  /** 'queue' = GitHub merge queue, 'train' = GitLab merge train. */
+  kind: 'queue' | 'train'
+  entries: ForgeMergeQueueEntry[]
+}
+
 /** A single inline review comment anchored to a line in the diff. */
 export interface ForgeReviewComment {
   path: string
@@ -447,6 +470,8 @@ export interface ForgeCapabilities {
   discussionSearch: boolean
   /** The signed-in viewer can star/unstar repositories. */
   star: boolean
+  /** Repository supports a merge queue (GitHub) or merge train (GitLab). */
+  mergeQueue: boolean
 }
 
 export const NO_CAPABILITIES: ForgeCapabilities = {
@@ -460,7 +485,8 @@ export const NO_CAPABILITIES: ForgeCapabilities = {
   codeSearch: false,
   userSearch: false,
   discussionSearch: false,
-  star: false
+  star: false,
+  mergeQueue: false
 }
 
 export interface IssueListOptions extends ForgePageOptions {
@@ -510,6 +536,8 @@ export interface ForgeProvider {
   getPull?: (repo: RepoLocator, id: string, opts?: ForgeReadOptions) => Promise<ForgePullDetail>
   getPullFiles?: (repo: RepoLocator, id: string, opts?: ForgeReadOptions) => Promise<ForgeFileDiff[]>
   getPullCommits?: (repo: RepoLocator, id: string, opts?: ForgeReadOptions) => Promise<ForgeCommit[]>
+  /** Merge queue (GitHub) / merge train (GitLab) state for a branch (default branch if omitted). */
+  getMergeQueue?: (repo: RepoLocator, branch?: string, opts?: ForgeReadOptions) => Promise<ForgeMergeQueueStats | null>
 
   // Discussions ----------------------------------------------------------
   listDiscussions?: (repo: RepoLocator, opts?: ForgePageOptions) => Promise<Paginated<ForgeDiscussion>>
