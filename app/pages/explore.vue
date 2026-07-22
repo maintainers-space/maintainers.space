@@ -5,13 +5,12 @@ const { repos, loading, notes, load } = useExplore()
 const { isAuthenticated } = useAuth()
 
 const route = useRoute()
-const scope = ref<ExploreScope>('trending')
+const scope = ref<ExploreScope>(isAuthenticated.value ? 'following' : 'trending')
 const period = ref<ExplorePeriod>('weekly')
 const language = ref(String(route.query.lang || 'all'))
 
 const scopeItems = computed(() => [
   { label: 'Trending', value: 'trending', icon: 'i-lucide-flame' },
-  { label: 'Popular', value: 'popular', icon: 'i-lucide-star' },
   ...(isAuthenticated.value ? [{ label: 'Following', value: 'following', icon: 'i-lucide-users' }] : [])
 ])
 

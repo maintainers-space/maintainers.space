@@ -2,7 +2,7 @@ import { getForge } from '~/lib/forges'
 import { fetchFollows } from '~/lib/atproto/public'
 import type { ForgeRepo } from '~/types/forge'
 
-export type ExploreScope = 'trending' | 'popular' | 'following'
+export type ExploreScope = 'trending' | 'following'
 export type ExplorePeriod = 'daily' | 'weekly' | 'monthly'
 
 export interface ExploreOptions {
@@ -67,16 +67,14 @@ export function useExplore() {
 
   let token = 0
 
-  function githubQuery(scope: Exclude<ExploreScope, 'following'>, period: ExplorePeriod, language?: string): string {
+  function githubQuery(period: ExplorePeriod, language?: string): string {
     const parts: string[] = []
-    if (scope === 'trending') parts.push(`created:>=${sinceDate(period)}`, 'stars:>1')
-    else parts.push('stars:>5000')
+    parts.push(`created:>=${sinceDate(period)}`, 'stars:>1')
     if (language) parts.push(`language:${language}`)
     return parts.join(' ')
   }
 
   async function loadDiscovery(
-    scope: Exclude<ExploreScope, 'following'>,
     period: ExplorePeriod,
     limit: number,
     language: string | undefined,
@@ -86,7 +84,7 @@ export function useExplore() {
     const gh = getForge('github')
     if (gh?.searchRepos) {
       try {
-        const res = await gh.searchRepos(githubQuery(scope, period, language), {
+        const res = await gh.searchRepos(githubQuery(period, language), {
           sort: 'stars',
           order: 'desc',
           limit,
@@ -113,11 +111,11 @@ export function useExplore() {
 
   async function loadFollowing(collected: ForgeRepo[], noteSet: Set<string>): Promise<void> {
     if (!isAuthenticated.value) {
-      noteSet.add('Sign in to see repositories from the people and orgs you follow.')
+      noteSet.add('Sign in to see repositories from the people you follow.')
       return
     }
 
-    // GitHub: accounts you follow + orgs you belong to.
+    // GitHub: people you follow (users only, no orgs).
     const gh = getForge('github')
     if (gh?.listFollowedRepos) {
       const ghToken = getToken('github')
@@ -172,7 +170,7 @@ export function useExplore() {
       if (scope === 'following') {
         await loadFollowing(collected, noteSet)
       } else {
-        await loadDiscovery(scope, period, limit, opts.language, collected, noteSet)
+        await loadDiscovery(period, limit, opts.language, collected, noteSet)
       }
       if (my !== token) return
       repos.value = dedupe(collected)

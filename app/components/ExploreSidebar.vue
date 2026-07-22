@@ -3,25 +3,26 @@ const { isAuthenticated } = useAuth()
 const { favourites, hasVisits } = useRepoVisits()
 const { repos, loading, load } = useExplore()
 
-// Signed-in users with a visit history get a personal feed; everyone else
-// (and brand-new users without history) sees the generic trending list.
+// Signed-in users get a personal "Recent" feed only — trending is discovery
+// noise once you're logged in. Anonymous visitors see the generic trending list.
 const showFavourites = computed(() => isAuthenticated.value && hasVisits.value)
+const showTrending = computed(() => !isAuthenticated.value)
 
 function ensureTrending(): void {
-  if (!showFavourites.value && !repos.value.length) {
+  if (showTrending.value && !repos.value.length) {
     load({ scope: 'trending', period: 'weekly', limit: 5 })
   }
 }
 
 onMounted(ensureTrending)
-watch(showFavourites, ensureTrending)
+watch(showTrending, ensureTrending)
 
 const favTop = computed(() => favourites.value.slice(0, 6))
 const top = computed(() => repos.value.slice(0, 5))
 </script>
 
 <template>
-  <div class="mt-4 space-y-4">
+  <div v-if="showFavourites || showTrending" class="mt-4 space-y-4">
     <div v-if="showFavourites">
       <div class="mb-2 flex items-center justify-between px-1">
         <span class="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted">
@@ -46,7 +47,7 @@ const top = computed(() => repos.value.slice(0, 5))
       </ul>
     </div>
 
-    <div v-else>
+    <div v-else-if="showTrending">
       <div class="mb-2 flex items-center justify-between px-1">
         <span class="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted">
           <UIcon name="i-lucide-flame" class="size-3.5" />Trending

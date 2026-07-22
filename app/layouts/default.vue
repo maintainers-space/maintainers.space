@@ -13,9 +13,7 @@ const nav = computed<NavigationMenuItem[]>(() => {
   ]
   if (isAuthenticated.value) {
     items.push(
-      { label: 'Notifications', icon: 'i-lucide-bell', to: '/notifications', onSelect: () => { open.value = false } },
-      { label: 'Linked accounts', icon: 'i-lucide-link', to: '/settings/accounts', onSelect: () => { open.value = false } },
-      { label: 'Settings', icon: 'i-lucide-settings', to: '/settings', exact: true, onSelect: () => { open.value = false } }
+      { label: 'Notifications', icon: 'i-lucide-bell', to: '/notifications', onSelect: () => { open.value = false } }
     )
   }
   return items
