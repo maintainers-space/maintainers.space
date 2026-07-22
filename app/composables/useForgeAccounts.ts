@@ -94,6 +94,9 @@ export function useForgeAccounts() {
         repo: did.value as Did,
         collection: COLLECTION,
         rkey: makeRkey(input.provider, input.username, input.host),
+        // koinon's lexicons aren't published on-network, so the PDS can't resolve
+        // them; skip validation or the write is rejected with "could not find lexicon".
+        validate: false,
         record: record as unknown as Record<string, unknown>
       }
     })))

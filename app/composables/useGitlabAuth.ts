@@ -21,6 +21,7 @@ export function useGitlabAuth() {
   const { did, restoring } = useAuth()
   const { link } = useForgeAccounts()
   const { finishClaim } = useRepoMetadataEditor()
+  const toast = useToast()
 
   const isConnected = computed(() => !!get('gitlab'))
 
@@ -66,7 +67,14 @@ export function useGitlabAuth() {
         verified: true,
         attestation,
         attestedBy
-      }).catch(() => { /* token is stored regardless; linking is best-effort */ })
+      }).catch((linkError) => {
+        toast.add({
+          title: 'Connected, but could not link to your profile',
+          description: linkError instanceof Error ? linkError.message : String(linkError),
+          color: 'error',
+          icon: 'i-lucide-circle-alert'
+        })
+      })
     }
 
     await finishClaim('gitlab', params)

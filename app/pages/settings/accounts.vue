@@ -25,17 +25,19 @@ watch(
 //                across every device the moment you sign in with atproto.
 //   • connected→ an OAuth token is present in THIS browser. It never leaves the
 //                device, so a fresh device is "linked" but not yet "connected".
-type ConnState = 'connected' | 'needs-auth' | 'disconnected'
+type ConnState = 'connected' | 'connected-unlinked' | 'needs-auth' | 'disconnected'
 
 function connState(provider: string, isConnected: boolean): ConnState {
-  if (isConnected) return 'connected'
-  if (accounts.value.some(a => a.provider === provider)) return 'needs-auth'
+  const linked = accounts.value.some(a => a.provider === provider)
+  if (isConnected) return linked ? 'connected' : 'connected-unlinked'
+  if (linked) return 'needs-auth'
   return 'disconnected'
 }
 
 function connCopy(state: ConnState, label: string): string {
   switch (state) {
     case 'connected': return 'Connected on this device.'
+    case 'connected-unlinked': return `Connected on this device, but not yet linked to your atproto identity. Reconnect to finish linking ${label}.`
     case 'needs-auth': return 'Linked to your atproto identity — authorize on this device to use it.'
     default: return `Sign in with ${label} to verify and link your account.`
   }
@@ -55,6 +57,8 @@ function buttonFor(state: ConnState, icon: string, label: string): ProviderView[
   switch (state) {
     case 'connected':
       return { label: 'Reconnect', icon: 'i-lucide-refresh-cw', color: 'neutral', variant: 'outline' }
+    case 'connected-unlinked':
+      return { label: 'Finish linking', icon, color: 'primary', variant: 'solid' }
     case 'needs-auth':
       return { label: 'Authorize on this device', icon, color: 'primary', variant: 'solid' }
     default:

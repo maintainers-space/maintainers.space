@@ -117,6 +117,7 @@ export function useRepoMetadataEditor(source?: MaybeRefOrGetter<RepoMetadataTarg
         repo: did.value as Did,
         collection: COLLECTION,
         rkey: repoMetadataRkey(t.provider, t.owner, t.name, t.host),
+        validate: false,
         record: record as unknown as Record<string, unknown>
       }
     })))
