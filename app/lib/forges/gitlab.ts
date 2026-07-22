@@ -186,6 +186,24 @@ function mapDiff(f: any): ForgeFileDiff {
   }
 }
 
+/** Project web base ("https://gitlab.com/owner/repo") from any project URL. */
+function projectBaseOf(webUrl?: string): string {
+  if (!webUrl) return ''
+  return String(webUrl).replace(/\/-\/.*$/, '').replace(/\/+$/, '')
+}
+
+// GitLab stores uploaded attachments (often SVG diagrams) as project-relative
+// "/uploads/<hash>/<file>" — a leading slash, but resolved against the project,
+// not the domain root — so they 404 when rendered anywhere else. Rewrite them to
+// absolute URLs, covering both markdown "](...)" and raw <img src>/href forms.
+function absolutizeUploads(md: string | null | undefined, base: string): string | null {
+  if (!md) return md ?? null
+  if (!base) return md
+  return md
+    .replace(/(\]\()(\/uploads\/)/g, (_m, p: string, u: string) => `${p}${base}${u}`)
+    .replace(/((?:src|href)\s*=\s*["'])(\/uploads\/)/g, (_m, p: string, u: string) => `${p}${base}${u}`)
+}
+
 function mapIssue(r: any): ForgeIssue {
   return {
     provider: 'gitlab',
@@ -194,7 +212,7 @@ function mapIssue(r: any): ForgeIssue {
     title: r.title,
     state: r.state === 'closed' ? 'closed' : 'open',
     author: mapUser(r.author),
-    body: r.description ?? null,
+    body: absolutizeUploads(r.description, projectBaseOf(r.web_url)),
     commentCount: r.user_notes_count,
     labels: (r.labels ?? []).map((l: any) => (typeof l === 'string' ? { name: l } : { name: l.name, color: l.color, description: l.description })),
     createdAt: r.created_at ?? null,
@@ -220,7 +238,7 @@ function mapPull(r: any): ForgePull {
     title: r.title,
     state: mrState(r),
     author: mapUser(r.author),
-    body: r.description ?? null,
+    body: absolutizeUploads(r.description, projectBaseOf(r.web_url)),
     commentCount: r.user_notes_count,
     labels: (r.labels ?? []).map((l: any) => (typeof l === 'string' ? { name: l } : { name: l.name, color: l.color })),
     sourceBranch: r.source_branch,
@@ -234,11 +252,11 @@ function mapPull(r: any): ForgePull {
 }
 
 /** GitLab notes → comments, dropping system notes (label changes, etc.). */
-function mapNote(r: any): ForgeComment {
+function mapNote(r: any, base = ''): ForgeComment {
   return {
     id: String(r.id),
     author: mapUser(r.author),
-    body: r.body ?? '',
+    body: absolutizeUploads(r.body, base) ?? '',
     createdAt: r.created_at ?? null
   }
 }
@@ -478,7 +496,7 @@ export const gitlabProvider: ForgeProvider = {
       glFetch<any>(`/projects/${pid}/issues/${id}`, undefined, opts),
       glFetch<any[]>(`/projects/${pid}/issues/${id}/notes`, { per_page: 100, sort: 'asc', order_by: 'created_at' }, opts).catch(() => [])
     ])
-    return { ...mapIssue(issue), comments: (notes ?? []).filter((n: any) => !n.system).map(mapNote) }
+    return { ...mapIssue(issue), comments: (notes ?? []).filter((n: any) => !n.system).map((n: any) => mapNote(n, projectBaseOf(issue.web_url))) }
   },
 
   async listPulls(repo, opts) {
@@ -509,7 +527,7 @@ export const gitlabProvider: ForgeProvider = {
     return {
       ...mapPull(mr),
       stat,
-      comments: (notes ?? []).filter((n: any) => !n.system).map(mapNote)
+      comments: (notes ?? []).filter((n: any) => !n.system).map((n: any) => mapNote(n, projectBaseOf(mr.web_url)))
     }
   },
 
