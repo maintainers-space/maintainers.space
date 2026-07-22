@@ -8,8 +8,10 @@ import type {
   ForgeCommitActor,
   ForgeCommitDetail,
   ForgeComment,
+  ForgeContribution,
   ForgeDiscussion,
   ForgeDiscussionDetail,
+  ForgeEventKind,
   ForgeFileDiff,
   ForgeIssue,
   ForgeIssueDetail,
@@ -293,6 +295,110 @@ async function getReadme(owner: string, repo: string, ref?: string, opts?: Forge
   } catch {
     return null
   }
+}
+
+/** Relative "impact" weight per event kind, used to rank the friends feed. */
+const EVENT_IMPACT: Record<ForgeEventKind, number> = {
+  pr_merged: 10,
+  release: 8,
+  pr_opened: 6,
+  pr_review: 4,
+  issue_opened: 3,
+  issue_closed: 2,
+  create: 1.5,
+  push: 1,
+  comment: 1,
+  fork: 0.5,
+  star: 0.25,
+  other: 0
+}
+
+/** Map a raw GitHub events-API item into a normalized contribution (or null). */
+function mapEvent(e: any): ForgeContribution | null {
+  const type = String(e?.type ?? '')
+  const actor = mapUser({ login: e?.actor?.login, avatar_url: e?.actor?.avatar_url, html_url: `https://github.com/${e?.actor?.login}` })
+  const repoFull = String(e?.repo?.name ?? '')
+  const [owner = '', name = ''] = repoFull.split('/')
+  if (!actor || !owner || !name) return null
+  const repo = { owner, name, fullName: repoFull, url: `https://github.com/${repoFull}` }
+  const base = { provider: 'github' as const, id: String(e.id), actor, repo, createdAt: String(e.created_at ?? '') }
+  const p = e.payload ?? {}
+
+  let kind: ForgeEventKind
+  let title: string | null | undefined
+  let url: string | null | undefined
+  let number: number | undefined
+  let count: number | undefined
+  let refType: string | undefined
+
+  switch (type) {
+    case 'PushEvent': {
+      kind = 'push'
+      count = p.size ?? p.commits?.length
+      title = p.commits?.[p.commits.length - 1]?.message?.split('\n')[0]
+      const branch = String(p.ref ?? '').replace('refs/heads/', '')
+      url = `https://github.com/${repoFull}/commits/${branch}`
+      break
+    }
+    case 'PullRequestEvent': {
+      const merged = !!p.pull_request?.merged
+      kind = p.action === 'closed' && merged ? 'pr_merged' : p.action === 'opened' || p.action === 'reopened' ? 'pr_opened' : 'other'
+      title = p.pull_request?.title
+      number = p.number ?? p.pull_request?.number
+      url = p.pull_request?.html_url
+      break
+    }
+    case 'PullRequestReviewEvent': {
+      kind = 'pr_review'
+      title = p.pull_request?.title
+      number = p.pull_request?.number
+      url = p.review?.html_url ?? p.pull_request?.html_url
+      break
+    }
+    case 'IssuesEvent': {
+      kind = p.action === 'closed' ? 'issue_closed' : p.action === 'opened' || p.action === 'reopened' ? 'issue_opened' : 'other'
+      title = p.issue?.title
+      number = p.issue?.number
+      url = p.issue?.html_url
+      break
+    }
+    case 'IssueCommentEvent':
+    case 'PullRequestReviewCommentEvent':
+    case 'CommitCommentEvent': {
+      kind = 'comment'
+      title = p.issue?.title ?? p.pull_request?.title
+      number = p.issue?.number ?? p.pull_request?.number
+      url = p.comment?.html_url
+      break
+    }
+    case 'CreateEvent': {
+      kind = 'create'
+      refType = p.ref_type
+      title = p.ref ? `${p.ref_type} ${p.ref}` : p.ref_type
+      url = `https://github.com/${repoFull}`
+      break
+    }
+    case 'ReleaseEvent': {
+      kind = 'release'
+      title = p.release?.name || p.release?.tag_name
+      url = p.release?.html_url
+      break
+    }
+    case 'ForkEvent': {
+      kind = 'fork'
+      url = p.forkee?.html_url
+      break
+    }
+    case 'WatchEvent': {
+      kind = 'star'
+      url = repo.url
+      break
+    }
+    default:
+      return null
+  }
+
+  return { ...base, kind, title, url, number, count, refType, impact: EVENT_IMPACT[kind] }
 }
 
 export const githubProvider: ForgeProvider = {
@@ -684,6 +790,32 @@ export const githubProvider: ForgeProvider = {
       .filter(r => !r.isFork && !r.isPrivate)
       .filter(r => (seen.has(r.fullName) ? false : (seen.add(r.fullName), true)))
       .sort((a, b) => String(b.updatedAt ?? '').localeCompare(String(a.updatedAt ?? '')))
+  },
+
+  async listFollowing(opts): Promise<ForgeUser[]> {
+    const token = opts?.token ?? getForgeToken('github')
+    if (!token) return []
+    const data = await $fetch<any[]>(`${API}/user/following`, {
+      headers: ghHeaders(opts),
+      query: { per_page: opts?.limit ?? 100 },
+      signal: opts?.signal
+    }).catch(() => [])
+    return (data ?? [])
+      .filter(u => String(u.type) === 'User')
+      .map(u => mapUser(u))
+      .filter((u): u is ForgeUser => !!u)
+  },
+
+  async listUserEvents(login, opts): Promise<ForgeContribution[]> {
+    // Authenticated request against the given user: GitHub returns that user's
+    // public events (plus your own private ones when login === you). Bounded to
+    // ~90 days / 300 events by the API.
+    const data = await $fetch<any[]>(`${API}/users/${encodeURIComponent(login)}/events`, {
+      headers: ghHeaders(opts),
+      query: { per_page: Math.min(opts?.limit ?? 100, 100) },
+      signal: opts?.signal
+    }).catch(() => [])
+    return (data ?? []).map(mapEvent).filter((c): c is ForgeContribution => !!c)
   }
 }
 

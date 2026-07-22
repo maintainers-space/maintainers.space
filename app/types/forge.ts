@@ -344,6 +344,44 @@ export interface ForgeNotification {
   url?: string | null
 }
 
+// --- Contributions / activity feed ----------------------------------------
+
+export type ForgeEventKind
+  = | 'push'
+    | 'pr_opened'
+    | 'pr_merged'
+    | 'pr_review'
+    | 'issue_opened'
+    | 'issue_closed'
+    | 'comment'
+    | 'create'
+    | 'release'
+    | 'fork'
+    | 'star'
+    | 'other'
+
+/** A normalized activity event (GitHub events API, Tangled timeline, ...). */
+export interface ForgeContribution {
+  provider: ForgeId
+  id: string
+  kind: ForgeEventKind
+  actor: ForgeUser
+  repo: { owner: string, name: string, fullName: string, url?: string }
+  /** PR/issue title, commit summary, tag name, ... */
+  title?: string | null
+  /** Deep link to the PR/issue/commit/release. */
+  url?: string | null
+  createdAt: string
+  /** Human number when there is one (PR/issue). */
+  number?: number
+  /** e.g. number of commits in a push. */
+  count?: number
+  /** create-event ref type (branch/tag/repository). */
+  refType?: string
+  /** Ranking score used by the "friends" feed (higher = more impactful). */
+  impact?: number
+}
+
 // --- Capabilities ----------------------------------------------------------
 
 export interface ForgeCapabilities {
@@ -446,4 +484,10 @@ export interface ForgeProvider {
    * follows on this forge. Requires auth; returns [] when unavailable.
    */
   listFollowedRepos?: (opts?: ForgeReadOptions) => Promise<ForgeRepo[]>
+  /** People (users, not orgs) the authenticated viewer follows. */
+  listFollowing?: (opts?: ForgePageOptions) => Promise<ForgeUser[]>
+
+  // Activity -------------------------------------------------------------
+  /** Recent public activity for a user, newest first (bounded by the forge). */
+  listUserEvents?: (login: string, opts?: ForgePageOptions) => Promise<ForgeContribution[]>
 }
