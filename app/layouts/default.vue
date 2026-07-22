@@ -40,7 +40,7 @@ function externalProfileUrl(provider: string, username: string, profileUrl?: str
 }
 
 // Links to the viewer's profile on each connected provider, in a fixed order
-// (GitHub, GitLab, Tangled, Codeberg, AT Protocol). The rare case where we
+// (GitHub, GitLab, Codeberg, Tangled, AT Protocol). The rare case where we
 // intentionally leave the app for the provider's own site.
 const external = computed<NavigationMenuItem[]>(() => {
   const list = accounts.value ?? []
@@ -59,9 +59,9 @@ const external = computed<NavigationMenuItem[]>(() => {
   pushForge('github', gh?.username, gh?.profileUrl)
   const gl = find('gitlab')
   pushForge('gitlab', gl?.username, gl?.profileUrl)
-  if (profile.value?.handle) pushForge('tangled', profile.value.handle)
   const cb = find('codeberg')
   pushForge('codeberg', cb?.username, cb?.profileUrl)
+  if (profile.value?.handle) pushForge('tangled', profile.value.handle)
   if (did.value) {
     out.push({
       label: 'AT Protocol',
