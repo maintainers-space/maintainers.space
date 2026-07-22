@@ -111,7 +111,8 @@ export function useNotifications() {
   })
   const ciCount = computed(() => ciItems.value.length)
 
-  const hasSources = computed(() => !!getToken('github') || !!getToken('gitlab') || !!did.value)
+  const hasSources = computed(() =>
+    forgeList.some(f => f.id !== 'tangled' && !!getToken(f.id)) || !!did.value)
 
   async function load(force = false): Promise<void> {
     loading.value = true
@@ -122,9 +123,10 @@ export function useNotifications() {
     await Promise.all(
       forgeList.map(async (forge) => {
         const token = getToken(forge.id)
-        // GitHub & GitLab need an OAuth token; nudge the user to connect when a
-        // signed-in viewer is missing one, so their forge isn't silently absent.
-        const needsToken = forge.id === 'github' || forge.id === 'gitlab'
+        // Every forge except atproto/Tangled needs an OAuth token; nudge the user
+        // to connect when a signed-in viewer is missing one, so their forge isn't
+        // silently absent.
+        const needsToken = forge.id !== 'tangled'
         if (needsToken && !token) {
           if (viewer) noteSet.add(`Connect your ${forge.label} account to include ${forge.label} notifications.`)
           return

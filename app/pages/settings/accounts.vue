@@ -4,6 +4,7 @@ import type { ForgeAccount } from '~/composables/useForgeAccounts'
 const { accounts, pending, loaded, refresh, unlink } = useForgeAccounts()
 const github = useGithubAuth()
 const gitlab = useGitlabAuth()
+const codeberg = useCodebergAuth()
 const { did } = useAuth()
 const { isVerified, check } = useForgeAttestations()
 const toast = useToast()
@@ -64,6 +65,7 @@ function buttonFor(state: ConnState, icon: string, label: string): ProviderView[
 const providers = computed<ProviderView[]>(() => {
   const gh = connState('github', github.isConnected.value)
   const gl = connState('gitlab', gitlab.isConnected.value)
+  const cb = connState('codeberg', codeberg.isConnected.value)
   return [
     {
       id: 'github',
@@ -82,6 +84,15 @@ const providers = computed<ProviderView[]>(() => {
       state: gl,
       button: buttonFor(gl, 'i-simple-icons-gitlab', 'GitLab'),
       connect: () => gitlab.connect('/settings/accounts')
+    },
+    {
+      id: 'codeberg',
+      label: 'Codeberg',
+      icon: 'i-simple-icons-codeberg',
+      copy: connCopy(cb, 'Codeberg'),
+      state: cb,
+      button: buttonFor(cb, 'i-simple-icons-codeberg', 'Codeberg'),
+      connect: () => codeberg.connect('/settings/accounts')
     }
   ]
 })
@@ -92,6 +103,7 @@ async function onUnlink(account: ForgeAccount) {
     // An account link and its OAuth token are one connection — drop both.
     if (account.provider === 'github') github.disconnect()
     if (account.provider === 'gitlab') gitlab.disconnect()
+    if (account.provider === 'codeberg') codeberg.disconnect()
     toast.add({ title: 'Account unlinked', color: 'success' })
   } catch (error) {
     toast.add({

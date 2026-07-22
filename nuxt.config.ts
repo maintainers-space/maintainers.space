@@ -34,6 +34,11 @@ export default defineNuxtConfig({
       clientId: '',
       clientSecret: ''
     },
+    // Codeberg (Forgejo) OAuth (server-only). Set NUXT_CODEBERG_CLIENT_ID / NUXT_CODEBERG_CLIENT_SECRET.
+    codeberg: {
+      clientId: '',
+      clientSecret: ''
+    },
     // Server-signed forge-account attestations (server-only). A private ES256 key
     // in JWK JSON form; set NUXT_ATTESTATION_PRIVATE_KEY. When empty, linking still
     // works but records carry no verifiable attestation (badge stays unverified).

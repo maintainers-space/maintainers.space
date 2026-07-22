@@ -128,6 +128,23 @@ export function useExplore() {
       }
     }
 
+    // Codeberg (Forgejo): most-starred public projects. Like GitLab, its search
+    // has no language facet, so the language filter only narrows the GitHub slice.
+    const cb = getForge('codeberg')
+    if (cb?.searchRepos) {
+      try {
+        const res = await cb.searchRepos(language && language !== 'all' ? language : '', {
+          sort: 'stars',
+          order: 'desc',
+          limit: Math.min(limit, 12),
+          token: getToken('codeberg')
+        })
+        collected.push(...res.items)
+      } catch {
+        /* best-effort */
+      }
+    }
+
     // Tangled has no search API — surface a small curated set so the feed
     // still feels cross-provider.
     const tangled = getForge('tangled')
@@ -153,8 +170,10 @@ export function useExplore() {
       if (!forge.listFollowedRepos) return
       const t = getToken(forge.id)
       if (!t) {
-        if (forge.id === 'github') noteSet.add('Connect your GitHub account to include the people you follow there.')
-        if (forge.id === 'gitlab') noteSet.add('Connect your GitLab account to include the people you follow there.')
+        // Any token-based forge (not atproto/Tangled) needs a connected account.
+        if (forge.id !== 'tangled') {
+          noteSet.add(`Connect your ${forge.label} account to include the people you follow there.`)
+        }
         return
       }
       try {

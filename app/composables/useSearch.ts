@@ -12,7 +12,7 @@ export interface SearchResults {
   discussions: ForgeDiscussion[]
 }
 
-const DEFAULT_PROVIDERS: ForgeId[] = ['github', 'gitlab', 'tangled']
+const DEFAULT_PROVIDERS: ForgeId[] = ['github', 'gitlab', 'tangled', 'codeberg']
 const DEFAULT_TYPES: ResultType[] = ['repos', 'issues', 'users']
 
 /** Flatten an AST to its free-text terms — GitLab's search takes plain text. */
@@ -166,6 +166,30 @@ export function useSearch() {
             if (myToken !== runToken) return
             results.code.push(...r.items)
           }).catch(() => { /* best-effort */ }))
+        }
+      }
+
+      if (pid === 'codeberg') {
+        const text = astToPlainText(q.root).trim()
+        if (!text) continue
+        const base: ForgeSearchOptions = { limit, token: getToken('codeberg'), sort: sortOption(q), order: q.sortOrder }
+        if (types.includes('repos') && forge.searchRepos) {
+          tasks.push(forge.searchRepos(text, base).then((r) => {
+            if (myToken !== runToken) return
+            results.repos.push(...r.items)
+          }).catch(() => { noteSet.add('Codeberg repository search failed.') }))
+        }
+        if (types.includes('issues') && forge.searchIssues) {
+          tasks.push(forge.searchIssues(text, base).then((r) => {
+            if (myToken !== runToken) return
+            results.issues.push(...r.items)
+          }).catch(() => { /* best-effort */ }))
+        }
+        if (types.includes('users') && forge.searchUsers) {
+          tasks.push(forge.searchUsers(text, base).then((r) => {
+            if (myToken !== runToken) return
+            results.users.push(...r.items)
+          }).catch(() => { /* user search is best-effort */ }))
         }
       }
 
