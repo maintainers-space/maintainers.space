@@ -1,16 +1,19 @@
 import { configureOAuth } from '@atcute/oauth-browser-client'
 import { identityResolver } from './identity'
 
-// Granular atproto OAuth scope — request only what koinon actually uses.
+// Granular atproto OAuth scope — request only the collections koinon writes.
 //
-// koinon's ONLY authenticated PDS operation is reading/writing its own account
-// links in the `dev.koinon.forgeAccount` collection (see useForgeAccounts.ts).
-// Everything else (profiles, follows, repos, Tangled data) is a public,
-// unauthenticated read and needs no scope.
+// koinon's authenticated PDS writes are limited to three record collections:
 //
 //   atproto                        → identity only (required base scope)
-//   repo:dev.koinon.forgeAccount   → create/update/delete records in that one
-//                                    collection (no `action=` means all three)
+//   repo:dev.koinon.forgeAccount   → linked forge accounts (useForgeAccounts.ts)
+//   repo:dev.koinon.repoMetadata   → repo community links / metadata
+//                                    (useRepoMetadataEditor.ts)
+//   repo:sh.tangled.feed.star      → starring Tangled repos (useRepoStar.ts)
+//
+// A bare `repo:<nsid>` (no `action=`) grants create/update/delete for that one
+// collection. Everything else (profiles, follows, repos, Tangled reads) is a
+// public, unauthenticated read and needs no scope.
 //
 // This deliberately avoids the legacy `transition:generic` scope, which grants
 // full read/write to every collection (Bluesky posts, likes, follows, profile…)
@@ -18,9 +21,15 @@ import { identityResolver } from './identity'
 //
 // NOTE: this string MUST stay in sync with the `scope` in
 // public/client-metadata.json (the production client_id document) and with the
-// FORGE_ACCOUNT_COLLECTION constant in useForgeAccounts.ts.
-export const FORGE_ACCOUNT_SCOPE = 'repo:dev.koinon.forgeAccount'
-export const OAUTH_SCOPE = `atproto ${FORGE_ACCOUNT_SCOPE}`
+// collection constants FORGE_ACCOUNT_COLLECTION (useForgeAccounts.ts),
+// REPO_METADATA_COLLECTION (lib/repo-metadata.ts) and TANGLED_STAR_COLLECTION
+// (useRepoStar.ts).
+export const OAUTH_SCOPE = [
+  'atproto',
+  'repo:dev.koinon.forgeAccount',
+  'repo:dev.koinon.repoMetadata',
+  'repo:sh.tangled.feed.star'
+].join(' ')
 
 let configured = false
 
