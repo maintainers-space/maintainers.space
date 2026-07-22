@@ -653,23 +653,24 @@ export const githubProvider: ForgeProvider = {
     const token = opts?.token ?? getForgeToken('github')
     if (!token) return []
     const headers = ghHeaders(opts)
-    const [following, orgs] = await Promise.all([
-      $fetch<any[]>(`${API}/user/following`, { headers, query: { per_page: 50 }, signal: opts?.signal }).catch(() => []),
-      $fetch<any[]>(`${API}/user/orgs`, { headers, query: { per_page: 50 }, signal: opts?.signal }).catch(() => [])
-    ])
-    const owners: { login: string, kind: 'users' | 'orgs' }[] = [
-      ...(orgs as any[]).map(o => ({ login: String(o.login), kind: 'orgs' as const })),
-      ...(following as any[]).map(u => ({ login: String(u.login), kind: 'users' as const }))
-    ]
-    // Pull a few recently-pushed repos from each followed account, bounded so
+    // Only people, not orgs: /user/following mixes User and Organization
+    // accounts, and org membership is irrelevant here — the goal is to see what
+    // the humans you follow are actually building.
+    const following = await $fetch<any[]>(`${API}/user/following`, {
+      headers,
+      query: { per_page: 100 },
+      signal: opts?.signal
+    }).catch(() => [])
+    const owners = (following as any[])
+      .filter(u => String(u.type) === 'User')
+      .map(u => String(u.login))
+    // Pull a few recently-pushed repos from each followed person, bounded so
     // the feed stays fast even for people who follow hundreds of accounts.
-    const perOwner = await Promise.all(owners.slice(0, 18).map(async (o) => {
+    const perOwner = await Promise.all(owners.slice(0, 20).map(async (login) => {
       try {
-        const data = await $fetch<any[]>(`${API}/${o.kind}/${o.login}/repos`, {
+        const data = await $fetch<any[]>(`${API}/users/${login}/repos`, {
           headers,
-          query: o.kind === 'users'
-            ? { per_page: 5, sort: 'pushed', type: 'owner' }
-            : { per_page: 5, sort: 'pushed', type: 'sources' },
+          query: { per_page: 5, sort: 'pushed', type: 'owner' },
           signal: opts?.signal
         })
         return (data ?? []).map(mapRepo)
