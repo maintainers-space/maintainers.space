@@ -26,7 +26,10 @@ export function useGithubAuth() {
   /** Redirect to GitHub to authorize; returns to `returnTo` (an in-app path). */
   function connect(returnTo?: string): void {
     const to = returnTo ?? (import.meta.client ? location.pathname + location.search : '/settings/accounts')
-    window.location.assign(`/api/auth/github/login?redirect=${encodeURIComponent(to)}`)
+    const params = new URLSearchParams({ redirect: to })
+    // Bind the attestation to the signed-in atproto identity when available.
+    if (did.value) params.set('did', did.value)
+    window.location.assign(`/api/auth/github/login?${params.toString()}`)
   }
 
   function disconnect(): void {
@@ -49,6 +52,11 @@ export function useGithubAuth() {
     // Verify who the token belongs to, then link it as a verified account.
     const user = await fetchAuthedGithubUser(token)
 
+    // Unforgeable proof (signed by our server) that this GitHub account belongs
+    // to the current DID. Absent when the server has no signing key configured.
+    const attestation = params.get('attestation') || undefined
+    const attestedBy = params.get('attestedBy') || undefined
+
     // The link record lives on the atproto PDS, so wait for session restore.
     while (restoring.value) await new Promise(r => setTimeout(r, 50))
     if (did.value) {
@@ -58,7 +66,9 @@ export function useGithubAuth() {
         displayName: user.name || undefined,
         avatarUrl: user.avatar_url,
         profileUrl: user.html_url,
-        verified: true
+        verified: true,
+        attestation,
+        attestedBy
       }).catch(() => { /* token is stored regardless; linking is best-effort */ })
     }
 

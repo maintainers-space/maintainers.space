@@ -30,7 +30,7 @@ export default defineEventHandler(async (event) => {
   const { clientId, clientSecret } = useRuntimeConfig(event).github
   if (!clientId || !clientSecret) return fail('GitHub OAuth is not configured on this server.')
 
-  let stored: { state?: string, returnTo?: string } = {}
+  let stored: { state?: string, returnTo?: string, did?: string } = {}
   try {
     stored = cookieRaw ? JSON.parse(cookieRaw) : {}
   } catch { /* fall through to state mismatch */ }
@@ -59,6 +59,33 @@ export default defineEventHandler(async (event) => {
       scope: res.scope ?? '',
       return: safeReturn(stored.returnTo)
     })
+
+    // Bind the (server-verified) GitHub identity to the user's atproto DID with a
+    // signed attestation, so the resulting PDS record's "verified" claim can't be
+    // forged. Best-effort: if signing is unconfigured or GitHub is unreachable,
+    // linking still proceeds without a proof.
+    if (stored.did) {
+      try {
+        const ghUser = await $fetch<{ login: string }>('https://api.github.com/user', {
+          headers: {
+            'Accept': 'application/vnd.github+json',
+            'Authorization': `Bearer ${res.access_token}`,
+            'User-Agent': 'koinon'
+          }
+        })
+        const signed = await signForgeAttestation({
+          origin,
+          did: stored.did,
+          provider: 'github',
+          username: ghUser.login
+        })
+        if (signed) {
+          fragment.set('attestation', signed.attestation)
+          fragment.set('attestedBy', signed.attestedBy)
+        }
+      } catch { /* attestation is best-effort; the link is still stored */ }
+    }
+
     return sendRedirect(event, `/oauth/github#${fragment.toString()}`)
   } catch {
     return fail('Could not complete GitHub sign-in. Please try again.')

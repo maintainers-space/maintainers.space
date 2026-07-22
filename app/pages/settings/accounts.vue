@@ -3,13 +3,56 @@ import type { ForgeAccount } from '~/composables/useForgeAccounts'
 
 const { accounts, pending, loaded, refresh, unlink } = useForgeAccounts()
 const { connect, disconnect, isConnected } = useGithubAuth()
+const { did } = useAuth()
+const { isVerified, check } = useForgeAttestations()
 const toast = useToast()
 
 onMounted(() => {
   if (!loaded.value) refresh()
 })
 
+// Verify attestations whenever the account list or identity changes.
+watch(
+  [accounts, () => did.value],
+  () => { check(did.value, accounts.value ?? []) },
+  { immediate: true }
+)
+
 const githubLinked = computed(() => accounts.value.some(a => a.provider === 'github'))
+
+// Two independent facts, previously (and wrongly) conflated:
+//   • linked   → a dev.koinon.forgeAccount record exists on your PDS. This syncs
+//                across every device the moment you sign in with atproto.
+//   • connected→ a GitHub OAuth token is present in THIS browser. It never leaves
+//                the device, so a fresh device is "linked" but not yet "connected".
+// That mismatch is why another device looked connected but wasn't.
+const githubState = computed<'connected' | 'needs-auth' | 'disconnected'>(() => {
+  if (isConnected.value) return 'connected'
+  if (githubLinked.value) return 'needs-auth'
+  return 'disconnected'
+})
+
+const githubCopy = computed(() => {
+  switch (githubState.value) {
+    case 'connected':
+      return 'Connected on this device.'
+    case 'needs-auth':
+      return 'Linked to your atproto identity — authorize on this device to use it.'
+    default:
+      return 'Sign in with GitHub to verify and link your account.'
+  }
+})
+
+const githubButton = computed(() => {
+  switch (githubState.value) {
+    case 'connected':
+      return { label: 'Reconnect', icon: 'i-lucide-refresh-cw', color: 'neutral' as const, variant: 'outline' as const }
+    case 'needs-auth':
+      return { label: 'Authorize on this device', icon: 'i-simple-icons-github', color: 'primary' as const, variant: 'solid' as const }
+    default:
+      return { label: 'Connect GitHub', icon: 'i-simple-icons-github', color: 'primary' as const, variant: 'solid' as const }
+  }
+})
 
 async function onUnlink(account: ForgeAccount) {
   try {
@@ -49,17 +92,22 @@ async function onUnlink(account: ForgeAccount) {
             GitHub
           </p>
           <p class="text-sm text-muted">
-            {{ githubLinked || isConnected ? 'Connected via OAuth.' : 'Sign in with GitHub to verify and link your account.' }}
+            {{ githubCopy }}
           </p>
         </div>
         <UButton
-          :label="githubLinked || isConnected ? 'Reconnect' : 'Connect GitHub'"
-          :icon="githubLinked || isConnected ? 'i-lucide-refresh-cw' : 'i-simple-icons-github'"
-          :color="githubLinked || isConnected ? 'neutral' : 'primary'"
-          :variant="githubLinked || isConnected ? 'outline' : 'solid'"
+          :label="githubButton.label"
+          :icon="githubButton.icon"
+          :color="githubButton.color"
+          :variant="githubButton.variant"
           @click="connect('/settings/accounts')"
         />
       </div>
+      <p v-if="githubState === 'needs-auth'" class="mt-3 text-xs text-muted">
+        Your accounts stay linked to your identity, but the GitHub token that
+        authorizes API access lives only on each device for security. Authorizing
+        here is usually a single click — GitHub remembers you already approved koinon.
+      </p>
     </UCard>
 
     <div class="space-y-2">
@@ -84,6 +132,7 @@ async function onUnlink(account: ForgeAccount) {
           v-for="account in accounts"
           :key="account.uri"
           :account="account"
+          :verified="isVerified(did, account)"
           @unlink="onUnlink"
         />
       </div>

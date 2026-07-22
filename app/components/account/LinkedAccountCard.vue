@@ -2,7 +2,7 @@
 import type { ForgeAccount } from '~/composables/useForgeAccounts'
 import { getForge } from '~/lib/forges'
 
-const props = defineProps<{ account: ForgeAccount }>()
+const props = defineProps<{ account: ForgeAccount, verified?: boolean }>()
 const emit = defineEmits<{ unlink: [account: ForgeAccount] }>()
 
 const forge = computed(() => getForge(props.account.provider))
@@ -20,7 +20,7 @@ const forge = computed(() => getForge(props.account.provider))
       <div class="flex items-center gap-1.5">
         <span class="truncate font-medium text-default">{{ account.displayName || account.username }}</span>
         <UBadge
-          v-if="account.verified"
+          v-if="verified"
           label="Verified"
           color="primary"
           variant="subtle"

@@ -14,6 +14,10 @@ export interface ForgeAccountRecord {
   avatarUrl?: string
   profileUrl?: string
   verified?: boolean
+  /** Compact JWS (ES256) issued by the koinon server binding this DID to the account. */
+  attestation?: string
+  /** Origin of the koinon server that issued `attestation` (JWKS at /.well-known/jwks.json). */
+  attestedBy?: string
   createdAt: string
 }
 
@@ -77,6 +81,8 @@ export function useForgeAccounts() {
       avatarUrl: input.avatarUrl,
       profileUrl: input.profileUrl,
       verified: input.verified ?? false,
+      attestation: input.attestation,
+      attestedBy: input.attestedBy,
       createdAt: input.createdAt ?? new Date().toISOString()
     }
     for (const k of Object.keys(record) as Array<keyof ForgeAccountRecord>) {

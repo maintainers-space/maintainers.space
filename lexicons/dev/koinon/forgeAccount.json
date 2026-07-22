@@ -42,7 +42,17 @@
           },
           "verified": {
             "type": "boolean",
-            "description": "Whether ownership of the forge account has been cryptographically or otherwise verified."
+            "description": "Self-asserted ownership flag. NOT a trust signal on its own: the record owner can freely set it. Only treat the link as verified when a valid 'attestation' is present and checks out."
+          },
+          "attestation": {
+            "type": "string",
+            "description": "Compact JWS (ES256) issued by the koinon server binding this account to the record owner's DID. Its payload asserts { sub: <owner did>, provider, username }. Because it is signed with the server's private key, the record owner cannot forge or tamper with it. Verified against the issuer's JWKS.",
+            "maxLength": 4096
+          },
+          "attestedBy": {
+            "type": "string",
+            "format": "uri",
+            "description": "Origin of the koinon server that issued 'attestation'. Its public keys are published at '<attestedBy>/.well-known/jwks.json'. Verifiers must pin this to a trusted issuer."
           },
           "createdAt": {
             "type": "string",

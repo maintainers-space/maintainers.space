@@ -20,8 +20,13 @@ export default defineEventHandler((event) => {
   const origin = getRequestURL(event).origin
   const state = crypto.randomUUID()
   const returnTo = safeReturn(getQuery(event).redirect)
+  // The atproto DID to bind the attestation to. Asserted by the client; safe
+  // because verifiers require the signed `sub` to equal the record owner's DID,
+  // and a user can only write the resulting record to their own repo.
+  const rawDid = getQuery(event).did
+  const did = typeof rawDid === 'string' && rawDid.startsWith('did:') ? rawDid : ''
 
-  setCookie(event, 'gh_oauth', JSON.stringify({ state, returnTo }), {
+  setCookie(event, 'gh_oauth', JSON.stringify({ state, returnTo, did }), {
     httpOnly: true,
     sameSite: 'lax',
     secure: origin.startsWith('https:'),

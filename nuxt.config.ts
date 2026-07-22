@@ -29,6 +29,12 @@ export default defineNuxtConfig({
       clientId: '',
       clientSecret: ''
     },
+    // Server-signed forge-account attestations (server-only). A private ES256 key
+    // in JWK JSON form; set NUXT_ATTESTATION_PRIVATE_KEY. When empty, linking still
+    // works but records carry no verifiable attestation (badge stays unverified).
+    attestation: {
+      privateKey: ''
+    },
     public: {
       // OAuth client id for production; overridden per-env. Empty => localhost dev client.
       atprotoClientId: '',

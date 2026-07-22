@@ -32,6 +32,15 @@ const githubLogins = computed(() =>
   (accounts.value ?? []).filter(a => a.provider === 'github').map(a => a.username)
 )
 
+// Gate the "verified" badge on a real signature check, not the record's own
+// (forgeable) `verified` flag.
+const { isVerified, check } = useForgeAttestations()
+watch(
+  [accounts, () => profile.value?.did],
+  () => { check(profile.value?.did, accounts.value ?? []) },
+  { immediate: true }
+)
+
 // 3) Repositories across the atproto (Tangled) identity + linked GitHub accounts.
 const { data: repos, pending: reposPending } = useAsyncData(
   `profile-repos:${handle.value}`,
@@ -171,7 +180,7 @@ useHead(() => ({ title: `${displayName.value} · koinon` }))
                 <ForgeIcon :provider="a.provider" class="size-4" />
                 <span>{{ a.username }}</span>
                 <UIcon
-                  v-if="a.verified"
+                  v-if="isVerified(profile?.did, a)"
                   name="i-lucide-shield-check"
                   class="size-4 text-primary"
                 />
