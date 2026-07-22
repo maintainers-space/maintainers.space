@@ -17,8 +17,10 @@ export interface RepoMetadataTarget {
   owner: string
   name: string
   host?: string
-  /** Tangled owner DID (from repo.ref.repoDid); enables atproto-native ownership. */
+  /** Tangled repo-entity DID (from repo.ref.repoDid); used for stars/issues subjects. */
   repoDid?: string
+  /** Tangled owner DID — the authority of the repo record's at-URI; the ownership principal. */
+  ownerDid?: string
 }
 
 export interface RepoMetadataEntry {
@@ -31,14 +33,17 @@ export interface RepoMetadataEntry {
  * Confirm a fetched record genuinely belongs to the repo being viewed and is
  * cryptographically owned by `did`: matching subject/provider/owner/name plus
  * either a valid server attestation (github/gitlab/codeberg) or, for Tangled,
- * the record owner being the repo's atproto DID.
+ * the record owner being the repo's atproto owner DID. Every field read from the
+ * untrusted record is type-checked first so one malformed record can't throw.
  */
 async function verifyEntry(target: RepoMetadataTarget, did: string, record: RepoMetadataRecord): Promise<boolean> {
+  if (typeof record.subject !== 'string' || typeof record.provider !== 'string'
+    || typeof record.owner !== 'string' || typeof record.name !== 'string') return false
   if (record.subject !== repoSubject(target.provider, target.owner, target.name)) return false
   if (record.provider !== target.provider) return false
   if (record.owner.toLowerCase() !== target.owner.toLowerCase()) return false
   if (record.name.toLowerCase() !== target.name.toLowerCase()) return false
-  if (target.provider === 'tangled') return !!target.repoDid && did === target.repoDid
+  if (target.provider === 'tangled') return !!target.ownerDid && did === target.ownerDid
   return verifyRepoAttestation(record, did)
 }
 
@@ -52,6 +57,8 @@ export function useRepoMetadata(source: MaybeRefOrGetter<RepoMetadataTarget | nu
   const entries = ref<RepoMetadataEntry[]>([])
   const pending = ref(false)
   const loaded = ref(false)
+  let generation = 0
+  let currentSubject = ''
 
   const links = computed<CommunityLink[]>(() => {
     const seen = new Set<string>()
@@ -68,36 +75,51 @@ export function useRepoMetadata(source: MaybeRefOrGetter<RepoMetadataTarget | nu
   })
 
   async function load(force = false): Promise<void> {
+    const gen = ++generation
     const target = toValue(source)
     if (!target?.provider || !target.owner || !target.name) {
       entries.value = []
+      currentSubject = ''
+      pending.value = false
       loaded.value = true
       return
     }
+    const subject = repoSubject(target.provider, target.owner, target.name)
+    // Navigated to a different repo: drop the previous repo's links immediately
+    // so they can never be shown against the wrong repository.
+    if (subject !== currentSubject) entries.value = []
     pending.value = true
     try {
-      const subject = repoSubject(target.provider, target.owner, target.name)
-      const backlinks = await getBacklinks(subject, BACKLINK_SOURCE, { force })
-      const verified: RepoMetadataEntry[] = []
-      await Promise.all(backlinks.map(async (bl) => {
-        if (bl.collection !== REPO_METADATA_COLLECTION) return
+      const backlinks = await getBacklinks(subject, BACKLINK_SOURCE, { force }).catch(() => [])
+      // Each candidate is fetched and verified in isolation, so a single
+      // hostile/malformed record can never reject the whole batch.
+      const settled = await Promise.allSettled(backlinks.map(async (bl): Promise<RepoMetadataEntry | null> => {
+        if (bl.collection !== REPO_METADATA_COLLECTION) return null
         const rec = await getPublicRecord<RepoMetadataRecord>(bl.did, REPO_METADATA_COLLECTION, bl.rkey)
         if (rec && await verifyEntry(target, bl.did, rec.value)) {
-          verified.push({ did: bl.did, rkey: bl.rkey, record: rec.value })
+          return { did: bl.did, rkey: bl.rkey, record: rec.value }
         }
+        return null
       }))
-      verified.sort((a, b) => (a.record.createdAt < b.record.createdAt ? 1 : -1))
+      // A newer load superseded this one while it was in flight: discard.
+      if (gen !== generation) return
+      const verified = settled
+        .flatMap(r => (r.status === 'fulfilled' && r.value ? [r.value] : []))
+        .sort((a, b) => (a.record.createdAt < b.record.createdAt ? 1 : -1))
+      currentSubject = subject
       entries.value = verified
     } finally {
-      pending.value = false
-      loaded.value = true
+      if (gen === generation) {
+        pending.value = false
+        loaded.value = true
+      }
     }
   }
 
   watch(
     () => {
       const t = toValue(source)
-      return t ? `${t.provider}/${t.owner}/${t.name}|${t.repoDid ?? ''}` : ''
+      return t ? `${t.provider}/${t.owner}/${t.name}|${t.ownerDid ?? ''}` : ''
     },
     () => { void load() },
     { immediate: true }

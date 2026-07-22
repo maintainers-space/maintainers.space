@@ -60,6 +60,8 @@ export function useRepoMetadataEditor(source?: MaybeRefOrGetter<RepoMetadataTarg
   const own = ref<RepoMetadataRecord | null>(null)
   const ownLoaded = ref(false)
   const saving = ref(false)
+  let ownGeneration = 0
+  let ownSubject = ''
 
   function target(): RepoMetadataTarget | null {
     return source ? toValue(source) ?? null : null
@@ -68,21 +70,28 @@ export function useRepoMetadataEditor(source?: MaybeRefOrGetter<RepoMetadataTarg
   const canManage = computed(() => {
     const t = target()
     if (!t || !did.value) return false
-    if (t.provider === 'tangled') return !!t.repoDid && t.repoDid === did.value
+    if (t.provider === 'tangled') return !!t.ownerDid && t.ownerDid === did.value
     return CLAIM_PROVIDERS.has(t.provider)
   })
 
   const isClaimed = computed(() => !!own.value)
 
   async function loadOwn(): Promise<void> {
+    const gen = ++ownGeneration
     const t = target()
     if (!t || !did.value) {
       own.value = null
+      ownSubject = ''
       ownLoaded.value = true
       return
     }
+    const subject = repoSubject(t.provider, t.owner, t.name)
+    // Different repo/account: clear the previous claim state so it can't leak.
+    if (subject !== ownSubject) own.value = null
     const rkey = repoMetadataRkey(t.provider, t.owner, t.name, t.host)
-    const rec = await getPublicRecord<RepoMetadataRecord>(did.value, REPO_METADATA_COLLECTION, rkey)
+    const rec = await getPublicRecord<RepoMetadataRecord>(did.value, REPO_METADATA_COLLECTION, rkey).catch(() => null)
+    if (gen !== ownGeneration) return
+    ownSubject = subject
     own.value = rec?.value ?? null
     ownLoaded.value = true
   }
@@ -145,7 +154,7 @@ export function useRepoMetadataEditor(source?: MaybeRefOrGetter<RepoMetadataTarg
     const links = sanitizeLinks(rawLinks)
 
     if (t.provider === 'tangled') {
-      if (t.repoDid !== did.value) throw new Error('Only the repository owner can edit this.')
+      if (t.ownerDid !== did.value) throw new Error('Only the repository owner can edit this.')
       await writeRecord(t, links)
       return { claiming: false }
     }

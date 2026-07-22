@@ -166,7 +166,7 @@ function makeRepo(owner: string, repo: string, resolved: ResolvedRepo, extra?: P
     topics: value.topics ?? [],
     createdAt: value.createdAt ?? null,
     updatedAt: value.createdAt ?? null,
-    ref: { atUri: resolved.atUri, knot: resolved.knot, repoDid: resolved.repoDid, spindle: resolved.spindle },
+    ref: { atUri: resolved.atUri, ownerDid: resolved.atUri ? didFromUri(resolved.atUri) : undefined, knot: resolved.knot, repoDid: resolved.repoDid, spindle: resolved.spindle },
     ...extra
   }
 }

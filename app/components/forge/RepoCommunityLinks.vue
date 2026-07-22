@@ -9,7 +9,8 @@ const target = computed<RepoMetadataTarget | null>(() => ({
   provider: props.repo.provider,
   owner: props.repo.owner,
   name: props.repo.name,
-  repoDid: typeof props.repo.ref?.repoDid === 'string' ? props.repo.ref.repoDid : undefined
+  repoDid: typeof props.repo.ref?.repoDid === 'string' ? props.repo.ref.repoDid : undefined,
+  ownerDid: typeof props.repo.ref?.ownerDid === 'string' ? props.repo.ref.ownerDid : undefined
 }))
 
 const { links, refresh } = useRepoMetadata(target)
