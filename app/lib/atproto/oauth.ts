@@ -1,7 +1,26 @@
 import { configureOAuth } from '@atcute/oauth-browser-client'
 import { identityResolver } from './identity'
 
-export const OAUTH_SCOPE = 'atproto transition:generic'
+// Granular atproto OAuth scope — request only what koinon actually uses.
+//
+// koinon's ONLY authenticated PDS operation is reading/writing its own account
+// links in the `dev.koinon.forgeAccount` collection (see useForgeAccounts.ts).
+// Everything else (profiles, follows, repos, Tangled data) is a public,
+// unauthenticated read and needs no scope.
+//
+//   atproto                        → identity only (required base scope)
+//   repo:dev.koinon.forgeAccount   → create/update/delete records in that one
+//                                    collection (no `action=` means all three)
+//
+// This deliberately avoids the legacy `transition:generic` scope, which grants
+// full read/write to every collection (Bluesky posts, likes, follows, profile…)
+// and shows users an "access to nearly everything" consent screen.
+//
+// NOTE: this string MUST stay in sync with the `scope` in
+// public/client-metadata.json (the production client_id document) and with the
+// FORGE_ACCOUNT_COLLECTION constant in useForgeAccounts.ts.
+export const FORGE_ACCOUNT_SCOPE = 'repo:dev.koinon.forgeAccount'
+export const OAUTH_SCOPE = `atproto ${FORGE_ACCOUNT_SCOPE}`
 
 let configured = false
 
