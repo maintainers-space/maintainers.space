@@ -31,7 +31,7 @@ export default defineEventHandler(async (event) => {
   const { clientId, clientSecret } = useRuntimeConfig(event).codeberg
   if (!clientId || !clientSecret) return fail('Codeberg OAuth is not configured on this server.')
 
-  let stored: { state?: string, returnTo?: string, did?: string } = {}
+  let stored: { state?: string, returnTo?: string, did?: string, claimOwner?: string, claimName?: string } = {}
   try {
     stored = cookieRaw ? JSON.parse(cookieRaw) : {}
   } catch { /* fall through to state mismatch */ }
@@ -79,6 +79,16 @@ export default defineEventHandler(async (event) => {
         }
       } catch { /* attestation is best-effort; the link is still stored */ }
     }
+
+    await applyRepoClaim({
+      fragment,
+      origin,
+      provider: 'codeberg',
+      token: res.access_token,
+      did: stored.did,
+      claimOwner: stored.claimOwner,
+      claimName: stored.claimName
+    })
 
     return sendRedirect(event, `/oauth/codeberg#${fragment.toString()}`)
   } catch {
