@@ -7,7 +7,7 @@ const { provider, owner, name, forge, locator } = useRepoContext()
 const base = computed(() => repoPath({ provider: provider.value, owner: owner.value, name: name.value }))
 const id = computed(() => String(route.params.id))
 
-const { data, pending, error } = useAsyncData<ForgeActionRun | null>(
+const { data, pending, error } = useLiveAsyncData<ForgeActionRun | null>(
   () => `run:${provider.value}:${owner.value}:${name.value}:${id.value}`,
   async () => {
     if (!forge.value?.getActionRun) return null
