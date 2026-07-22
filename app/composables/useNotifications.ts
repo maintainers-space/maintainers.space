@@ -51,16 +51,18 @@ export function useNotifications() {
   const loadedOnce = useState<boolean>('inbox-loaded', () => false)
   const merging = useState<string[]>('inbox-merging', () => [])
 
-  const dependencyItems = computed(() => items.value.filter(i => i.isBot))
-  const ciItems = computed(() => items.value.filter(i => i.kind === 'ci' && !i.isBot))
+  const resolvedItems = computed(() => items.value.filter(i => i.resolved))
+  const dependencyItems = computed(() => items.value.filter(i => i.isBot && !i.resolved))
+  const ciItems = computed(() => items.value.filter(i => i.kind === 'ci' && !i.isBot && !i.resolved))
   const inboxItems = computed(() =>
     items.value
-      .filter(i => !i.isBot && i.kind !== 'ci')
+      .filter(i => !i.resolved && !i.isBot && i.kind !== 'ci')
       // Unread threads first, then most-recently updated (stable sort keeps recency).
       .sort((a, b) => Number(b.unread) - Number(a.unread))
   )
   const unreadCount = computed(() => inboxItems.value.filter(i => i.unread).length)
   const dependencyCount = computed(() => dependencyItems.value.length)
+  const resolvedCount = computed(() => resolvedItems.value.length)
 
   /** Collapse repetitive CI-failure notifications into one entry per repo. */
   const ciGroups = computed<CiFailureGroup[]>(() => {
@@ -122,6 +124,25 @@ export function useNotifications() {
 
   const isMerging = (item: ForgeInboxItem): boolean => merging.value.includes(`${item.provider}:${item.id}`)
 
+  /** Mark a single notification thread as read and drop it from the inbox. */
+  async function markRead(item: ForgeInboxItem): Promise<void> {
+    const forge = getForge(item.provider)
+    const token = getToken(item.provider)
+    removeItem(item)
+    if (forge?.markNotificationRead) await forge.markNotificationRead(item.id, { token }).catch(() => {})
+  }
+
+  /** Mark many threads read at once (bounded fan-out), e.g. "mark all as read". */
+  async function markManyRead(list: ForgeInboxItem[]): Promise<void> {
+    const targets = list.slice()
+    for (const it of targets) removeItem(it)
+    await Promise.all(targets.map((it) => {
+      const forge = getForge(it.provider)
+      const token = getToken(it.provider)
+      return forge?.markNotificationRead ? forge.markNotificationRead(it.id, { token }).catch(() => {}) : Promise.resolve()
+    }))
+  }
+
   async function reply(item: ForgeInboxItem, body: string): Promise<boolean> {
     const forge = getForge(item.provider)
     const token = getToken(item.provider)
@@ -170,16 +191,20 @@ export function useNotifications() {
     items,
     inboxItems,
     dependencyItems,
+    resolvedItems,
     ciGroups,
     ciCount,
     loading,
     notes,
     unreadCount,
     dependencyCount,
+    resolvedCount,
     hasSources,
     loadedOnce,
     load,
     reply,
+    markRead,
+    markManyRead,
     approveAndMerge,
     mergeAll,
     isMerging

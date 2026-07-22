@@ -111,6 +111,7 @@ async function onMergeAll(): Promise<void> {
               :key="`${item.provider}:${item.id}`"
               :item="item"
               :allow-reply="false"
+              :allow-mark-read="false"
             >
               <template #actions>
                 <UButton

@@ -1,12 +1,35 @@
 <script setup lang="ts">
-const { inboxItems, dependencyCount, ciGroups, ciCount, loading, notes, unreadCount, loadedOnce, load } = useNotifications()
-const { isAuthenticated } = useAuth()
+import type { ForgeInboxItem } from '~/types/forge'
 
-const ciOpen = ref(false)
+const {
+  inboxItems,
+  dependencyCount,
+  ciGroups,
+  ciCount,
+  resolvedItems,
+  resolvedCount,
+  loading,
+  notes,
+  unreadCount,
+  loadedOnce,
+  load,
+  markRead,
+  markManyRead
+} = useNotifications()
+const { isAuthenticated } = useAuth()
 
 onMounted(() => {
   if (!loadedOnce.value) load()
 })
+
+/** Icon + tint for a resolved thread's final state. */
+function resolvedMeta(item: ForgeInboxItem): { icon: string, class: string } {
+  if (item.kind === 'pull') {
+    if (item.state === 'merged') return { icon: 'i-lucide-git-merge', class: 'text-primary' }
+    return { icon: 'i-lucide-git-pull-request-closed', class: 'text-error' }
+  }
+  return { icon: 'i-lucide-circle-check', class: 'text-primary' }
+}
 </script>
 
 <template>
@@ -27,6 +50,15 @@ onMounted(() => {
           </UBadge>
         </template>
         <template #right>
+          <UButton
+            v-if="inboxItems.length"
+            icon="i-lucide-check-check"
+            color="neutral"
+            variant="ghost"
+            size="sm"
+            label="Mark all read"
+            @click="markManyRead(inboxItems)"
+          />
           <UButton
             icon="i-lucide-refresh-cw"
             color="neutral"
@@ -93,60 +125,12 @@ onMounted(() => {
             <UIcon name="i-lucide-chevron-right" class="size-4 shrink-0 text-muted" />
           </NuxtLink>
 
-          <!-- Failing checks: repetitive CI failures collapsed to one row per repo. -->
-          <div v-if="ciCount" class="overflow-hidden rounded-lg border border-default bg-elevated/30">
-            <button
-              type="button"
-              class="flex w-full items-center gap-3 px-4 py-3 text-left transition hover:bg-elevated/60"
-              @click="ciOpen = !ciOpen"
-            >
-              <div class="flex size-9 shrink-0 items-center justify-center rounded-md bg-error/10 text-error">
-                <UIcon name="i-lucide-circle-x" class="size-5" />
-              </div>
-              <div class="min-w-0 flex-1">
-                <p class="text-sm font-medium text-highlighted">
-                  Failing checks
-                </p>
-                <p class="text-xs text-muted">
-                  {{ ciCount }} failed check{{ ciCount === 1 ? '' : 's' }} across
-                  {{ ciGroups.length }} {{ ciGroups.length === 1 ? 'repository' : 'repositories' }}
-                </p>
-              </div>
-              <UBadge color="error" variant="subtle" size="sm">
-                {{ ciCount }}
-              </UBadge>
-              <UIcon :name="ciOpen ? 'i-lucide-chevron-up' : 'i-lucide-chevron-down'" class="size-4 shrink-0 text-muted" />
-            </button>
-            <div
-              class="grid transition-[grid-template-rows] duration-200 ease-out"
-              :class="ciOpen ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'"
-            >
-              <div class="overflow-hidden">
-                <ul class="divide-y divide-default border-t border-default">
-                  <li v-for="g in ciGroups" :key="g.key">
-                    <NuxtLink
-                      :to="g.to || undefined"
-                      :href="!g.to ? (g.url || undefined) : undefined"
-                      :target="!g.to ? '_blank' : undefined"
-                      class="flex items-center gap-3 px-4 py-2.5 text-sm transition hover:bg-elevated/40"
-                    >
-                      <UIcon name="i-lucide-git-branch" class="size-4 shrink-0 text-muted" />
-                      <span class="min-w-0 flex-1 truncate text-default">{{ g.repo.fullName }}</span>
-                      <span class="shrink-0 text-xs font-medium text-error">failed {{ g.count }}&times;</span>
-                      <span v-if="g.latestAt" class="hidden shrink-0 text-xs text-muted sm:inline">{{ formatRelativeTime(g.latestAt) }}</span>
-                    </NuxtLink>
-                  </li>
-                </ul>
-              </div>
-            </div>
-          </div>
-
           <div v-if="loading && !inboxItems.length" class="space-y-3">
             <USkeleton v-for="i in 4" :key="i" class="h-16 w-full" />
           </div>
 
           <div
-            v-else-if="!inboxItems.length && !dependencyCount && !ciCount && !notes.length"
+            v-else-if="!inboxItems.length && !dependencyCount && !ciCount && !resolvedCount && !notes.length"
             class="rounded-lg border border-dashed border-default py-16 text-center"
           >
             <UIcon name="i-lucide-check-check" class="mx-auto size-8 text-success" />
@@ -154,7 +138,7 @@ onMounted(() => {
               You're all caught up.
             </p>
             <p class="mt-1 text-xs text-muted">
-              Resolved issues, merged PRs and repetitive check failures are filtered out automatically.
+              Nothing needs your attention right now.
             </p>
           </div>
 
@@ -164,6 +148,76 @@ onMounted(() => {
               :key="`${item.provider}:${item.id}`"
               :item="item"
             />
+          </div>
+
+          <!-- Awareness section: resolved threads and noisy check failures, kept
+               at the bottom so they never sit above what needs attention. -->
+          <div v-if="resolvedCount || ciCount" class="space-y-3 pt-2">
+            <p class="px-1 text-xs font-semibold uppercase tracking-wide text-muted">
+              For your awareness
+            </p>
+
+            <NotificationsGroupCard
+              v-if="resolvedCount"
+              icon="i-lucide-circle-check-big"
+              icon-class="bg-elevated text-muted"
+              title="Recently resolved"
+              :subtitle="`${resolvedCount} thread${resolvedCount === 1 ? '' : 's'} closed or merged — here so you know why they left your inbox`"
+              :count="resolvedCount"
+              count-color="neutral"
+            >
+              <ul class="divide-y divide-default">
+                <li v-for="item in resolvedItems" :key="`${item.provider}:${item.id}`">
+                  <div class="flex items-center gap-3 px-4 py-2.5 text-sm">
+                    <UIcon :name="resolvedMeta(item).icon" class="size-4 shrink-0" :class="resolvedMeta(item).class" />
+                    <NuxtLink
+                      :to="item.to || undefined"
+                      :href="!item.to ? (item.url || undefined) : undefined"
+                      :target="!item.to ? '_blank' : undefined"
+                      class="min-w-0 flex-1 truncate text-default hover:text-primary"
+                    >
+                      {{ item.title }}
+                      <span v-if="item.number" class="text-muted">#{{ item.number }}</span>
+                    </NuxtLink>
+                    <span v-if="item.updatedAt" class="hidden shrink-0 text-xs text-muted sm:inline">{{ formatRelativeTime(item.updatedAt) }}</span>
+                    <UButton
+                      icon="i-lucide-check"
+                      color="neutral"
+                      variant="ghost"
+                      size="xs"
+                      aria-label="Mark as read"
+                      @click="markRead(item)"
+                    />
+                  </div>
+                </li>
+              </ul>
+            </NotificationsGroupCard>
+
+            <NotificationsGroupCard
+              v-if="ciCount"
+              icon="i-lucide-circle-x"
+              icon-class="bg-error/10 text-error"
+              title="Failing checks"
+              :subtitle="`${ciCount} failed check${ciCount === 1 ? '' : 's'} across ${ciGroups.length} ${ciGroups.length === 1 ? 'repository' : 'repositories'}`"
+              :count="ciCount"
+              count-color="error"
+            >
+              <ul class="divide-y divide-default">
+                <li v-for="g in ciGroups" :key="g.key">
+                  <NuxtLink
+                    :to="g.to || undefined"
+                    :href="!g.to ? (g.url || undefined) : undefined"
+                    :target="!g.to ? '_blank' : undefined"
+                    class="flex items-center gap-3 px-4 py-2.5 text-sm transition hover:bg-elevated/40"
+                  >
+                    <UIcon name="i-lucide-git-branch" class="size-4 shrink-0 text-muted" />
+                    <span class="min-w-0 flex-1 truncate text-default">{{ g.repo.fullName }}</span>
+                    <span class="shrink-0 text-xs font-medium text-error">failed {{ g.count }}&times;</span>
+                    <span v-if="g.latestAt" class="hidden shrink-0 text-xs text-muted sm:inline">{{ formatRelativeTime(g.latestAt) }}</span>
+                  </NuxtLink>
+                </li>
+              </ul>
+            </NotificationsGroupCard>
           </div>
         </template>
       </div>

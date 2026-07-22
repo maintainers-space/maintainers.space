@@ -835,14 +835,15 @@ export const githubProvider: ForgeProvider = {
         number
       }
 
-      // Only PR/issue subjects can be "resolved" — enrich them and drop the
-      // ones that are already closed/merged so the inbox stays actionable.
+      // Enrich PR/issue subjects with their live state. Resolved (closed/merged)
+      // items are kept but tagged so the inbox can surface them in a separate
+      // "recently resolved" group instead of silently dropping them.
       if ((kind === 'pull' || kind === 'issue') && apiUrl && number) {
         try {
           const subj = await $fetch<any>(apiUrl, { headers, signal: opts?.signal })
-          const resolved = kind === 'pull' ? (subj.merged_at || subj.state === 'closed') : subj.state === 'closed'
-          if (resolved) return null
+          const resolved = kind === 'pull' ? !!(subj.merged_at || subj.state === 'closed') : subj.state === 'closed'
           item.state = kind === 'pull' ? pullState(subj) : (subj.state === 'closed' ? 'closed' : 'open')
+          item.resolved = resolved
           item.author = mapUser(subj.user)
           const bk = botKindOf(subj.user?.login)
           item.isBot = !!bk

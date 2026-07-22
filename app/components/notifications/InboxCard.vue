@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import type { ForgeInboxItem, ForgeNotificationKind } from '~/types/forge'
 
-const props = withDefaults(defineProps<{ item: ForgeInboxItem, allowReply?: boolean }>(), {
-  allowReply: true
+const props = withDefaults(defineProps<{ item: ForgeInboxItem, allowReply?: boolean, allowMarkRead?: boolean }>(), {
+  allowReply: true,
+  allowMarkRead: true
 })
 const emit = defineEmits<{ replied: [] }>()
 
-const { reply } = useNotifications()
+const { reply, markRead } = useNotifications()
 
 interface KindStyle { icon: string, chip: string }
 
@@ -72,13 +73,10 @@ async function submitReply(): Promise<void> {
 </script>
 
 <template>
-  <article
-    class="overflow-hidden rounded-lg border border-default bg-default"
-    :class="item.unread ? 'border-l-2 border-l-primary' : ''"
-  >
+  <article class="overflow-hidden rounded-lg border border-default bg-default">
     <div
       class="flex items-start gap-3 px-3 py-3 sm:px-4"
-      :class="expandable ? 'cursor-pointer' : ''"
+      :class="expandable ? 'cursor-pointer transition hover:bg-elevated/40' : ''"
       @click="toggle"
     >
       <div class="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full" :class="style.chip">
@@ -133,12 +131,21 @@ async function submitReply(): Promise<void> {
         </div>
       </div>
 
-      <div class="flex shrink-0 items-center gap-2" @click.stop>
+      <div class="flex shrink-0 items-center gap-1.5" @click.stop>
         <span v-if="commentCount" class="inline-flex items-center gap-1 text-xs font-medium text-muted">
           <UIcon name="i-lucide-message-square" class="size-3.5" />
           {{ commentCount }}
         </span>
         <slot name="actions" />
+        <UButton
+          v-if="allowMarkRead"
+          icon="i-lucide-check"
+          color="neutral"
+          variant="ghost"
+          size="xs"
+          aria-label="Mark as read"
+          @click="markRead(item)"
+        />
         <UButton
           v-if="expandable"
           :icon="open ? 'i-lucide-chevron-up' : 'i-lucide-chevron-down'"

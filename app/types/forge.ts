@@ -388,8 +388,10 @@ export interface ForgeInboxItem {
   url?: string | null
   /** PR/issue number, when the subject has one. */
   number?: number
-  /** Subject state (resolved items are filtered out before display). */
+  /** Subject state (merged/closed items are surfaced separately, not dropped). */
   state?: ForgePullState
+  /** True when the underlying PR/issue is already closed or merged. */
+  resolved?: boolean
   author?: ForgeUser | null
   stat?: ForgeDiffStat | null
   /** True when the PR was opened by a dependency bot (dependabot/renovate). */
