@@ -16,7 +16,7 @@ const { data: profile, pending: profilePending, error: profileError } = useAsync
 )
 
 // 2) Linked forge accounts (public dev.koinon.forgeAccount records).
-const { data: accounts } = useAsyncData(
+const { data: publicAccounts } = useAsyncData(
   `profile-accounts:${handle.value}`,
   async () => {
     const recs = await listPublicRecords<ForgeAccountRecord>(handle.value, FORGE_ACCOUNT_COLLECTION)
@@ -30,6 +30,22 @@ const { data: accounts } = useAsyncData(
 
 const { did: myDid } = useAuth()
 const isOwn = computed(() => !!myDid.value && myDid.value === profile.value?.did)
+
+// Public PDS reads can be CORS-blocked on self-hosted PDSes, so your own links
+// may not come back over the public endpoint. The authenticated client always
+// succeeds, so merge it in (deduped) when viewing your own profile.
+const { accounts: myAccounts, loaded: myAccountsLoaded, refresh: refreshMyAccounts } = useForgeAccounts()
+watch(isOwn, (own) => {
+  if (own && !myAccountsLoaded.value) refreshMyAccounts()
+}, { immediate: true })
+
+const accounts = computed<ForgeAccountRecord[]>(() => {
+  const base = publicAccounts.value ?? []
+  if (!isOwn.value) return base
+  const seen = new Set(base.map(a => `${a.provider}:${a.username}`.toLowerCase()))
+  const extra = (myAccounts.value ?? []).filter(a => !seen.has(`${a.provider}:${a.username}`.toLowerCase()))
+  return [...base, ...extra]
+})
 
 // Any forge account linked to this identity, grouped by provider, so repos and
 // activity below are gathered uniformly across GitHub, GitLab, … — never a
@@ -54,13 +70,23 @@ watch(
   { immediate: true }
 )
 
-interface LinkedAccountView { provider: string, username: string, to: string, verified: boolean }
+interface LinkedAccountView { provider: string, username: string, href: string, verified: boolean }
 
-// Unified linked-accounts list. The atproto identity itself *is* a Tangled
-// account, so it leads the list and is inherently verified — we resolved the DID
-// to render this page. Other forges (GitHub, GitLab, …) are verified only when
-// their server-signed attestation checks out. Every entry links to the owner's
-// in-app page so browsing stays on koinon instead of bouncing to the forge.
+/** Public profile URL on the provider's own site. Linked accounts point here. */
+function externalProfileUrl(provider: string, username: string, profileUrl?: string): string {
+  if (profileUrl) return profileUrl
+  switch (provider) {
+    case 'github': return `https://github.com/${encodeURIComponent(username)}`
+    case 'gitlab': return `https://gitlab.com/${encodeURIComponent(username)}`
+    case 'codeberg': return `https://codeberg.org/${encodeURIComponent(username)}`
+    case 'tangled': return `https://tangled.sh/@${encodeURIComponent(username)}`
+    default: return '#'
+  }
+}
+
+// The atproto identity itself is a Tangled account, so it leads the list and is
+// inherently verified. Other forges are verified only when their server-signed
+// attestation checks out. Every chip links out to the provider's own site.
 const linkedAccounts = computed<LinkedAccountView[]>(() => {
   const out: LinkedAccountView[] = []
   const p = profile.value
@@ -68,7 +94,7 @@ const linkedAccounts = computed<LinkedAccountView[]>(() => {
     out.push({
       provider: 'tangled',
       username: p.handle,
-      to: `/tangled/${encodeURIComponent(p.handle)}`,
+      href: externalProfileUrl('tangled', p.handle),
       verified: true
     })
   }
@@ -76,7 +102,7 @@ const linkedAccounts = computed<LinkedAccountView[]>(() => {
     out.push({
       provider: a.provider,
       username: a.username,
-      to: `/${a.provider}/${encodeURIComponent(a.username)}`,
+      href: externalProfileUrl(a.provider, a.username, a.profileUrl),
       verified: isVerified(p?.did, a)
     })
   }
@@ -223,7 +249,9 @@ useHead(() => ({ title: `${displayName.value} · koinon` }))
               <UButton
                 v-for="a in linkedAccounts"
                 :key="`${a.provider}:${a.username}`"
-                :to="a.to"
+                :to="a.href"
+                target="_blank"
+                rel="noopener noreferrer"
                 color="neutral"
                 variant="outline"
                 size="md"
@@ -236,6 +264,7 @@ useHead(() => ({ title: `${displayName.value} · koinon` }))
                   name="i-lucide-shield-check"
                   class="size-4 text-primary"
                 />
+                <UIcon name="i-lucide-external-link" class="size-3.5 text-muted" />
               </UButton>
             </div>
             <p v-else class="text-sm text-muted">
