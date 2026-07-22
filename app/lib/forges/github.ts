@@ -811,11 +811,15 @@ export const githubProvider: ForgeProvider = {
               ? 'discussion'
               : type === 'commit'
                 ? 'commit'
-                : type === 'release' ? 'release' : 'other'
+                : type === 'release'
+                  ? 'release'
+                  : type === 'checksuite' ? 'ci' : 'other'
       const seg = kind === 'pull' ? 'pulls' : 'issues'
-      const to = owner && name && number
-        ? `/github/${owner}/${name}/${seg}/${number}`
-        : owner && name ? `/github/${owner}/${name}` : null
+      const to = kind === 'ci' && owner && name
+        ? `/github/${owner}/${name}/actions`
+        : owner && name && number
+          ? `/github/${owner}/${name}/${seg}/${number}`
+          : owner && name ? `/github/${owner}/${name}` : null
 
       const item: ForgeInboxItem = {
         provider: 'github',

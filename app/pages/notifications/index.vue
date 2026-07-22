@@ -1,6 +1,8 @@
 <script setup lang="ts">
-const { inboxItems, dependencyCount, loading, notes, unreadCount, loadedOnce, load } = useNotifications()
+const { inboxItems, dependencyCount, ciGroups, ciCount, loading, notes, unreadCount, loadedOnce, load } = useNotifications()
 const { isAuthenticated } = useAuth()
+
+const ciOpen = ref(false)
 
 onMounted(() => {
   if (!loadedOnce.value) load()
@@ -91,12 +93,60 @@ onMounted(() => {
             <UIcon name="i-lucide-chevron-right" class="size-4 shrink-0 text-muted" />
           </NuxtLink>
 
+          <!-- Failing checks: repetitive CI failures collapsed to one row per repo. -->
+          <div v-if="ciCount" class="overflow-hidden rounded-lg border border-default bg-elevated/30">
+            <button
+              type="button"
+              class="flex w-full items-center gap-3 px-4 py-3 text-left transition hover:bg-elevated/60"
+              @click="ciOpen = !ciOpen"
+            >
+              <div class="flex size-9 shrink-0 items-center justify-center rounded-md bg-error/10 text-error">
+                <UIcon name="i-lucide-circle-x" class="size-5" />
+              </div>
+              <div class="min-w-0 flex-1">
+                <p class="text-sm font-medium text-highlighted">
+                  Failing checks
+                </p>
+                <p class="text-xs text-muted">
+                  {{ ciCount }} failed check{{ ciCount === 1 ? '' : 's' }} across
+                  {{ ciGroups.length }} {{ ciGroups.length === 1 ? 'repository' : 'repositories' }}
+                </p>
+              </div>
+              <UBadge color="error" variant="subtle" size="sm">
+                {{ ciCount }}
+              </UBadge>
+              <UIcon :name="ciOpen ? 'i-lucide-chevron-up' : 'i-lucide-chevron-down'" class="size-4 shrink-0 text-muted" />
+            </button>
+            <div
+              class="grid transition-[grid-template-rows] duration-200 ease-out"
+              :class="ciOpen ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'"
+            >
+              <div class="overflow-hidden">
+                <ul class="divide-y divide-default border-t border-default">
+                  <li v-for="g in ciGroups" :key="g.key">
+                    <NuxtLink
+                      :to="g.to || undefined"
+                      :href="!g.to ? (g.url || undefined) : undefined"
+                      :target="!g.to ? '_blank' : undefined"
+                      class="flex items-center gap-3 px-4 py-2.5 text-sm transition hover:bg-elevated/40"
+                    >
+                      <UIcon name="i-lucide-git-branch" class="size-4 shrink-0 text-muted" />
+                      <span class="min-w-0 flex-1 truncate text-default">{{ g.repo.fullName }}</span>
+                      <span class="shrink-0 text-xs font-medium text-error">failed {{ g.count }}&times;</span>
+                      <span v-if="g.latestAt" class="hidden shrink-0 text-xs text-muted sm:inline">{{ formatRelativeTime(g.latestAt) }}</span>
+                    </NuxtLink>
+                  </li>
+                </ul>
+              </div>
+            </div>
+          </div>
+
           <div v-if="loading && !inboxItems.length" class="space-y-3">
-            <USkeleton v-for="i in 4" :key="i" class="h-24 w-full" />
+            <USkeleton v-for="i in 4" :key="i" class="h-16 w-full" />
           </div>
 
           <div
-            v-else-if="!inboxItems.length && !notes.length"
+            v-else-if="!inboxItems.length && !dependencyCount && !ciCount && !notes.length"
             class="rounded-lg border border-dashed border-default py-16 text-center"
           >
             <UIcon name="i-lucide-check-check" class="mx-auto size-8 text-success" />
@@ -104,11 +154,11 @@ onMounted(() => {
               You're all caught up.
             </p>
             <p class="mt-1 text-xs text-muted">
-              Resolved issues and merged PRs are filtered out automatically.
+              Resolved issues, merged PRs and repetitive check failures are filtered out automatically.
             </p>
           </div>
 
-          <div v-else class="space-y-3">
+          <div v-else-if="inboxItems.length" class="space-y-2.5">
             <NotificationsInboxCard
               v-for="item in inboxItems"
               :key="`${item.provider}:${item.id}`"

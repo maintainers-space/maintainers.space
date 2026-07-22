@@ -1,6 +1,17 @@
 import { forgeList, getForge } from '~/lib/forges'
 import type { ForgeInboxItem, ForgeNotification } from '~/types/forge'
 
+/** A repo whose CI is failing repeatedly, collapsed from many check notifications. */
+export interface CiFailureGroup {
+  key: string
+  repo: { owner: string, name: string, fullName: string }
+  count: number
+  latestAt?: string | null
+  to?: string | null
+  url?: string | null
+  items: ForgeInboxItem[]
+}
+
 /** Extract a human message from an ofetch-style error without leaking `any`. */
 function errMessage(e: unknown): string | undefined {
   const x = e as { data?: { message?: string }, message?: string } | null | undefined
@@ -41,9 +52,35 @@ export function useNotifications() {
   const merging = useState<string[]>('inbox-merging', () => [])
 
   const dependencyItems = computed(() => items.value.filter(i => i.isBot))
-  const inboxItems = computed(() => items.value.filter(i => !i.isBot))
+  const ciItems = computed(() => items.value.filter(i => i.kind === 'ci' && !i.isBot))
+  const inboxItems = computed(() =>
+    items.value
+      .filter(i => !i.isBot && i.kind !== 'ci')
+      // Unread threads first, then most-recently updated (stable sort keeps recency).
+      .sort((a, b) => Number(b.unread) - Number(a.unread))
+  )
   const unreadCount = computed(() => inboxItems.value.filter(i => i.unread).length)
   const dependencyCount = computed(() => dependencyItems.value.length)
+
+  /** Collapse repetitive CI-failure notifications into one entry per repo. */
+  const ciGroups = computed<CiFailureGroup[]>(() => {
+    const map = new Map<string, CiFailureGroup>()
+    for (const it of ciItems.value) {
+      if (!it.repo) continue
+      const key = `${it.provider}:${it.repo.fullName}`
+      const g = map.get(key)
+      if (g) {
+        g.count++
+        g.items.push(it)
+        if ((it.updatedAt ?? '') > (g.latestAt ?? '')) g.latestAt = it.updatedAt
+      } else {
+        map.set(key, { key, repo: it.repo, count: 1, latestAt: it.updatedAt, to: it.to, url: it.url, items: [it] })
+      }
+    }
+    return [...map.values()].sort((a, b) => b.count - a.count || (b.latestAt ?? '').localeCompare(a.latestAt ?? ''))
+  })
+  const ciCount = computed(() => ciItems.value.length)
+
   const hasSources = computed(() => !!getToken('github') || !!did.value)
 
   async function load(): Promise<void> {
@@ -133,6 +170,8 @@ export function useNotifications() {
     items,
     inboxItems,
     dependencyItems,
+    ciGroups,
+    ciCount,
     loading,
     notes,
     unreadCount,
