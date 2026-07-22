@@ -31,9 +31,19 @@ const { data: accounts } = useAsyncData(
 const { did: myDid } = useAuth()
 const isOwn = computed(() => !!myDid.value && myDid.value === profile.value?.did)
 
-const githubLogins = computed(() =>
-  (accounts.value ?? []).filter(a => a.provider === 'github').map(a => a.username)
-)
+// Any forge account linked to this identity, grouped by provider, so repos and
+// activity below are gathered uniformly across GitHub, GitLab, … — never a
+// single hard-coded provider.
+const providerLogins = computed<Record<string, string[]>>(() => {
+  const map: Record<string, string[]> = {}
+  for (const a of accounts.value ?? []) {
+    if (!a.provider || !a.username) continue
+    ;(map[a.provider] ??= []).push(a.username)
+  }
+  return map
+})
+
+const hasLinkedForges = computed(() => Object.keys(providerLogins.value).length > 0)
 
 // Gate the "verified" badge on a real signature check, not the record's own
 // (forgeable) `verified` flag.
@@ -44,45 +54,53 @@ watch(
   { immediate: true }
 )
 
-interface LinkedAccountView { provider: string, username: string, url?: string, verified: boolean }
+interface LinkedAccountView { provider: string, username: string, to: string, verified: boolean }
 
 // Unified linked-accounts list. The atproto identity itself *is* a Tangled
 // account, so it leads the list and is inherently verified — we resolved the DID
-// to render this page. Other forges (GitHub, …) are verified only when their
-// server-signed attestation checks out.
+// to render this page. Other forges (GitHub, GitLab, …) are verified only when
+// their server-signed attestation checks out. Every entry links to the owner's
+// in-app page so browsing stays on koinon instead of bouncing to the forge.
 const linkedAccounts = computed<LinkedAccountView[]>(() => {
   const out: LinkedAccountView[] = []
   const p = profile.value
   if (p) {
-    const tangled = getForge('tangled')
     out.push({
       provider: 'tangled',
       username: p.handle,
-      url: tangled?.ownerWebUrl ? tangled.ownerWebUrl(p.handle) : undefined,
+      to: `/tangled/${encodeURIComponent(p.handle)}`,
       verified: true
     })
   }
   for (const a of accounts.value ?? []) {
-    out.push({ provider: a.provider, username: a.username, url: accountUrl(a), verified: isVerified(p?.did, a) })
+    out.push({
+      provider: a.provider,
+      username: a.username,
+      to: `/${a.provider}/${encodeURIComponent(a.username)}`,
+      verified: isVerified(p?.did, a)
+    })
   }
   return out
 })
 
-// 3) Repositories across the atproto (Tangled) identity + linked GitHub accounts.
+// 3) Repositories across the atproto (Tangled) identity + every linked forge
+//    account (GitHub, GitLab, …). All repos are pooled and sorted together so
+//    the grid never separates one provider from another.
 const { data: repos, pending: reposPending } = useAsyncData(
   `profile-repos:${handle.value}`,
   async () => {
-    const token = getToken('github')
     const tangled = getForge('tangled')
-    const gh = getForge('github')
     const jobs: Promise<ForgeRepo[]>[] = []
 
     if (tangled?.listRepos) {
       jobs.push(tangled.listRepos(handle.value).catch(() => [] as ForgeRepo[]))
     }
-    if (gh?.listRepos) {
-      for (const login of githubLogins.value) {
-        jobs.push(gh.listRepos(login, { token }).catch(() => [] as ForgeRepo[]))
+    for (const [providerId, logins] of Object.entries(providerLogins.value)) {
+      const forge = getForge(providerId)
+      if (!forge?.listRepos) continue
+      const token = getToken(providerId)
+      for (const login of logins) {
+        jobs.push(forge.listRepos(login, { token }).catch(() => [] as ForgeRepo[]))
       }
     }
     const out = (await Promise.all(jobs)).flat()
@@ -94,19 +112,25 @@ const { data: repos, pending: reposPending } = useAsyncData(
   { watch: [handle, accounts], default: () => [] as ForgeRepo[] }
 )
 
-// 4) Recent activity — issues/PRs authored and commented on (GitHub, best-effort).
+// 4) Recent activity — issues/PRs authored and commented on across every forge
+//    that supports issue search (GitHub, GitLab, …), pooled and mixed.
 const { data: activity, pending: activityPending } = useAsyncData(
   `profile-activity:${handle.value}`,
   async (): Promise<{ authored: ForgeIssue[], commented: ForgeIssue[] }> => {
-    const gh = getForge('github')
-    const primary = githubLogins.value[0]
-    if (!gh?.searchIssues || !primary) return { authored: [], commented: [] }
-    const token = getToken('github')
-    const opts = { token, sort: 'updated' as const, order: 'desc' as const, limit: 8 }
-    const [authored, commented] = await Promise.all([
-      gh.searchIssues(`author:${primary}`, opts).then(r => r.items).catch(() => [] as ForgeIssue[]),
-      gh.searchIssues(`commenter:${primary} -author:${primary}`, opts).then(r => r.items).catch(() => [] as ForgeIssue[])
-    ])
+    const authoredJobs: Promise<ForgeIssue[]>[] = []
+    const commentedJobs: Promise<ForgeIssue[]>[] = []
+    for (const [providerId, logins] of Object.entries(providerLogins.value)) {
+      const forge = getForge(providerId)
+      const primary = logins[0]
+      if (!forge?.searchIssues || !primary) continue
+      const token = getToken(providerId)
+      const opts = { token, sort: 'updated' as const, order: 'desc' as const, limit: 8 }
+      authoredJobs.push(forge.searchIssues(`author:${primary}`, opts).then(r => r.items).catch(() => [] as ForgeIssue[]))
+      commentedJobs.push(forge.searchIssues(`commenter:${primary} -author:${primary}`, opts).then(r => r.items).catch(() => [] as ForgeIssue[]))
+    }
+    const byRecency = (a: ForgeIssue, b: ForgeIssue) => String(b.updatedAt ?? '').localeCompare(String(a.updatedAt ?? ''))
+    const authored = (await Promise.all(authoredJobs)).flat().sort(byRecency).slice(0, 8)
+    const commented = (await Promise.all(commentedJobs)).flat().sort(byRecency).slice(0, 8)
     return { authored, commented }
   },
   { watch: [handle, accounts], default: () => ({ authored: [], commented: [] }) }
@@ -114,12 +138,6 @@ const { data: activity, pending: activityPending } = useAsyncData(
 
 const displayName = computed(() => profile.value?.displayName || profile.value?.handle || handle.value)
 const bskyUrl = computed(() => profile.value ? `https://bsky.app/profile/${profile.value.did}` : undefined)
-
-function accountUrl(a: ForgeAccountRecord): string | undefined {
-  if (a.profileUrl) return a.profileUrl
-  const f = getForge(a.provider)
-  return f?.ownerWebUrl ? f.ownerWebUrl(a.username) : undefined
-}
 
 useHead(() => ({ title: `${displayName.value} · koinon` }))
 </script>
@@ -172,9 +190,6 @@ useHead(() => ({ title: `${displayName.value} · koinon` }))
                 <span>@{{ profile.handle }}</span>
                 <span class="font-mono text-xs">· {{ shortDid(profile.did) }}</span>
               </div>
-              <p v-if="profile.description" class="mt-2 max-w-2xl whitespace-pre-line text-sm text-default">
-                {{ profile.description }}
-              </p>
             </div>
             <div class="flex items-center gap-2">
               <UButton
@@ -208,8 +223,7 @@ useHead(() => ({ title: `${displayName.value} · koinon` }))
               <UButton
                 v-for="a in linkedAccounts"
                 :key="`${a.provider}:${a.username}`"
-                :to="a.url"
-                :target="a.url ? '_blank' : undefined"
+                :to="a.to"
                 color="neutral"
                 variant="outline"
                 size="md"
@@ -250,7 +264,7 @@ useHead(() => ({ title: `${displayName.value} · koinon` }))
           </section>
 
           <!-- Activity -->
-          <section v-if="githubLogins.length" class="grid gap-4 lg:grid-cols-2">
+          <section v-if="hasLinkedForges" class="grid gap-4 lg:grid-cols-2">
             <HomeActionList
               title="Created"
               icon="i-lucide-git-pull-request"

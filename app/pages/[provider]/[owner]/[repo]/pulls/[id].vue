@@ -18,9 +18,9 @@ const { data, pending, error, refresh } = useAsyncData<ForgePullDetail | null>(
 
 const { get: getToken } = useForgeTokens()
 const toast = useToast()
-const canWrite = computed(() => provider.value === 'github' && !!getToken('github') && !!forge.value?.createComment)
+const canWrite = computed(() => !!getToken(provider.value) && !!forge.value?.createComment)
 
-const tab = ref<'conversation' | 'commits' | 'files'>('conversation')
+const tab = useRouteTab('tab', ['conversation', 'commits', 'files'] as const, 'conversation')
 
 const files = ref<ForgeFileDiff[] | null>(null)
 const filesLoading = ref(false)
@@ -54,6 +54,12 @@ async function ensureCommits(): Promise<void> {
 watch(tab, (t) => {
   if (t === 'files') ensureFiles()
   if (t === 'commits') ensureCommits()
+})
+
+// Deep-linked directly to ?tab=files/commits: kick off the lazy load on mount.
+onMounted(() => {
+  if (tab.value === 'files') ensureFiles()
+  if (tab.value === 'commits') ensureCommits()
 })
 
 const tabItems = computed(() => [

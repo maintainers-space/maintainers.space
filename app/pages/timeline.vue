@@ -15,7 +15,7 @@ const {
   loadFriends
 } = useTimeline()
 
-const tab = ref<'me' | 'friends'>('me')
+const tab = useRouteTab('tab', ['me', 'friends'] as const, 'me')
 
 const tabItems = [
   { label: 'Me', icon: 'i-lucide-user', value: 'me' },
@@ -29,11 +29,11 @@ function ensureLoaded(which: 'me' | 'friends') {
 }
 
 function refresh() {
-  if (tab.value === 'me') loadMe()
-  else loadFriends()
+  if (tab.value === 'me') loadMe(true)
+  else loadFriends(true)
 }
 
-onMounted(() => ensureLoaded('me'))
+onMounted(() => ensureLoaded(tab.value))
 watch(tab, t => ensureLoaded(t))
 
 const activeLoading = computed(() => (tab.value === 'me' ? meLoading.value : friendsLoading.value))
@@ -109,10 +109,10 @@ const friendsGroups = computed(() => groupByDay(friendsItems.value))
 
           <p class="text-xs text-muted">
             <template v-if="tab === 'me'">
-              Your recent contributions across GitHub, newest first.
+              Your recent contributions across every connected forge, newest first.
             </template>
             <template v-else>
-              Recent activity from the people you follow on GitHub, newest first.
+              Recent activity from the people you follow, newest first.
             </template>
           </p>
 

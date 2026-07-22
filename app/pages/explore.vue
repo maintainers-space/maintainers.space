@@ -4,10 +4,15 @@ import type { ExplorePeriod, ExploreScope } from '~/composables/useExplore'
 const { repos, loading, notes, load } = useExplore()
 const { isAuthenticated } = useAuth()
 
-const route = useRoute()
-const scope = ref<ExploreScope>(isAuthenticated.value ? 'following' : 'trending')
-const period = ref<ExplorePeriod>('weekly')
-const language = ref(String(route.query.lang || 'all'))
+const scope = useRouteTab<ExploreScope>('scope', ['trending', 'following'], isAuthenticated.value ? 'following' : 'trending')
+const period = useRouteTab<ExplorePeriod>('period', ['daily', 'weekly', 'monthly'], 'weekly')
+const language = useRouteTab('lang', ['all', 'TypeScript', 'JavaScript', 'Python', 'Rust', 'Go', 'Vue', 'C++', 'Zig'], 'all')
+
+// Following requires sign-in; fall back to trending for anonymous visitors even
+// if a stale ?scope=following lands in the URL.
+watchEffect(() => {
+  if (!isAuthenticated.value && scope.value === 'following') scope.value = 'trending'
+})
 
 const scopeItems = computed(() => [
   { label: 'Trending', value: 'trending', icon: 'i-lucide-flame' },
@@ -22,13 +27,13 @@ const periodItems = [
 
 const languages = ['all', 'TypeScript', 'JavaScript', 'Python', 'Rust', 'Go', 'Vue', 'C++', 'Zig']
 
-function reload(): void {
+function reload(force = false): void {
   const lang = language.value && language.value !== 'all' ? language.value : undefined
-  load({ scope: scope.value, period: period.value, language: lang, limit: 30 })
+  load({ scope: scope.value, period: period.value, language: lang, limit: 30, force })
 }
 
-watch([scope, period, language], reload)
-onMounted(reload)
+watch([scope, period, language], () => reload())
+onMounted(() => reload())
 </script>
 
 <template>
@@ -38,7 +43,7 @@ onMounted(reload)
         <template #leading>
           <UDashboardSidebarCollapse />
         </template>
-        <template #trailing>
+        <template #right>
           <UButton
             icon="i-lucide-refresh-cw"
             color="neutral"
@@ -46,7 +51,7 @@ onMounted(reload)
             size="sm"
             :loading="loading"
             aria-label="Refresh"
-            @click="reload"
+            @click="reload(true)"
           />
         </template>
       </UDashboardNavbar>
@@ -113,7 +118,7 @@ onMounted(reload)
             size="sm"
             label="Try again"
             :loading="loading"
-            @click="reload"
+            @click="reload(true)"
           />
         </div>
 
