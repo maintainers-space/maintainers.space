@@ -38,7 +38,6 @@ watch(isAuthenticated, (v) => {
   }
 })
 
-// ---- Anonymous landing (repo quick-open) --------------------------------
 const provider = ref('github')
 const owner = ref('')
 const repo = ref('')

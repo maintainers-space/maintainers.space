@@ -111,8 +111,8 @@ export function useExplore() {
       }
     }
 
-    // GitLab: most-starred public projects. GitLab's /projects search has no
-    // language facet, so language filtering only narrows the GitHub slice.
+    // GitLab search has no language facet, so the language filter only narrows
+    // the GitHub slice of the trending mix.
     const gl = getForge('gitlab')
     if (gl?.searchRepos) {
       try {
@@ -128,8 +128,6 @@ export function useExplore() {
       }
     }
 
-    // Codeberg (Forgejo): most-starred public projects. Like GitLab, its search
-    // has no language facet, so the language filter only narrows the GitHub slice.
     const cb = getForge('codeberg')
     if (cb?.searchRepos) {
       try {
@@ -145,8 +143,7 @@ export function useExplore() {
       }
     }
 
-    // Tangled has no search API — surface a small curated set so the feed
-    // still feels cross-provider.
+    // Tangled has no search API — surface a small curated set instead.
     const tangled = getForge('tangled')
     if (tangled?.listRepos) {
       try {
@@ -164,13 +161,10 @@ export function useExplore() {
       return
     }
 
-    // Every forge that exposes a "repos from people you follow" endpoint
-    // (GitHub, GitLab, …), gathered in parallel and pooled with the rest.
     await Promise.all(forgeList.map(async (forge) => {
       if (!forge.listFollowedRepos) return
       const t = getToken(forge.id)
       if (!t) {
-        // Any token-based forge (not atproto/Tangled) needs a connected account.
         if (forge.id !== 'tangled') {
           noteSet.add(`Connect your ${forge.label} account to include the people you follow there.`)
         }
@@ -183,7 +177,6 @@ export function useExplore() {
       }
     }))
 
-    // Tangled / atproto: accounts you follow on the social graph.
     const tangled = getForge('tangled')
     const viewer = did.value
     if (tangled?.listRepos && viewer) {

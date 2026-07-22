@@ -108,7 +108,6 @@ export function useAuth() {
       // allowStale → instant restore straight from localStorage, no network.
       const session = await getSession(target, { allowStale: true })
       await activate(new OAuthUserAgent(session))
-      // Refresh/validate in the background without blocking first paint.
       void revalidateSession(target)
     } catch (err) {
       // Only a revoked/expired refresh token clears the session. Transient

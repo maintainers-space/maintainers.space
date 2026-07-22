@@ -1,16 +1,8 @@
 // Client-side response cache shared by every forge provider and feed composable.
-//
-// koinon calls the forges (GitHub, GitLab) directly from the browser and Tangled
-// through a same-origin proxy, so the most effective way to "minimize API calls
-// to all providers" is a small in-memory cache with stale-while-revalidate
-// semantics: within the fresh window a request is answered from memory; within
-// the following stale window the cached value is returned instantly while a
-// fresh copy is fetched in the background. A `force` flag bypasses the cache
-// entirely — that is what every "reload" button uses.
-//
-// TTLs mirror the server cache policy: ~1 minute for status-y data (PR status,
-// notifications) and ~5 minutes for browsing feeds (timeline, trending,
-// following) where being a little stale is fine.
+// A small in-memory cache with stale-while-revalidate semantics: within the
+// fresh window a request is served from memory; within the stale window the
+// cached value is returned instantly while a fresh copy is fetched in the
+// background. A `force` flag bypasses the cache — that is what "reload" uses.
 
 export const TTL = {
   /** ~1 minute — PR status, notifications, CI. */

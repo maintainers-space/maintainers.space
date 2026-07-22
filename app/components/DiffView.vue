@@ -55,7 +55,6 @@ function isOpen(path: string): boolean {
   return open[path] ?? true
 }
 
-// --- inline comments / suggestions ---
 const active = ref<{ path: string, line: number } | null>(null)
 const draft = ref('')
 const submitting = ref(false)

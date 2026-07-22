@@ -117,8 +117,6 @@ export interface RepoOverview {
   readme: ForgeReadme | null
 }
 
-// --- Commits & diffs -------------------------------------------------------
-
 export interface ForgeCommitActor {
   name?: string
   email?: string
@@ -161,8 +159,6 @@ export interface ForgeCommitDetail extends ForgeCommit {
   files?: ForgeFileDiff[]
 }
 
-// --- Issues ----------------------------------------------------------------
-
 export type ForgeIssueState = 'open' | 'closed'
 
 export interface ForgeIssue {
@@ -199,8 +195,6 @@ export interface ForgeComment {
 export interface ForgeIssueDetail extends ForgeIssue {
   comments: ForgeComment[]
 }
-
-// --- Pull requests ---------------------------------------------------------
 
 export type ForgePullState = 'open' | 'closed' | 'merged' | 'draft'
 
@@ -254,8 +248,6 @@ export interface ForgeMergeResult {
   message?: string
 }
 
-// --- Discussions -----------------------------------------------------------
-
 export interface ForgeDiscussion {
   provider: ForgeId
   id: string
@@ -276,8 +268,6 @@ export interface ForgeDiscussion {
 export interface ForgeDiscussionDetail extends ForgeDiscussion {
   comments: ForgeComment[]
 }
-
-// --- Actions / CI ----------------------------------------------------------
 
 export type ForgeRunStatus
   = | 'queued'
@@ -324,8 +314,6 @@ export interface ForgeActionRun {
   ref?: Record<string, unknown>
 }
 
-// --- Search ----------------------------------------------------------------
-
 export type ForgeSearchSort = 'best' | 'stars' | 'updated' | 'created' | 'forks'
 export interface ForgeSearchOptions extends ForgePageOptions {
   sort?: ForgeSearchSort
@@ -339,8 +327,6 @@ export interface ForgeSearchCode {
   url?: string | null
   fragments?: string[]
 }
-
-// --- Notifications ---------------------------------------------------------
 
 export type ForgeNotificationKind
   = | 'issue'
@@ -401,8 +387,6 @@ export interface ForgeInboxItem {
   unreadComments?: ForgeComment[]
 }
 
-// --- Contributions / activity feed ----------------------------------------
-
 export type ForgeEventKind
   = | 'push'
     | 'pr_opened'
@@ -438,8 +422,6 @@ export interface ForgeContribution {
   /** Ranking score used by the "friends" feed (higher = more impactful). */
   impact?: number
 }
-
-// --- Capabilities ----------------------------------------------------------
 
 /** The signed-in viewer's actionable work, used by the home dashboard. */
 export interface ForgeMyWork {

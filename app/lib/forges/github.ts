@@ -370,7 +370,6 @@ function mapEvent(e: any): ForgeContribution | null {
       const head = commits[commits.length - 1]
       title = head?.message?.split('\n')[0]
       const headSha = p.head ?? head?.sha
-      // Link to the exact commit that was pushed, not the branch's commit list.
       url = headSha
         ? `https://github.com/${repoFull}/commit/${headSha}`
         : `https://github.com/${repoFull}/commits/${String(p.ref ?? '').replace('refs/heads/', '')}`
@@ -411,8 +410,6 @@ function mapEvent(e: any): ForgeContribution | null {
       kind = 'create'
       refType = p.ref_type
       title = p.ref ? `${p.ref_type} ${p.ref}` : p.ref_type
-      // Link to the created branch/tag directly; fall back to the repo for a
-      // whole-repository create event.
       url = p.ref && p.ref_type !== 'repository'
         ? `https://github.com/${repoFull}/tree/${p.ref}`
         : `https://github.com/${repoFull}`
@@ -774,7 +771,6 @@ export const githubProvider: ForgeProvider = {
                 : type === 'release'
                   ? 'release'
                   : 'other'
-      // subject.url points at the API resource; derive an in-app route.
       const apiUrl = String(n.subject?.url ?? '')
       const numMatch = apiUrl.match(/\/(?:issues|pulls)\/(\d+)$/)
       const seg = kind === 'pull' ? 'pulls' : 'issues'
@@ -846,9 +842,8 @@ export const githubProvider: ForgeProvider = {
         number
       }
 
-      // Enrich PR/issue subjects with their live state. Resolved (closed/merged)
-      // items are kept but tagged so the inbox can surface them in a separate
-      // "recently resolved" group instead of silently dropping them.
+      // Resolved (closed/merged) items are tagged, not dropped, so the inbox can
+      // group them under "recently resolved".
       if ((kind === 'pull' || kind === 'issue') && apiUrl && number) {
         try {
           const subj = await $fetch<any>(apiUrl, { headers, signal: opts?.signal })
@@ -875,9 +870,7 @@ export const githubProvider: ForgeProvider = {
               .slice(-3)
               .map(mapComment)
           }
-        } catch {
-          // Subject unreadable (deleted / no access): keep the un-enriched item.
-        }
+        } catch { /* subject unreadable (deleted / no access): keep un-enriched */ }
       }
       return item
     })
@@ -972,9 +965,7 @@ export const githubProvider: ForgeProvider = {
     const token = opts?.token ?? getForgeToken('github')
     if (!token) return []
     const headers = ghHeaders(opts)
-    // Only people, not orgs: /user/following mixes User and Organization
-    // accounts, and org membership is irrelevant here — the goal is to see what
-    // the humans you follow are actually building.
+    // Only people, not orgs: /user/following mixes in Organization accounts.
     const following = await $fetch<any[]>(`${API}/user/following`, {
       headers,
       query: { per_page: 100 },
@@ -983,8 +974,6 @@ export const githubProvider: ForgeProvider = {
     const owners = (following as any[])
       .filter(u => String(u.type) === 'User')
       .map(u => String(u.login))
-    // Pull a few recently-pushed repos from each followed person, bounded so
-    // the feed stays fast even for people who follow hundreds of accounts.
     const perOwner = await Promise.all(owners.slice(0, 20).map(async (login) => {
       try {
         const data = await $fetch<any[]>(`${API}/users/${login}/repos`, {
@@ -1020,9 +1009,6 @@ export const githubProvider: ForgeProvider = {
   },
 
   async listUserEvents(login, opts): Promise<ForgeContribution[]> {
-    // Authenticated request against the given user: GitHub returns that user's
-    // public events (plus your own private ones when login === you). Bounded to
-    // ~90 days / 300 events by the API.
     const data = await $fetch<any[]>(`${API}/users/${encodeURIComponent(login)}/events`, {
       headers: ghHeaders(opts),
       query: { per_page: Math.min(opts?.limit ?? 100, 100) },
@@ -1034,8 +1020,6 @@ export const githubProvider: ForgeProvider = {
   async listMyWork(opts): Promise<ForgeMyWork> {
     const token = opts?.token ?? getForgeToken('github')
     if (!token) return { authoredPulls: [], reviewRequests: [], assignedIssues: [] }
-    // `@me` resolves server-side from the token, so this works without knowing
-    // the login. Bounded to the freshest few of each bucket.
     const run = (q: string): Promise<ForgeIssue[]> =>
       githubProvider.searchIssues!(q, { token, sort: 'updated', order: 'desc', limit: 8 })
         .then(r => r.items)

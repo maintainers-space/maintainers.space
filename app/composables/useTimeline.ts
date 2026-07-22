@@ -106,7 +106,6 @@ export function useTimeline() {
     const buckets = await Promise.all(forgeList.map(async (forge) => {
       if (!forge.listUserEvents) return [] as ForgeContribution[]
 
-      // Tangled/atproto: follow graph comes from the social identity.
       if (forge.id === 'tangled') {
         const self = did.value
         if (!self) return [] as ForgeContribution[]
@@ -117,7 +116,6 @@ export function useTimeline() {
         return chunks.flat()
       }
 
-      // Forge-native follow graph (GitHub, GitLab, …).
       const token = getToken(forge.id)
       if (!token || !forge.listFollowing) return [] as ForgeContribution[]
       const users = await forge.listFollowing({ token, limit: 100 }).catch(() => [])

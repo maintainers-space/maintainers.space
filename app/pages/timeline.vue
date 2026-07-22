@@ -38,7 +38,6 @@ watch(tab, t => ensureLoaded(t))
 
 const activeLoading = computed(() => (tab.value === 'me' ? meLoading.value : friendsLoading.value))
 
-// --- Day grouping: turn the flat, date-sorted feed into a real timeline. ---
 interface DayGroup { key: string, label: string, items: ForgeContribution[] }
 
 function dayLabel(d: Date): string {

@@ -1,17 +1,8 @@
-// Shared HTTP cache-header logic for every server route.
-//
-// The goal is to minimize outbound API calls to the forges (GitHub, GitLab,
-// Tangled) and to atproto infrastructure by letting the browser, any CDN, and
-// Netlify's edge each hold onto responses — with *rising* cache lifetimes so the
-// closer-to-the-user tier expires first and the durable edge tier serves the
-// most requests. Every policy also carries a `stale-while-revalidate` window so
-// a slightly-stale response is served instantly while a fresh one is fetched in
-// the background.
-//
-// Three headers are emitted, honoured by different layers:
-//   • `Cache-Control`             — the browser (max-age) and generic shared caches (s-maxage).
-//   • `CDN-Cache-Control`         — standards-track override read by most CDNs (Fastly, Cloudflare…).
-//   • `Netlify-CDN-Cache-Control` — Netlify's durable edge, the longest tier.
+// Shared HTTP cache-header logic for public server routes. Emits three headers
+// with rising lifetimes — Cache-Control (browser + generic shared caches),
+// CDN-Cache-Control (most CDNs) and Netlify-CDN-Cache-Control (Netlify's durable
+// edge) — each with a stale-while-revalidate window, so the closer-to-user tier
+// expires first while the durable edge absorbs most requests.
 
 import type { H3Event } from 'h3'
 

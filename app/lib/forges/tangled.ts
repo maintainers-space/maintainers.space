@@ -170,8 +170,6 @@ function makeRepo(owner: string, repo: string, resolved: ResolvedRepo, extra?: P
   }
 }
 
-// --- Diff conversion (Tangled fragment format -> unified patch) -------------
-
 interface TangledFragmentLine { Op: number, Line: string }
 interface TangledFragment {
   OldPosition: number
@@ -205,8 +203,6 @@ function countPatch(fragments: TangledFragment[]): { additions: number, deletion
   }
   return { additions, deletions }
 }
-
-// --- CI status normalization ----------------------------------------------
 
 function ciStatus(s?: string): ForgeRunStatus {
   switch (s) {
@@ -518,10 +514,8 @@ export const tangledProvider: ForgeProvider = {
     return mapPipeline(data)
   },
 
-  // Tangled has no anonymous notification inbox (personal notifications live
-  // behind tangled.org's own auth). As a best-effort, surface recent issue,
-  // pull-request and CI activity on the signed-in viewer's own repositories so
-  // Tangled participates in the unified inbox like every other forge.
+  // Tangled has no anonymous notification inbox, so as a best-effort we surface
+  // recent issue, PR and CI activity on the viewer's own repos instead.
   async listNotifications(opts): Promise<ForgeNotification[]> {
     const items = await collectTangledInbox(opts)
     return items.map((it): ForgeNotification => ({
@@ -542,9 +536,8 @@ export const tangledProvider: ForgeProvider = {
     return collectTangledInbox(opts)
   },
 
-  // Best-effort activity feed: the repos a Tangled identity has created. Cheap
-  // (one list call) and deterministic, so Tangled shows up in the timeline
-  // alongside GitHub/GitLab without guessing at private feed endpoints.
+  // Best-effort activity feed: the repos a Tangled identity has created, since
+  // there is no public per-user event endpoint.
   async listUserEvents(login, opts): Promise<ForgeContribution[]> {
     let did: string
     try {

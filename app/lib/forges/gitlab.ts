@@ -801,8 +801,6 @@ export const gitlabProvider: ForgeProvider = {
   }
 }
 
-// --- Home "my work" helpers ------------------------------------------------
-
 /** Derive owner/name/fullName from a global MR/issue payload. */
 function workRepo(r: any): { provider: ForgeId, owner: string, name: string, fullName: string, url?: string } {
   let path = String(r.references?.full ?? '').split(/[!#]/)[0] ?? ''
@@ -836,8 +834,6 @@ function workItem(r: any, isPull: boolean): ForgeIssue {
     repo: workRepo(r)
   }
 }
-
-// --- Todo (notification) helpers -------------------------------------------
 
 function todoKind(t: any): ForgeNotification['kind'] {
   if (t.action_name === 'build_failed' || t.target_type === 'Pipeline') return 'ci'

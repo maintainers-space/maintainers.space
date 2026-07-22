@@ -68,7 +68,6 @@ const tabItems = computed(() => [
   { label: 'Files changed', icon: 'i-lucide-file-diff', value: 'files' }
 ])
 
-// --- write actions (comments, reviews, inline suggestions) ---
 const commentDraft = ref('')
 const postingComment = ref(false)
 const reviewDraft = ref('')

@@ -8,14 +8,12 @@ const route = useRoute()
 const { get: getToken } = useForgeTokens()
 const handle = computed(() => String(route.params.handle))
 
-// 1) atproto identity + profile card.
 const { data: profile, pending: profilePending, error: profileError } = useAsyncData(
   `profile:${handle.value}`,
   () => fetchPublicProfile(handle.value),
   { watch: [handle] }
 )
 
-// 2) Linked forge accounts (public dev.koinon.forgeAccount records).
 const { data: publicAccounts } = useAsyncData(
   `profile-accounts:${handle.value}`,
   async () => {
@@ -47,9 +45,8 @@ const accounts = computed<ForgeAccountRecord[]>(() => {
   return [...base, ...extra]
 })
 
-// Any forge account linked to this identity, grouped by provider, so repos and
-// activity below are gathered uniformly across GitHub, GitLab, … — never a
-// single hard-coded provider.
+// Repos and activity are gathered uniformly across every linked provider, never
+// a single hard-coded one.
 const providerLogins = computed<Record<string, string[]>>(() => {
   const map: Record<string, string[]> = {}
   for (const a of accounts.value ?? []) {
@@ -84,9 +81,8 @@ function externalProfileUrl(provider: string, username: string, profileUrl?: str
   }
 }
 
-// The atproto identity itself is a Tangled account, so it leads the list and is
-// inherently verified. Other forges are verified only when their server-signed
-// attestation checks out. Every chip links out to the provider's own site.
+// The atproto identity leads the list and is inherently verified; other forges
+// are verified only when their server-signed attestation checks out.
 const linkedAccounts = computed<LinkedAccountView[]>(() => {
   const out: LinkedAccountView[] = []
   const p = profile.value
@@ -109,9 +105,8 @@ const linkedAccounts = computed<LinkedAccountView[]>(() => {
   return out
 })
 
-// 3) Repositories across the atproto (Tangled) identity + every linked forge
-//    account (GitHub, GitLab, …). All repos are pooled and sorted together so
-//    the grid never separates one provider from another.
+// Repos from the Tangled identity and every linked forge are pooled and sorted
+// together so the grid never separates one provider from another.
 const { data: repos, pending: reposPending } = useAsyncData(
   `profile-repos:${handle.value}`,
   async () => {
@@ -138,8 +133,7 @@ const { data: repos, pending: reposPending } = useAsyncData(
   { watch: [handle, accounts], default: () => [] as ForgeRepo[] }
 )
 
-// 4) Recent activity — issues/PRs authored and commented on across every forge
-//    that supports issue search (GitHub, GitLab, …), pooled and mixed.
+// Issues/PRs authored and commented on across every forge, pooled and mixed.
 const { data: activity, pending: activityPending } = useAsyncData(
   `profile-activity:${handle.value}`,
   async (): Promise<{ authored: ForgeIssue[], commented: ForgeIssue[] }> => {

@@ -1,8 +1,6 @@
-// Public (unauthenticated) atproto reads.
-//
-// Identity resolution goes through the shared, decentralized resolver in
-// ./identity so ANY handle resolves (regardless of PDS). Profile enrichment is
-// a best-effort call to the public Bluesky AppView and is never fatal.
+// Public (unauthenticated) atproto reads. Identity resolution uses the shared
+// decentralized resolver in ./identity so any handle resolves regardless of PDS;
+// profile enrichment is a best-effort Bluesky AppView call and never fatal.
 
 import { isVerifiedHandle, resolveIdentity } from './identity'
 import { getJson } from './proxied-fetch'

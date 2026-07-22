@@ -85,7 +85,7 @@ export function useNotifications() {
   const inboxItems = computed(() =>
     items.value
       .filter(i => !i.resolved && !i.isBot && i.kind !== 'ci')
-      // Unread threads first, then most-recently updated (stable sort keeps recency).
+
       .sort((a, b) => Number(b.unread) - Number(a.unread))
   )
   const unreadCount = computed(() => inboxItems.value.filter(i => i.unread).length)
@@ -123,9 +123,8 @@ export function useNotifications() {
     await Promise.all(
       forgeList.map(async (forge) => {
         const token = getToken(forge.id)
-        // Every forge except atproto/Tangled needs an OAuth token; nudge the user
-        // to connect when a signed-in viewer is missing one, so their forge isn't
-        // silently absent.
+        // Non-Tangled forges need an OAuth token; nudge a signed-in viewer to
+        // connect so their forge isn't silently absent.
         const needsToken = forge.id !== 'tangled'
         if (needsToken && !token) {
           if (viewer) noteSet.add(`Connect your ${forge.label} account to include ${forge.label} notifications.`)
@@ -149,12 +148,10 @@ export function useNotifications() {
       })
     )
 
-    // Drop anything the user already completed on this device.
     const dismissed = loadDismissed()
     const visible = collected.filter(i => !dismissed[`${i.provider}:${i.id}`])
 
-    // Aggregate first, then sort by recency, so providers interleave with no
-    // per-forge sectioning anywhere in the inbox.
+    // Providers are pooled then sorted by recency, never sectioned per-forge.
     visible.sort((a, b) => new Date(b.updatedAt ?? 0).getTime() - new Date(a.updatedAt ?? 0).getTime())
     items.value = visible
     notes.value = [...noteSet]
