@@ -231,6 +231,29 @@ export interface ForgePullDetail extends ForgePull {
   comments: ForgeComment[]
 }
 
+/** A single inline review comment anchored to a line in the diff. */
+export interface ForgeReviewComment {
+  path: string
+  /** 1-based line in the new file (the RIGHT side of the diff). */
+  line: number
+  /** Start line for a multi-line comment/suggestion. */
+  startLine?: number
+  body: string
+}
+
+export interface ForgeReviewInput {
+  event: 'APPROVE' | 'REQUEST_CHANGES' | 'COMMENT'
+  body?: string
+  comments?: ForgeReviewComment[]
+}
+
+export type ForgeMergeMethod = 'merge' | 'squash' | 'rebase'
+
+export interface ForgeMergeResult {
+  merged: boolean
+  message?: string
+}
+
 // --- Discussions -----------------------------------------------------------
 
 export interface ForgeDiscussion {
@@ -342,6 +365,38 @@ export interface ForgeNotification {
   /** In-app route when we can resolve one, else external url. */
   to?: string | null
   url?: string | null
+}
+
+/**
+ * A notification enriched into an actionable inbox item: the underlying PR/issue
+ * has been resolved (state, author, diff stat, unread comments) so the inbox can
+ * render a self-contained card and filter out already-closed/merged pings.
+ */
+export interface ForgeInboxItem {
+  provider: ForgeId
+  /** Notification thread id (used to mark the thread read). */
+  id: string
+  kind: ForgeNotificationKind
+  title: string
+  reason?: string | null
+  unread: boolean
+  updatedAt?: string | null
+  repo?: { owner: string, name: string, fullName: string }
+  /** In-app route to the PR/issue. */
+  to?: string | null
+  /** External url. */
+  url?: string | null
+  /** PR/issue number, when the subject has one. */
+  number?: number
+  /** Subject state (resolved items are filtered out before display). */
+  state?: ForgePullState
+  author?: ForgeUser | null
+  stat?: ForgeDiffStat | null
+  /** True when the PR was opened by a dependency bot (dependabot/renovate). */
+  isBot?: boolean
+  botKind?: 'dependabot' | 'renovate' | null
+  /** Recent comments created after the viewer last read the thread. */
+  unreadComments?: ForgeComment[]
 }
 
 // --- Contributions / activity feed ----------------------------------------
@@ -477,6 +532,22 @@ export interface ForgeProvider {
   // Notifications --------------------------------------------------------
   /** Authenticated notification inbox (requires a forge token). */
   listNotifications?: (opts?: ForgePageOptions) => Promise<ForgeNotification[]>
+  /**
+   * Enriched, actionable inbox: notifications with their PR/issue resolved
+   * (state, author, diff stat, unread comments) and already-resolved pings
+   * filtered out. Requires a forge token.
+   */
+  listInbox?: (opts?: ForgePageOptions) => Promise<ForgeInboxItem[]>
+  /** Mark a single notification thread as read. */
+  markNotificationRead?: (threadId: string, opts?: ForgeReadOptions) => Promise<void>
+
+  // Write actions (require an authenticated token) -----------------------
+  /** Post a top-level comment on an issue or pull request. */
+  createComment?: (repo: RepoLocator, id: string, body: string, opts?: ForgeReadOptions) => Promise<ForgeComment>
+  /** Submit a pull-request review (approve / request changes / comment), optionally with inline comments. */
+  createReview?: (repo: RepoLocator, id: string, input: ForgeReviewInput, opts?: ForgeReadOptions) => Promise<void>
+  /** Merge a pull request. Falls back across merge methods the repo allows. */
+  mergePull?: (repo: RepoLocator, id: string, opts?: ForgeReadOptions & { method?: ForgeMergeMethod }) => Promise<ForgeMergeResult>
 
   // Social graph ---------------------------------------------------------
   /**

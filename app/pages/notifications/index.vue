@@ -1,21 +1,10 @@
 <script setup lang="ts">
-import type { ForgeNotificationKind } from '~/types/forge'
-
-const { items, loading, notes, unreadCount, load } = useNotifications()
+const { inboxItems, dependencyCount, loading, notes, unreadCount, loadedOnce, load } = useNotifications()
 const { isAuthenticated } = useAuth()
 
-onMounted(load)
-
-const kindIcon: Record<ForgeNotificationKind, string> = {
-  issue: 'i-lucide-circle-dot',
-  pull: 'i-lucide-git-pull-request',
-  discussion: 'i-lucide-messages-square',
-  commit: 'i-lucide-git-commit-horizontal',
-  release: 'i-lucide-tag',
-  mention: 'i-lucide-at-sign',
-  ci: 'i-lucide-play',
-  other: 'i-lucide-bell'
-}
+onMounted(() => {
+  if (!loadedOnce.value) load()
+})
 </script>
 
 <template>
@@ -80,45 +69,52 @@ const kindIcon: Record<ForgeNotificationKind, string> = {
             </UAlert>
           </div>
 
-          <div v-if="loading && !items.length" class="space-y-2">
-            <USkeleton v-for="i in 5" :key="i" class="h-14 w-full" />
+          <NuxtLink
+            v-if="dependencyCount"
+            to="/notifications/dependencies"
+            class="flex items-center gap-3 rounded-lg border border-default bg-elevated/30 px-4 py-3 transition hover:bg-elevated/60"
+          >
+            <div class="flex size-9 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
+              <UIcon name="i-lucide-package" class="size-5" />
+            </div>
+            <div class="min-w-0 flex-1">
+              <p class="text-sm font-medium text-highlighted">
+                Dependency updates
+              </p>
+              <p class="text-xs text-muted">
+                {{ dependencyCount }} automated PR{{ dependencyCount === 1 ? '' : 's' }} ready to review &amp; merge
+              </p>
+            </div>
+            <UBadge color="primary" variant="subtle" size="sm">
+              {{ dependencyCount }}
+            </UBadge>
+            <UIcon name="i-lucide-chevron-right" class="size-4 shrink-0 text-muted" />
+          </NuxtLink>
+
+          <div v-if="loading && !inboxItems.length" class="space-y-3">
+            <USkeleton v-for="i in 4" :key="i" class="h-24 w-full" />
           </div>
 
           <div
-            v-else-if="!items.length && !notes.length"
+            v-else-if="!inboxItems.length && !notes.length"
             class="rounded-lg border border-dashed border-default py-16 text-center"
           >
             <UIcon name="i-lucide-check-check" class="mx-auto size-8 text-success" />
             <p class="mt-3 text-sm text-muted">
               You're all caught up.
             </p>
+            <p class="mt-1 text-xs text-muted">
+              Resolved issues and merged PRs are filtered out automatically.
+            </p>
           </div>
 
-          <ul v-else class="divide-y divide-default overflow-hidden rounded-lg border border-default">
-            <li v-for="n in items" :key="`${n.provider}:${n.id}`">
-              <NuxtLink
-                :to="n.to || undefined"
-                :href="!n.to ? (n.url || undefined) : undefined"
-                :target="!n.to ? '_blank' : undefined"
-                class="flex items-start gap-3 px-4 py-3 transition hover:bg-elevated/40"
-              >
-                <span
-                  class="mt-1.5 size-2 shrink-0 rounded-full"
-                  :class="n.unread ? 'bg-primary' : 'bg-transparent'"
-                />
-                <UIcon :name="kindIcon[n.kind]" class="mt-0.5 size-4 shrink-0 text-muted" />
-                <div class="min-w-0 flex-1">
-                  <p class="truncate text-sm text-default">{{ n.title }}</p>
-                  <div class="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted">
-                    <ForgeIcon :provider="n.provider" class="size-3" />
-                    <span v-if="n.repo">{{ n.repo.fullName }}</span>
-                    <span v-if="n.reason" class="capitalize">· {{ n.reason.replace(/_/g, ' ') }}</span>
-                    <span v-if="n.updatedAt">· {{ formatRelativeTime(n.updatedAt) }}</span>
-                  </div>
-                </div>
-              </NuxtLink>
-            </li>
-          </ul>
+          <div v-else class="space-y-3">
+            <NotificationsInboxCard
+              v-for="item in inboxItems"
+              :key="`${item.provider}:${item.id}`"
+              :item="item"
+            />
+          </div>
         </template>
       </div>
     </template>

@@ -13,8 +13,10 @@ import type {
   ForgeDiscussionDetail,
   ForgeEventKind,
   ForgeFileDiff,
+  ForgeInboxItem,
   ForgeIssue,
   ForgeIssueDetail,
+  ForgeMergeResult,
   ForgeNotification,
   ForgePull,
   ForgePullDetail,
@@ -53,6 +55,34 @@ async function ghGraphql<T>(query: string, variables: Record<string, unknown>, o
   })
   if (res.errors?.length) throw createError({ statusCode: 400, statusMessage: res.errors[0]?.message ?? 'GraphQL error' })
   return res.data as T
+}
+
+/** Bounded-concurrency map, so notification fan-out stays responsive. */
+async function ghMapLimit<T, R>(items: T[], concurrency: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+  const results: R[] = new Array(items.length)
+  let cursor = 0
+  async function worker(): Promise<void> {
+    while (cursor < items.length) {
+      const idx = cursor++
+      results[idx] = await fn(items[idx]!)
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(concurrency, items.length) || 1 }, worker))
+  return results
+}
+
+/** Classify a login as a known dependency bot, else null. */
+function botKindOf(login?: string | null): 'dependabot' | 'renovate' | null {
+  const l = String(login ?? '').toLowerCase()
+  if (!l) return null
+  if (l.includes('dependabot')) return 'dependabot'
+  if (l.includes('renovate')) return 'renovate'
+  return null
+}
+
+/** Best-effort HTTP status extraction from an ofetch error. */
+function errStatus(e: any): number | undefined {
+  return e?.statusCode ?? e?.status ?? e?.response?.status
 }
 
 function mapDiscussion(d: any): ForgeDiscussion {
@@ -753,6 +783,149 @@ export const githubProvider: ForgeProvider = {
         url: n.repository?.html_url
       }
     })
+  },
+
+  async listInbox(opts): Promise<ForgeInboxItem[]> {
+    const token = opts?.token ?? getForgeToken('github')
+    if (!token) return []
+    const headers = ghHeaders(opts)
+    const [raw, me] = await Promise.all([
+      $fetch<any[]>(`${API}/notifications`, { headers, query: { per_page: opts?.limit ?? 50, all: false }, signal: opts?.signal }).catch(() => []),
+      $fetch<any>(`${API}/user`, { headers, signal: opts?.signal }).catch(() => null)
+    ])
+    const myLogin = String(me?.login ?? '').toLowerCase()
+
+    const items = await ghMapLimit(raw ?? [], 6, async (n): Promise<ForgeInboxItem | null> => {
+      const owner = n.repository?.owner?.login ?? ''
+      const name = n.repository?.name ?? ''
+      const type = String(n.subject?.type ?? '').toLowerCase()
+      const apiUrl = String(n.subject?.url ?? '')
+      const numMatch = apiUrl.match(/\/(?:issues|pulls)\/(\d+)$/)
+      const number = numMatch ? Number(numMatch[1]) : undefined
+      const kind: ForgeNotification['kind']
+        = type === 'pullrequest'
+          ? 'pull'
+          : type === 'issue'
+            ? 'issue'
+            : type === 'discussion'
+              ? 'discussion'
+              : type === 'commit'
+                ? 'commit'
+                : type === 'release' ? 'release' : 'other'
+      const seg = kind === 'pull' ? 'pulls' : 'issues'
+      const to = owner && name && number
+        ? `/github/${owner}/${name}/${seg}/${number}`
+        : owner && name ? `/github/${owner}/${name}` : null
+
+      const item: ForgeInboxItem = {
+        provider: 'github',
+        id: String(n.id),
+        kind,
+        title: n.subject?.title ?? '(notification)',
+        reason: n.reason,
+        unread: !!n.unread,
+        updatedAt: n.updated_at,
+        repo: owner && name ? { owner, name, fullName: n.repository?.full_name ?? `${owner}/${name}` } : undefined,
+        to,
+        url: n.repository?.html_url,
+        number
+      }
+
+      // Only PR/issue subjects can be "resolved" — enrich them and drop the
+      // ones that are already closed/merged so the inbox stays actionable.
+      if ((kind === 'pull' || kind === 'issue') && apiUrl && number) {
+        try {
+          const subj = await $fetch<any>(apiUrl, { headers, signal: opts?.signal })
+          const resolved = kind === 'pull' ? (subj.merged_at || subj.state === 'closed') : subj.state === 'closed'
+          if (resolved) return null
+          item.state = kind === 'pull' ? pullState(subj) : (subj.state === 'closed' ? 'closed' : 'open')
+          item.author = mapUser(subj.user)
+          const bk = botKindOf(subj.user?.login)
+          item.isBot = !!bk
+          item.botKind = bk
+          if (kind === 'pull') {
+            item.stat = { additions: subj.additions, deletions: subj.deletions, filesChanged: subj.changed_files }
+          }
+          if (n.unread && (subj.comments ?? 0) > 0) {
+            const since = n.last_read_at
+            const cs = await $fetch<any[]>(`${API}/repos/${owner}/${name}/issues/${number}/comments`, {
+              headers,
+              query: since ? { since, per_page: 100 } : { per_page: 100 },
+              signal: opts?.signal
+            }).catch(() => [])
+            item.unreadComments = (cs ?? [])
+              .filter((c: any) => String(c.user?.login ?? '').toLowerCase() !== myLogin)
+              .filter((c: any) => !since || String(c.created_at) > String(since))
+              .slice(-3)
+              .map(mapComment)
+          }
+        } catch {
+          // Subject unreadable (deleted / no access): keep the un-enriched item.
+        }
+      }
+      return item
+    })
+    return items.filter((x): x is ForgeInboxItem => !!x)
+  },
+
+  async markNotificationRead(threadId, opts): Promise<void> {
+    await $fetch(`${API}/notifications/threads/${threadId}`, {
+      method: 'PATCH',
+      headers: ghHeaders(opts),
+      signal: opts?.signal
+    }).catch(() => {})
+  },
+
+  async createComment(repo, id, body, opts): Promise<ForgeComment> {
+    const c = await $fetch<any>(`${API}/repos/${repo.owner}/${repo.name}/issues/${id}/comments`, {
+      method: 'POST',
+      headers: ghHeaders(opts),
+      body: { body },
+      signal: opts?.signal
+    })
+    return mapComment(c)
+  },
+
+  async createReview(repo, id, input, opts): Promise<void> {
+    const body: Record<string, unknown> = { event: input.event }
+    if (input.body) body.body = input.body
+    if (input.comments?.length) {
+      body.comments = input.comments.map(c => ({
+        path: c.path,
+        line: c.line,
+        side: 'RIGHT',
+        ...(c.startLine ? { start_line: c.startLine, start_side: 'RIGHT' } : {}),
+        body: c.body
+      }))
+    }
+    await $fetch(`${API}/repos/${repo.owner}/${repo.name}/pulls/${id}/reviews`, {
+      method: 'POST',
+      headers: ghHeaders(opts),
+      body,
+      signal: opts?.signal
+    })
+  },
+
+  async mergePull(repo, id, opts): Promise<ForgeMergeResult> {
+    const methods = opts?.method ? [opts.method] : (['squash', 'merge', 'rebase'] as const)
+    let lastErr: unknown
+    for (const method of methods) {
+      try {
+        const r = await $fetch<any>(`${API}/repos/${repo.owner}/${repo.name}/pulls/${id}/merge`, {
+          method: 'PUT',
+          headers: ghHeaders(opts),
+          body: { merge_method: method },
+          signal: opts?.signal
+        })
+        return { merged: !!r.merged, message: r.message }
+      } catch (e) {
+        lastErr = e
+        // 405 = this merge method is disabled on the repo; try the next one.
+        // Anything else (409 conflict, 403 perms) is terminal.
+        if (errStatus(e) !== 405) break
+      }
+    }
+    throw lastErr
   },
 
   async listFollowedRepos(opts): Promise<ForgeRepo[]> {
