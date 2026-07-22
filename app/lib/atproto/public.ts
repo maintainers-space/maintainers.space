@@ -84,6 +84,31 @@ export async function listPublicRecords<T = Record<string, unknown>>(
   }
 }
 
+/**
+ * Public, unauthenticated read of a single record by rkey from an actor's PDS.
+ * Returns `null` on any failure so callers can degrade gracefully.
+ */
+export async function getPublicRecord<T = Record<string, unknown>>(
+  actor: string,
+  collection: string,
+  rkey: string
+): Promise<{ uri: string, value: T } | null> {
+  let ident
+  try {
+    ident = await resolveIdentity(actor)
+  } catch {
+    return null
+  }
+  try {
+    return await getJson<{ uri: string, value: T }>(
+      `${ident.pds}/xrpc/com.atproto.repo.getRecord`,
+      { repo: ident.did, collection, rkey }
+    )
+  } catch {
+    return null
+  }
+}
+
 export interface FollowedAccount {
   did: string
   handle: string
