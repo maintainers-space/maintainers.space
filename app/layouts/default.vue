@@ -1,9 +1,17 @@
 <script setup lang="ts">
 import type { NavigationMenuItem } from '@nuxt/ui'
+import { getForge } from '~/lib/forges'
 
-const { isAuthenticated } = useAuth()
+const { isAuthenticated, profile, did } = useAuth()
+const { accounts, loaded: accountsLoaded, refresh: refreshAccounts } = useForgeAccounts()
 const open = ref(false)
 const paletteOpen = ref(false)
+
+// The sidebar is always visible, so load linked accounts eagerly rather than
+// waiting for a page that happens to read them.
+watch(isAuthenticated, (auth) => {
+  if (auth && !accountsLoaded.value) void refreshAccounts()
+}, { immediate: true })
 
 const nav = computed<NavigationMenuItem[]>(() => {
   const items: NavigationMenuItem[] = [
@@ -20,11 +28,50 @@ const nav = computed<NavigationMenuItem[]>(() => {
   return items
 })
 
-const external: NavigationMenuItem[] = [
-  { label: 'GitHub', icon: 'i-simple-icons-github', to: 'https://github.com', target: '_blank' },
-  { label: 'AT Protocol', icon: 'i-lucide-at-sign', to: 'https://atproto.com', target: '_blank' },
-  { label: 'Tangled', icon: 'i-koinon-tangled', to: 'https://tangled.org', target: '_blank' }
-]
+function externalProfileUrl(provider: string, username: string, profileUrl?: string): string {
+  if (profileUrl) return profileUrl
+  switch (provider) {
+    case 'github': return `https://github.com/${encodeURIComponent(username)}`
+    case 'gitlab': return `https://gitlab.com/${encodeURIComponent(username)}`
+    case 'codeberg': return `https://codeberg.org/${encodeURIComponent(username)}`
+    case 'tangled': return `https://tangled.sh/@${encodeURIComponent(username)}`
+    default: return '#'
+  }
+}
+
+// Links to the viewer's profile on each connected provider, in a fixed order
+// (GitHub, GitLab, Tangled, Codeberg, AT Protocol). The rare case where we
+// intentionally leave the app for the provider's own site.
+const external = computed<NavigationMenuItem[]>(() => {
+  const list = accounts.value ?? []
+  const find = (provider: string) => list.find(a => a.provider === provider)
+  const out: NavigationMenuItem[] = []
+  const pushForge = (provider: string, username?: string, profileUrl?: string) => {
+    if (!username) return
+    out.push({
+      label: getForge(provider)?.label ?? provider,
+      icon: getForge(provider)?.icon ?? 'i-lucide-git-fork',
+      to: externalProfileUrl(provider, username, profileUrl),
+      target: '_blank'
+    })
+  }
+  const gh = find('github')
+  pushForge('github', gh?.username, gh?.profileUrl)
+  const gl = find('gitlab')
+  pushForge('gitlab', gl?.username, gl?.profileUrl)
+  if (profile.value?.handle) pushForge('tangled', profile.value.handle)
+  const cb = find('codeberg')
+  pushForge('codeberg', cb?.username, cb?.profileUrl)
+  if (did.value) {
+    out.push({
+      label: 'AT Protocol',
+      icon: 'i-simple-icons-bluesky',
+      to: `https://bsky.app/profile/${did.value}`,
+      target: '_blank'
+    })
+  }
+  return out
+})
 </script>
 
 <template>
@@ -70,6 +117,7 @@ const external: NavigationMenuItem[] = [
         <ExploreSidebar v-if="!collapsed" />
 
         <UNavigationMenu
+          v-if="external.length"
           :collapsed="collapsed"
           :items="external"
           orientation="vertical"
