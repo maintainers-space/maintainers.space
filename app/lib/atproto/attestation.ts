@@ -11,6 +11,8 @@ import { jwtVerify, createRemoteJWKSet, type JWTVerifyGetKey } from 'jose'
 
 /** Must match ATTESTATION_AUDIENCE in server/utils/attestation.ts. */
 const ATTESTATION_AUDIENCE = 'dev.koinon.forgeAccount'
+/** Must match REPO_ATTESTATION_AUDIENCE in server/utils/attestation.ts. */
+const REPO_ATTESTATION_AUDIENCE = 'dev.koinon.repoMetadata'
 
 export interface AttestableAccount {
   provider: string
@@ -81,6 +83,65 @@ export function verifyForgeAttestation(account: AttestableAccount, ownerDid: str
         payload.sub === ownerDid
         && claims.provider === account.provider
         && claims.username === account.username
+      )
+    } catch {
+      return false
+    }
+  })()
+
+  resultCache.set(cacheKey, promise)
+  promise.then(
+    (ok) => { if (!ok) resultCache.delete(cacheKey) },
+    () => resultCache.delete(cacheKey)
+  )
+  return promise
+}
+
+export interface AttestableRepoRecord {
+  provider: string
+  owner: string
+  name: string
+  host?: string
+  attestation?: string
+  attestedBy?: string
+}
+
+/**
+ * Verify a repo-metadata record's attestation proves `ownerDid` (the DID that
+ * wrote the record) held admin over the record's forge repo when it was signed.
+ * Resolves `false` for missing/untrusted/invalid attestations (never throws).
+ */
+export function verifyRepoAttestation(record: AttestableRepoRecord, ownerDid: string): Promise<boolean> {
+  const { attestation, attestedBy } = record
+  if (!attestation || !attestedBy || !ownerDid) return Promise.resolve(false)
+
+  const cacheKey = `repo|${ownerDid}|${record.provider}|${record.owner}/${record.name}|${attestation}`
+  const hit = resultCache.get(cacheKey)
+  if (hit) return hit
+
+  const promise = (async (): Promise<boolean> => {
+    let issuerOrigin: string
+    try {
+      issuerOrigin = new URL(attestedBy).origin
+    } catch {
+      return false
+    }
+    if (!trustedIssuers().has(issuerOrigin)) return false
+
+    try {
+      const { payload } = await jwtVerify(attestation, jwksFor(issuerOrigin), {
+        issuer: attestedBy,
+        audience: REPO_ATTESTATION_AUDIENCE,
+        algorithms: ['ES256']
+      })
+      const claims = payload as Record<string, unknown>
+      const sameHost = !claims.host || claims.host === record.host
+      return (
+        payload.sub === ownerDid
+        && claims.provider === record.provider
+        && String(claims.owner).toLowerCase() === record.owner.toLowerCase()
+        && String(claims.name).toLowerCase() === record.name.toLowerCase()
+        && sameHost
       )
     } catch {
       return false

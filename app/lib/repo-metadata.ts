@@ -82,6 +82,29 @@ export function linkLabel(link: CommunityLink): string {
   return hostname(link.url) ?? def?.label ?? 'Link'
 }
 
+/**
+ * Validate and normalise community links: keep http(s) only, trim, dedupe by
+ * URL, and infer a service from the host when one isn't given.
+ */
+export function sanitizeLinks(links: unknown): CommunityLink[] {
+  if (!Array.isArray(links)) return []
+  const seen = new Set<string>()
+  const out: CommunityLink[] = []
+  for (const raw of links) {
+    if (!raw || typeof raw !== 'object') continue
+    const candidate = raw as Partial<CommunityLink>
+    const url = typeof candidate.url === 'string' ? candidate.url.trim() : ''
+    if (!/^https?:\/\//i.test(url)) continue
+    const key = url.toLowerCase()
+    if (seen.has(key)) continue
+    seen.add(key)
+    const service = typeof candidate.service === 'string' && candidate.service ? candidate.service : detectService(url)
+    const label = typeof candidate.label === 'string' ? candidate.label.trim() : ''
+    out.push(label ? { service, url, label } : { service, url })
+  }
+  return out
+}
+
 function defaultRepoUrl(provider: string, owner: string, name: string): string {
   switch (provider) {
     case 'github': return `https://github.com/${owner}/${name}`
