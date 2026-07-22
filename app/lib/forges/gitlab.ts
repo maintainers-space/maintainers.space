@@ -840,7 +840,9 @@ function todoRoute(t: any, kind: ForgeNotification['kind'], owner: string, name:
   if (kind === 'ci') return `${base}/actions`
   if (kind === 'pull' && number) return `${base}/pulls/${number}`
   if (kind === 'issue' && number) return `${base}/issues/${number}`
-  return base
+  // Wikis, designs, epics, docs, … have no in-app view — fall back to the
+  // provider's own page (callers use `url` when `to` is null).
+  return null
 }
 
 const TODO_REASONS: Record<string, string> = {
