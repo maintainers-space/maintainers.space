@@ -10,6 +10,11 @@ function submit(): void {
   router.replace({ query: q ? { q } : {} })
 }
 
+function applySyntaxExample(q: string): void {
+  input.value = q
+  submit()
+}
+
 let debounce: ReturnType<typeof setTimeout> | undefined
 watch(input, () => {
   clearTimeout(debounce)
@@ -62,21 +67,16 @@ const syntax = [
           @keydown.enter="submit"
         >
           <template #trailing>
-            <UButton
-              size="xs"
-              color="neutral"
-              variant="subtle"
-              label="Search"
-              @click="submit"
-            />
+            <UButton size="xs" color="neutral" variant="subtle" label="Search" @click="submit" />
           </template>
         </UInput>
 
         <!-- Syntax hints when idle -->
         <div v-if="!hasQuery" class="space-y-4">
           <p class="text-sm text-muted">
-            One search across GitHub and Tangled. Combine terms with <UKbd>OR</UKbd>, <UKbd>NOT</UKbd>, parentheses and
-            <code class="text-default">key:value</code> qualifiers — GitHub-style.
+            One search across GitHub and Tangled. Combine terms with <UKbd>OR</UKbd>,
+            <UKbd>NOT</UKbd>, parentheses and <code class="text-default">key:value</code> qualifiers
+            — GitHub-style.
           </p>
           <div class="grid gap-2 sm:grid-cols-2">
             <button
@@ -84,7 +84,7 @@ const syntax = [
               :key="s.q"
               type="button"
               class="flex items-center justify-between gap-3 rounded-lg border border-default px-3 py-2 text-left text-sm transition hover:border-primary hover:bg-elevated/40"
-              @click="input = s.q; submit()"
+              @click="applySyntaxExample(s.q)"
             >
               <code class="truncate text-primary">{{ s.q }}</code>
               <span class="shrink-0 text-xs text-muted">{{ s.d }}</span>
@@ -110,14 +110,16 @@ const syntax = [
             <USkeleton v-for="i in 4" :key="i" class="h-16 w-full" />
           </div>
 
-          <div v-else-if="isEmpty" class="rounded-lg border border-dashed border-default py-16 text-center">
+          <div
+            v-else-if="isEmpty"
+            class="rounded-lg border border-dashed border-default py-16 text-center"
+          >
             <UIcon name="i-lucide-search-x" class="mx-auto size-8 text-muted" />
             <p class="mt-3 text-sm text-muted">
-              No results for <span class="font-medium text-default">{{ parsed.raw }}</span>.
+              No results for <span class="font-medium text-default">{{ parsed.raw }}</span
+              >.
             </p>
-            <p class="mt-1 text-xs text-muted">
-              Try broadening your terms or removing qualifiers.
-            </p>
+            <p class="mt-1 text-xs text-muted">Try broadening your terms or removing qualifiers.</p>
           </div>
 
           <div v-else class="space-y-8">
@@ -131,7 +133,11 @@ const syntax = [
               :count="results.repos.length"
               :total="totals.repos"
             >
-              <SearchResultRepo v-for="r in results.repos" :key="`${r.provider}:${r.fullName}`" :repo="r" />
+              <SearchResultRepo
+                v-for="r in results.repos"
+                :key="`${r.provider}:${r.fullName}`"
+                :repo="r"
+              />
             </SearchGroup>
 
             <SearchGroup
@@ -149,7 +155,11 @@ const syntax = [
               :count="results.issues.length"
               :total="totals.issues"
             >
-              <SearchResultIssue v-for="(it, i) in results.issues" :key="`${it.provider}:${it.id}:${i}`" :issue="it" />
+              <SearchResultIssue
+                v-for="(it, i) in results.issues"
+                :key="`${it.provider}:${it.id}:${i}`"
+                :issue="it"
+              />
             </SearchGroup>
 
             <SearchGroup
@@ -158,7 +168,11 @@ const syntax = [
               :count="results.discussions.length"
               :total="totals.discussions"
             >
-              <SearchResultDiscussion v-for="(d, i) in results.discussions" :key="`${d.provider}:${d.id}:${i}`" :discussion="d" />
+              <SearchResultDiscussion
+                v-for="(d, i) in results.discussions"
+                :key="`${d.provider}:${d.id}:${i}`"
+                :discussion="d"
+              />
             </SearchGroup>
 
             <SearchGroup
@@ -167,7 +181,11 @@ const syntax = [
               :count="results.users.length"
               :total="totals.users"
             >
-              <SearchResultUser v-for="u in results.users" :key="`${u.provider}:${u.login}`" :user="u" />
+              <SearchResultUser
+                v-for="u in results.users"
+                :key="`${u.provider}:${u.login}`"
+                :user="u"
+              />
             </SearchGroup>
           </div>
         </template>
