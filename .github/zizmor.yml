@@ -1,0 +1,10 @@
+# https://docs.zizmor.sh/configuration/
+#
+# semantic-pull-requests.yml and welcome-open.yml use pull_request_target
+# intentionally: they never check out pull request head code, and only
+# read event metadata to post a status check or a comment.
+rules:
+  dangerous-triggers:
+    ignore:
+      - semantic-pull-requests.yml
+      - welcome-open.yml

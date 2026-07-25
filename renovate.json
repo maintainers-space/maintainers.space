@@ -1,13 +1,38 @@
 {
-  "extends": [
-    "github>nuxt/renovate-config-nuxt"
-  ],
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["github>nuxt/renovate-config-nuxt"],
+  "minimumReleaseAge": "3 days",
   "lockFileMaintenance": {
-    "enabled": true
+    "enabled": true,
+    "schedule": ["before 4am on monday"]
   },
-  "packageRules": [{
-    "matchDepTypes": ["resolutions"],
-    "enabled": false
-  }],
-  "postUpdateOptions": ["pnpmDedupe"]
+  "postUpdateOptions": ["pnpmDedupe"],
+  "packageRules": [
+    {
+      "description": "Auto-merge patch and minor updates once CI passes — low risk, high volume, not worth manual review.",
+      "matchUpdateTypes": ["patch", "minor"],
+      "automerge": true,
+      "automergeType": "branch"
+    },
+    {
+      "description": "Major bumps always need a human look, regardless of package.",
+      "matchUpdateTypes": ["major"],
+      "automerge": false
+    },
+    {
+      "description": "Nuxt ecosystem moves together.",
+      "groupName": "nuxt ecosystem",
+      "matchPackageNames": ["nuxt", "@nuxt/**", "@vueuse/**", "vue", "vue-tsc"]
+    },
+    {
+      "description": "AT Protocol client stack moves together.",
+      "groupName": "atcute (atproto)",
+      "matchPackageNames": ["@atcute/**"]
+    },
+    {
+      "description": "Lint/format/dead-code tooling moves together.",
+      "groupName": "lint tooling",
+      "matchPackageNames": ["oxlint", "oxfmt", "knip", "lint-staged", "simple-git-hooks"]
+    }
+  ]
 }

@@ -1,0 +1,33 @@
+name: Welcome Message
+
+on:
+  pull_request_target:
+    branches: [main]
+    types: [opened]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions: {}
+
+jobs:
+  greeting:
+    name: Greet First-Time Contributors
+    if: github.repository == 'trueberryless/koinon'
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write # post first-time contributor greeting comments
+    steps:
+      - uses: zephyrproject-rtos/action-first-interaction@58853996b1ac504b8e0f6964301f369d2bb22e5c # v1.1.1+zephyr.6
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          pr-opened-message: |
+            Hello! Thank you for opening your **first PR** to koinon, @${{ github.event.pull_request.user.login }}! 🚀
+
+            Here's what happens next:
+
+            1. CI will run lint, format, type-check and unused-code checks against your changes. If anything fails you'll see it right here on the PR — don't hesitate to ask if a message is unclear.
+            2. A maintainer will take a look and may ask for changes. We try to be responsive, but give it a few days.
+
+            Thanks again for contributing!
