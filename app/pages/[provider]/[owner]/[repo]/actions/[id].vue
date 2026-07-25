@@ -4,7 +4,9 @@ import { useRepoContext } from '~/composables/useRepoContext'
 
 const route = useRoute()
 const { provider, owner, name, forge, locator } = useRepoContext()
-const base = computed(() => repoPath({ provider: provider.value, owner: owner.value, name: name.value }))
+const base = computed(() =>
+  repoPath({ provider: provider.value, owner: owner.value, name: name.value })
+)
 const id = computed(() => String(route.params.id))
 
 const { data, pending, error } = useLiveAsyncData<ForgeActionRun | null>(
@@ -39,7 +41,7 @@ const { data, pending, error } = useLiveAsyncData<ForgeActionRun | null>(
       variant="subtle"
       icon="i-lucide-circle-alert"
       title="Could not load run"
-      :description="(error as any)?.message"
+      :description="error?.message"
     />
 
     <template v-else-if="data">
@@ -51,7 +53,9 @@ const { data, pending, error } = useLiveAsyncData<ForgeActionRun | null>(
           <StateBadge :state="data.status" kind="run" />
           <span v-if="data.event" class="capitalize">{{ data.event }}</span>
           <span v-if="data.branch" class="font-mono text-xs">{{ data.branch }}</span>
-          <span v-if="data.commitSha" class="font-mono text-xs">{{ data.commitSha.slice(0, 7) }}</span>
+          <span v-if="data.commitSha" class="font-mono text-xs">{{
+            data.commitSha.slice(0, 7)
+          }}</span>
           <UserLink v-if="data.actor" :user="data.actor" />
           <span v-if="data.createdAt">{{ formatRelativeTime(data.createdAt) }}</span>
         </div>
@@ -61,27 +65,40 @@ const { data, pending, error } = useLiveAsyncData<ForgeActionRun | null>(
       </div>
 
       <div v-if="data.jobs?.length" class="space-y-3">
-        <div v-for="job in data.jobs" :key="job.id" class="overflow-hidden rounded-lg border border-default">
+        <div
+          v-for="job in data.jobs"
+          :key="job.id"
+          class="overflow-hidden rounded-lg border border-default"
+        >
           <div class="flex items-center gap-2 border-b border-default bg-elevated/40 px-4 py-2.5">
             <StateBadge :state="job.status" kind="run" size="xs" />
             <span class="text-sm font-medium text-default">{{ job.name }}</span>
-            <span
-              v-if="job.startedAt && job.completedAt"
-              class="ml-auto text-xs text-muted"
-            >{{ formatRelativeTime(job.completedAt) }}</span>
+            <span v-if="job.startedAt && job.completedAt" class="ml-auto text-xs text-muted">{{
+              formatRelativeTime(job.completedAt)
+            }}</span>
           </div>
           <ul v-if="job.steps?.length" class="divide-y divide-default/60">
-            <li v-for="(step, i) in job.steps" :key="i" class="flex items-center gap-2 px-4 py-2 text-sm">
+            <li
+              v-for="(step, i) in job.steps"
+              :key="i"
+              class="flex items-center gap-2 px-4 py-2 text-sm"
+            >
               <StateBadge :state="step.status" kind="run" size="xs" />
               <span class="text-default">{{ step.name }}</span>
             </li>
           </ul>
-          <p v-if="job.error" class="border-t border-default px-4 py-2 font-mono text-xs text-error">
+          <p
+            v-if="job.error"
+            class="border-t border-default px-4 py-2 font-mono text-xs text-error"
+          >
             {{ job.error }}
           </p>
         </div>
       </div>
-      <p v-else class="rounded-lg border border-dashed border-default py-8 text-center text-sm text-muted">
+      <p
+        v-else
+        class="rounded-lg border border-dashed border-default py-8 text-center text-sm text-muted"
+      >
         No job details available.
       </p>
     </template>

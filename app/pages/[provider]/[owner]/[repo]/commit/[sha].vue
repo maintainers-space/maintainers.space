@@ -35,7 +35,7 @@ const bodyText = computed(() => {
       variant="subtle"
       icon="i-lucide-circle-alert"
       title="Could not load commit"
-      :description="(error as any)?.message"
+      :description="error?.message"
     />
 
     <template v-else-if="data">
@@ -43,15 +43,21 @@ const bodyText = computed(() => {
         <h2 class="text-base font-semibold text-highlighted">
           {{ title }}
         </h2>
-        <pre v-if="bodyText" class="mt-2 whitespace-pre-wrap font-sans text-sm text-muted">{{ bodyText }}</pre>
+        <pre v-if="bodyText" class="mt-2 whitespace-pre-wrap font-sans text-sm text-muted">{{
+          bodyText
+        }}</pre>
         <div class="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted">
           <span v-if="data.author" class="inline-flex items-center gap-1.5">
             <UAvatar v-if="data.author.avatarUrl" :src="data.author.avatarUrl" size="3xs" />
-            <span class="font-medium text-default">{{ data.author.name || data.author.login }}</span>
+            <span class="font-medium text-default">{{
+              data.author.name || data.author.login
+            }}</span>
             committed
             <span v-if="data.author.when">{{ formatRelativeTime(data.author.when) }}</span>
           </span>
-          <span class="rounded border border-default px-2 py-0.5 font-mono">{{ data.shortSha }}</span>
+          <span class="rounded border border-default px-2 py-0.5 font-mono">{{
+            data.shortSha
+          }}</span>
           <span v-if="data.stat" class="flex items-center gap-2 font-mono">
             <span v-if="data.stat.filesChanged">{{ data.stat.filesChanged }} files</span>
             <span v-if="data.stat.additions" class="text-success">+{{ data.stat.additions }}</span>
@@ -61,7 +67,10 @@ const bodyText = computed(() => {
       </div>
 
       <DiffView v-if="data.files?.length" :files="data.files" />
-      <p v-else class="rounded-lg border border-dashed border-default py-8 text-center text-sm text-muted">
+      <p
+        v-else
+        class="rounded-lg border border-dashed border-default py-8 text-center text-sm text-muted"
+      >
         No file changes to display.
       </p>
     </template>

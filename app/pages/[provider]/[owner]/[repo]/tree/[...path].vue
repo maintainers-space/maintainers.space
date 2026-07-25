@@ -4,7 +4,9 @@ import { useRepoContext } from '~/composables/useRepoContext'
 
 const route = useRoute()
 const { provider, owner, name, forge, locator, defaultBranch } = useRepoContext()
-const base = computed(() => repoPath({ provider: provider.value, owner: owner.value, name: name.value }))
+const base = computed(() =>
+  repoPath({ provider: provider.value, owner: owner.value, name: name.value })
+)
 
 const parts = computed(() => {
   const raw = route.params.path
@@ -36,14 +38,8 @@ const { data, pending, error } = useAsyncData<ForgeTreeEntry[]>(
       variant="subtle"
       icon="i-lucide-circle-alert"
       title="Could not load directory"
-      :description="(error as any)?.message"
+      :description="error?.message"
     />
-    <ForgeRepoBrowser
-      v-else
-      :entries="data ?? []"
-      :base="base"
-      :git-ref="gitRef"
-      :path="path"
-    />
+    <ForgeRepoBrowser v-else :entries="data ?? []" :base="base" :git-ref="gitRef" :path="path" />
   </div>
 </template>

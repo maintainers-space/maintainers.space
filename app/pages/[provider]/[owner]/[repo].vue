@@ -6,11 +6,17 @@ import { provideRepoContext, useRepoParams } from '~/composables/useRepoContext'
 const route = useRoute()
 const { provider, owner, name, forge, locator } = useRepoParams()
 
-const { data: meta, pending, error, refresh } = useAsyncData<ForgeRepo | null>(
+const {
+  data: meta,
+  pending,
+  error,
+  refresh
+} = useAsyncData<ForgeRepo | null>(
   () => `repo-meta:${provider.value}:${owner.value}:${name.value}`,
   async () => {
     const f = getForge(provider.value)
-    if (!f) throw createError({ statusCode: 404, statusMessage: `Unknown provider "${provider.value}"` })
+    if (!f)
+      throw createError({ statusCode: 404, statusMessage: `Unknown provider "${provider.value}"` })
     if (f.getRepo) return await f.getRepo(owner.value, name.value)
     const ov = await f.getOverview(owner.value, name.value)
     return ov.repo
@@ -24,30 +30,57 @@ provideRepoContext({ provider, owner, name, forge, locator, meta, defaultBranch 
 
 // Track visits locally so signed-in users get a personal recent/favourite feed.
 const { record } = useRepoVisits()
-watch(meta, (m) => {
-  if (m) record(m)
-}, { immediate: true })
+watch(
+  meta,
+  (m) => {
+    if (m) record(m)
+  },
+  { immediate: true }
+)
 
-const base = computed(() => repoPath({ provider: provider.value, owner: owner.value, name: name.value }))
+const base = computed(() =>
+  repoPath({ provider: provider.value, owner: owner.value, name: name.value })
+)
 const caps = computed(() => forge.value?.capabilities)
 
 function startsWith(seg: string): boolean {
   return route.path === `${base.value}/${seg}` || route.path.startsWith(`${base.value}/${seg}/`)
 }
 
-const isCode = computed(() =>
-  route.path === base.value
-  || ['tree', 'blob', 'commits', 'commit'].some(startsWith)
+const isCode = computed(
+  () => route.path === base.value || ['tree', 'blob', 'commits', 'commit'].some(startsWith)
 )
 
 const tabs = computed(() => {
-  const items = [
-    { label: 'Code', icon: 'i-lucide-code', to: base.value, active: isCode.value }
-  ]
-  if (caps.value?.issues) items.push({ label: 'Issues', icon: 'i-lucide-circle-dot', to: `${base.value}/issues`, active: startsWith('issues') })
-  if (caps.value?.pulls) items.push({ label: 'Pull requests', icon: 'i-lucide-git-pull-request', to: `${base.value}/pulls`, active: startsWith('pulls') })
-  if (caps.value?.actions) items.push({ label: 'Actions', icon: 'i-lucide-play', to: `${base.value}/actions`, active: startsWith('actions') })
-  if (caps.value?.discussions) items.push({ label: 'Discussions', icon: 'i-lucide-messages-square', to: `${base.value}/discussions`, active: startsWith('discussions') })
+  const items = [{ label: 'Code', icon: 'i-lucide-code', to: base.value, active: isCode.value }]
+  if (caps.value?.issues)
+    items.push({
+      label: 'Issues',
+      icon: 'i-lucide-circle-dot',
+      to: `${base.value}/issues`,
+      active: startsWith('issues')
+    })
+  if (caps.value?.pulls)
+    items.push({
+      label: 'Pull requests',
+      icon: 'i-lucide-git-pull-request',
+      to: `${base.value}/pulls`,
+      active: startsWith('pulls')
+    })
+  if (caps.value?.actions)
+    items.push({
+      label: 'Actions',
+      icon: 'i-lucide-play',
+      to: `${base.value}/actions`,
+      active: startsWith('actions')
+    })
+  if (caps.value?.discussions)
+    items.push({
+      label: 'Discussions',
+      icon: 'i-lucide-messages-square',
+      to: `${base.value}/discussions`,
+      active: startsWith('discussions')
+    })
   return items
 })
 </script>
@@ -78,15 +111,12 @@ const tabs = computed(() => {
           variant="subtle"
           icon="i-lucide-circle-alert"
           :title="isForgeId(provider) ? 'Repository not found' : `Unknown provider: ${provider}`"
-          :description="(error as any)?.statusMessage || (error as any)?.message || 'We could not load this repository.'"
+          :description="
+            error?.statusMessage || error?.message || 'We could not load this repository.'
+          "
         >
           <template #actions>
-            <UButton
-              color="error"
-              variant="soft"
-              label="Retry"
-              @click="refresh()"
-            />
+            <UButton color="error" variant="soft" label="Retry" @click="refresh()" />
           </template>
         </UAlert>
 

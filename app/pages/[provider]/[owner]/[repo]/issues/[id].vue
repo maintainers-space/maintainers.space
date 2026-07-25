@@ -4,7 +4,9 @@ import { useRepoContext } from '~/composables/useRepoContext'
 
 const route = useRoute()
 const { provider, owner, name, forge, locator } = useRepoContext()
-const base = computed(() => repoPath({ provider: provider.value, owner: owner.value, name: name.value }))
+const base = computed(() =>
+  repoPath({ provider: provider.value, owner: owner.value, name: name.value })
+)
 const id = computed(() => String(route.params.id))
 
 const { data, pending, error } = useLiveAsyncData<ForgeIssueDetail | null>(
@@ -39,13 +41,14 @@ const { data, pending, error } = useLiveAsyncData<ForgeIssueDetail | null>(
       variant="subtle"
       icon="i-lucide-circle-alert"
       title="Could not load issue"
-      :description="(error as any)?.message"
+      :description="error?.message"
     />
 
     <template v-else-if="data">
       <div class="space-y-2 border-b border-default pb-4">
         <h1 class="text-xl font-semibold text-highlighted">
-          {{ data.title }} <span v-if="data.number" class="font-normal text-muted">#{{ data.number }}</span>
+          {{ data.title }}
+          <span v-if="data.number" class="font-normal text-muted">#{{ data.number }}</span>
         </h1>
         <div class="flex flex-wrap items-center gap-2 text-sm text-muted">
           <StateBadge :state="data.state" kind="issue" />
@@ -67,9 +70,13 @@ const { data, pending, error } = useLiveAsyncData<ForgeIssueDetail | null>(
       </div>
 
       <article class="overflow-hidden rounded-lg border border-default">
-        <header class="flex items-center gap-2 border-b border-default bg-elevated/40 px-4 py-2 text-sm">
+        <header
+          class="flex items-center gap-2 border-b border-default bg-elevated/40 px-4 py-2 text-sm"
+        >
           <UserLink :user="data.author" />
-          <span v-if="data.createdAt" class="text-muted">commented {{ formatRelativeTime(data.createdAt) }}</span>
+          <span v-if="data.createdAt" class="text-muted"
+            >commented {{ formatRelativeTime(data.createdAt) }}</span
+          >
         </header>
         <div class="px-4 py-3">
           <MarkdownBody :content="data.body ?? ''" empty="No description provided." />

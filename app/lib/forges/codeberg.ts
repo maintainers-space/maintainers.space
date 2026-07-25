@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import type {
   ForgeBranch,
   ForgeBlob,
@@ -32,6 +31,217 @@ import { getForgeToken } from '~/lib/forges/token-store'
 const API = 'https://codeberg.org/api/v1'
 const WEB = 'https://codeberg.org'
 
+// Raw Codeberg/Forgejo (Gitea-flavored) REST API response shapes.
+// These model only the fields this file actually reads; Gitea is inconsistent
+// about optionality (e.g. `login` vs `username`), so most fields are optional.
+
+interface CbUserResponse {
+  login?: string
+  username?: string
+  full_name?: string | null
+  fullname?: string | null
+  avatar_url?: string | null
+  html_url?: string | null
+}
+
+/** The nested git-level author/committer identity on a commit (name/email/date, no account info). */
+interface CbGitActor {
+  name?: string
+  email?: string
+  date?: string
+  timestamp?: string
+}
+
+/**
+ * `mapCommitActor`'s first argument is sometimes the git-level actor
+ * (`commit.author`, with name/email/date) and sometimes falls back to the
+ * top-level account object (`author`, with login/avatar_url) depending on
+ * which Codeberg/Gitea endpoint produced the commit. Merge both shapes so
+ * either can be passed without a weak-type mismatch.
+ */
+interface CbCommitActorRaw {
+  name?: string
+  email?: string
+  date?: string
+  timestamp?: string
+  login?: string
+  username?: string
+  avatar_url?: string | null
+  full_name?: string | null
+  fullname?: string | null
+  html_url?: string | null
+}
+
+interface CbRepoResponse {
+  owner?: CbUserResponse | null
+  name?: string
+  full_name?: string
+  description?: string | null
+  default_branch?: string
+  html_url?: string
+  website?: string | null
+  language?: string | null
+  topics?: string[]
+  stars_count?: number
+  forks_count?: number
+  watchers_count?: number
+  open_issues_count?: number
+  private?: boolean
+  fork?: boolean
+  created_at?: string | null
+  updated_at?: string | null
+}
+
+interface CbTopicsResponse {
+  topics?: string[]
+}
+
+/** Minimal repo reference embedded in events/notifications/search results. */
+interface CbRepoRefResponse {
+  owner?: CbUserResponse | null
+  name?: string
+  full_name?: string
+  html_url?: string
+}
+
+/** A repo reference that may be embedded directly or nested under `repository`/`repo`. */
+interface CbRepoRefContainer extends CbRepoRefResponse {
+  repository?: CbRepoRefResponse
+  repo?: CbRepoRefResponse
+}
+
+interface CbLabelResponse {
+  name: string
+  color?: string | null
+  description?: string | null
+}
+
+interface CbIssueResponse {
+  number?: number
+  index?: number
+  title?: string
+  state?: string
+  user?: CbUserResponse | null
+  body?: string | null
+  comments?: number
+  labels?: (CbLabelResponse | string)[]
+  created_at?: string | null
+  updated_at?: string | null
+  closed_at?: string | null
+  html_url?: string
+  pull_request?: unknown
+}
+
+interface CbPullResponse extends CbIssueResponse {
+  merged_at?: string | null
+  merged?: boolean
+  draft?: boolean
+  head?: { ref?: string }
+  base?: { ref?: string }
+  additions?: number
+  deletions?: number
+  changed_files?: number
+  commits?: number
+}
+
+/** Issue/pull search results embed the owning repo. */
+interface CbSearchIssueResponse extends CbIssueResponse {
+  repository?: CbRepoRefResponse
+  repo?: CbRepoRefResponse
+}
+
+interface CbCommentResponse {
+  id?: number | string
+  user?: CbUserResponse | null
+  body?: string | null
+  created_at?: string | null
+  html_url?: string | null
+}
+
+interface CbCommitResponse {
+  sha?: string
+  id?: string
+  commit?: {
+    message?: string
+    author?: CbGitActor
+    committer?: CbGitActor
+  }
+  message?: string
+  author?: CbUserResponse | null
+  committer?: CbUserResponse | null
+  html_url?: string | null
+  parents?: { sha?: string; id?: string }[]
+}
+
+/** The `/git/commits/{sha}` endpoint returns a commit plus diff stat/files. */
+interface CbGitCommitResponse extends CbCommitResponse {
+  stats?: { additions?: number; deletions?: number; total?: number }
+  files?: CbFileDiffResponse[]
+}
+
+interface CbFileDiffResponse {
+  previous_filename?: string
+  filename?: string
+  path?: string
+  status?: string
+  additions?: number
+  deletions?: number
+  changes?: number
+  patch?: string | null
+}
+
+/** Contents API entry: a tree listing item, or a single file/blob when requesting a path directly. */
+interface CbContentResponse {
+  name?: string
+  path?: string
+  type?: string
+  size?: number
+  sha?: string
+  content?: string
+}
+
+interface CbBranchResponse {
+  name: string
+  commit?: { id?: string; message?: string; timestamp?: string }
+}
+
+/** A single entry from the user activity feed (`/users/{login}/activities/feeds`). */
+interface CbActivityResponse {
+  id?: number | string
+  op_type?: string
+  act_user?: CbUserResponse | null
+  repo?: CbRepoRefResponse
+  content?: string | null
+  ref_name?: string | null
+  created?: string
+  created_at?: string
+}
+
+interface CbNotificationResponse {
+  id: number | string
+  subject?: {
+    type?: string
+    title?: string
+    url?: string
+    html_url?: string
+    state?: string
+  }
+  repository?: CbRepoRefResponse
+  reason?: string | null
+  unread?: boolean
+  updated_at?: string
+}
+
+interface CbSearchReposResponse {
+  ok?: boolean
+  data?: CbRepoResponse[]
+}
+
+interface CbSearchUsersResponse {
+  ok?: boolean
+  data?: CbUserResponse[]
+}
+
 function cbHeaders(opts?: ForgeReadOptions): Record<string, string> {
   const headers: Record<string, string> = { Accept: 'application/json' }
   const token = opts?.token ?? getForgeToken('codeberg')
@@ -41,8 +251,12 @@ function cbHeaders(opts?: ForgeReadOptions): Record<string, string> {
   return headers
 }
 
-async function cbMapLimit<T, R>(items: T[], concurrency: number, fn: (item: T) => Promise<R>): Promise<R[]> {
-  const results: R[] = new Array(items.length)
+async function cbMapLimit<T, R>(
+  items: T[],
+  concurrency: number,
+  fn: (item: T) => Promise<R>
+): Promise<R[]> {
+  const results: R[] = Array.from({ length: items.length })
   let cursor = 0
   async function worker(): Promise<void> {
     while (cursor < items.length) {
@@ -68,17 +282,21 @@ function botKindOf(login?: string | null): 'dependabot' | 'renovate' | null {
   return null
 }
 
-function errStatus(e: any): number | undefined {
-  return e?.statusCode ?? e?.status ?? e?.response?.status
+function errStatus(e: unknown): number | undefined {
+  if (!e || typeof e !== 'object') {
+    return undefined
+  }
+  const err = e as { statusCode?: number; status?: number; response?: { status?: number } }
+  return err.statusCode ?? err.status ?? err.response?.status
 }
 
-function loginOf(u: any): string {
+function loginOf(u: CbUserResponse | null | undefined): string {
   return String(u?.login ?? u?.username ?? '')
 }
 
 function decodeBase64Utf8(b64: string): string {
   const binary = atob(b64.replace(/\s/g, ''))
-  const bytes = Uint8Array.from(binary, ch => ch.charCodeAt(0))
+  const bytes = Uint8Array.from(binary, (ch) => ch.charCodeAt(0))
   return new TextDecoder().decode(bytes)
 }
 
@@ -109,10 +327,12 @@ function encodePath(path: string): string {
 
 function contentUrl(owner: string, repo: string, path: string): string {
   const enc = encodePath(path)
-  return enc ? `${API}/repos/${owner}/${repo}/contents/${enc}` : `${API}/repos/${owner}/${repo}/contents`
+  return enc
+    ? `${API}/repos/${owner}/${repo}/contents/${enc}`
+    : `${API}/repos/${owner}/${repo}/contents`
 }
 
-function mapUser(u: any): ForgeUser | undefined {
+function mapUser(u: CbUserResponse | null | undefined): ForgeUser | undefined {
   if (!u) {
     return undefined
   }
@@ -126,7 +346,10 @@ function mapUser(u: any): ForgeUser | undefined {
   }
 }
 
-function mapCommitActor(gitActor: any, user: any): ForgeCommitActor | undefined {
+function mapCommitActor(
+  gitActor: CbCommitActorRaw | null | undefined,
+  user: CbUserResponse | null | undefined
+): ForgeCommitActor | undefined {
   if (!gitActor && !user) {
     return undefined
   }
@@ -139,7 +362,7 @@ function mapCommitActor(gitActor: any, user: any): ForgeCommitActor | undefined 
   }
 }
 
-function mapRepo(r: any): ForgeRepo {
+function mapRepo(r: CbRepoResponse): ForgeRepo {
   const owner = loginOf(r.owner)
   return {
     provider: 'codeberg',
@@ -166,14 +389,18 @@ function mapRepo(r: any): ForgeRepo {
   }
 }
 
-function mapLabel(l: any): { name: string, color?: string | null, description?: string | null } {
+function mapLabel(l: CbLabelResponse | string): {
+  name: string
+  color?: string | null
+  description?: string | null
+} {
   if (typeof l === 'string') {
     return { name: l }
   }
   return { name: l.name, color: l.color, description: l.description }
 }
 
-function mapIssue(r: any): ForgeIssue {
+function mapIssue(r: CbIssueResponse): ForgeIssue {
   return {
     provider: 'codeberg',
     id: String(r.number ?? r.index ?? ''),
@@ -192,7 +419,7 @@ function mapIssue(r: any): ForgeIssue {
   }
 }
 
-function pullState(r: any): ForgePullState {
+function pullState(r: CbPullResponse): ForgePullState {
   if (r.merged_at || r.merged) {
     return 'merged'
   }
@@ -205,7 +432,7 @@ function pullState(r: any): ForgePullState {
   return 'open'
 }
 
-function mapPull(r: any): ForgePull {
+function mapPull(r: CbPullResponse): ForgePull {
   return {
     provider: 'codeberg',
     id: String(r.number ?? r.index ?? ''),
@@ -226,7 +453,7 @@ function mapPull(r: any): ForgePull {
   }
 }
 
-function mapComment(r: any): ForgeComment {
+function mapComment(r: CbCommentResponse): ForgeComment {
   return {
     id: String(r.id),
     author: mapUser(r.user),
@@ -236,7 +463,7 @@ function mapComment(r: any): ForgeComment {
   }
 }
 
-function mapCommit(r: any): ForgeCommit {
+function mapCommit(r: CbCommitResponse): ForgeCommit {
   const sha = String(r.sha ?? r.id ?? '')
   return {
     sha,
@@ -245,7 +472,7 @@ function mapCommit(r: any): ForgeCommit {
     author: mapCommitActor(r.commit?.author ?? r.author, r.author),
     committer: mapCommitActor(r.commit?.committer ?? r.committer, r.committer),
     url: r.html_url,
-    parents: (r.parents ?? []).map((p: any) => p.sha ?? p.id).filter(Boolean)
+    parents: (r.parents ?? []).map((p) => p.sha ?? p.id).filter(Boolean) as string[]
   }
 }
 
@@ -267,7 +494,7 @@ function fileStatus(status?: string): ForgeFileDiff['status'] {
   }
 }
 
-function mapFileDiff(f: any, patch?: string | null): ForgeFileDiff {
+function mapFileDiff(f: CbFileDiffResponse, patch?: string | null): ForgeFileDiff {
   const p = patch ?? f.patch ?? null
   return {
     oldPath: f.previous_filename,
@@ -282,11 +509,13 @@ function mapFileDiff(f: any, patch?: string | null): ForgeFileDiff {
 
 function splitUnifiedDiff(text: string): Record<string, string> {
   const out: Record<string, string> = {}
-  const parts = String(text ?? '').split(/(?=^diff --git )/m).filter(Boolean)
+  const parts = String(text ?? '')
+    .split(/(?=^diff --git )/m)
+    .filter(Boolean)
   for (const part of parts) {
     const plus = part.match(/^\+\+\+ b\/(.+)$/m)
     const diff = part.match(/^diff --git a\/(.+?) b\/(.+)$/m)
-    const path = plus?.[1] && plus[1] !== '/dev/null' ? plus[1] : diff?.[2] ?? ''
+    const path = plus?.[1] && plus[1] !== '/dev/null' ? plus[1] : (diff?.[2] ?? '')
     if (path) {
       out[path] = part
     }
@@ -294,25 +523,46 @@ function splitUnifiedDiff(text: string): Record<string, string> {
   return out
 }
 
-async function getRootTree(owner: string, repo: string, ref: string | undefined, opts?: ForgeReadOptions): Promise<ForgeTreeEntry[]> {
-  const data = await $fetch<any>(contentUrl(owner, repo, ''), {
+async function getRootTree(
+  owner: string,
+  repo: string,
+  ref: string | undefined,
+  opts?: ForgeReadOptions
+): Promise<ForgeTreeEntry[]> {
+  const data = await $fetch<CbContentResponse | CbContentResponse[]>(contentUrl(owner, repo, ''), {
     headers: cbHeaders(opts),
     query: ref ? { ref } : undefined,
     signal: opts?.signal
   })
   const arr = Array.isArray(data) ? data : [data]
   return arr
-    .map((e: any): ForgeTreeEntry => ({ name: e.name, path: e.path, type: e.type === 'dir' ? 'dir' : 'file', size: e.size, sha: e.sha }))
+    .map(
+      (e: CbContentResponse): ForgeTreeEntry => ({
+        name: e.name ?? '',
+        path: e.path ?? '',
+        type: e.type === 'dir' ? 'dir' : 'file',
+        size: e.size,
+        sha: e.sha
+      })
+    )
     .sort(sortEntries)
 }
 
-async function getReadme(owner: string, repo: string, ref: string, entries: ForgeTreeEntry[], opts?: ForgeReadOptions) {
-  const readme = entries.find(e => e.type === 'file' && /^readme(\.(md|markdown|rst|txt|adoc))?$/i.test(e.name))
+async function getReadme(
+  owner: string,
+  repo: string,
+  ref: string,
+  entries: ForgeTreeEntry[],
+  opts?: ForgeReadOptions
+) {
+  const readme = entries.find(
+    (e) => e.type === 'file' && /^readme(\.(md|markdown|rst|txt|adoc))?$/i.test(e.name)
+  )
   if (!readme) {
     return null
   }
   try {
-    const r = await $fetch<any>(contentUrl(owner, repo, readme.path), {
+    const r = await $fetch<CbContentResponse>(contentUrl(owner, repo, readme.path), {
       headers: cbHeaders(opts),
       query: { ref },
       signal: opts?.signal
@@ -344,8 +594,12 @@ function mapSort(sort?: ForgeSearchOptions['sort']): string | undefined {
   }
 }
 
-function repoFromRaw(r: any): { provider: 'codeberg', owner: string, name: string, fullName: string, url?: string } | undefined {
-  const raw = r.repository ?? r.repo ?? r
+function repoFromRaw(
+  r: CbRepoRefContainer | undefined
+):
+  | { provider: 'codeberg'; owner: string; name: string; fullName: string; url?: string }
+  | undefined {
+  const raw = r?.repository ?? r?.repo ?? r
   const fullName = String(raw?.full_name ?? '')
   let owner = loginOf(raw?.owner)
   let name = String(raw?.name ?? '')
@@ -357,10 +611,16 @@ function repoFromRaw(r: any): { provider: 'codeberg', owner: string, name: strin
   if (!owner || !name) {
     return undefined
   }
-  return { provider: 'codeberg', owner, name, fullName: fullName || `${owner}/${name}`, url: raw?.html_url ?? `${WEB}/${owner}/${name}` }
+  return {
+    provider: 'codeberg',
+    owner,
+    name,
+    fullName: fullName || `${owner}/${name}`,
+    url: raw?.html_url ?? `${WEB}/${owner}/${name}`
+  }
 }
 
-function mapSearchIssue(r: any, isPull?: boolean): ForgeIssue {
+function mapSearchIssue(r: CbSearchIssueResponse, isPull?: boolean): ForgeIssue {
   const issue = mapIssue(r)
   issue.isPull = isPull ?? issue.isPull
   const repo = repoFromRaw(r)
@@ -394,12 +654,22 @@ function notificationNumber(url?: string): number | undefined {
   return Number(m[1])
 }
 
-function notificationRoute(kind: ForgeNotification['kind'], owner: string, name: string, number?: number): string | null {
+function notificationRoute(
+  kind: ForgeNotification['kind'],
+  owner: string,
+  name: string,
+  number?: number
+): string | null {
   if (!owner || !name) {
     return null
   }
   if ((kind === 'issue' || kind === 'pull') && number) {
-    return issuePath({ provider: 'codeberg', id: String(number), isPull: kind === 'pull', repo: { owner, name } })
+    return issuePath({
+      provider: 'codeberg',
+      id: String(number),
+      isPull: kind === 'pull',
+      repo: { owner, name }
+    })
   }
   return null
 }
@@ -448,7 +718,7 @@ function eventKind(op: string): ForgeEventKind {
   }
 }
 
-function mapEvent(e: any): ForgeContribution | null {
+function mapEvent(e: CbActivityResponse): ForgeContribution | null {
   const actor = mapUser(e.act_user)
   const repo = repoFromRaw(e.repo)
   if (!actor || !repo) {
@@ -457,7 +727,9 @@ function mapEvent(e: any): ForgeContribution | null {
   const kind = eventKind(String(e.op_type ?? ''))
   const title = e.content ?? e.ref_name ?? repo.fullName
   const baseUrl = repo.url ?? `${WEB}/${repo.fullName}`
-  const url = e.ref_name ? `${baseUrl}/src/branch/${encodeURIComponent(String(e.ref_name))}` : baseUrl
+  const url = e.ref_name
+    ? `${baseUrl}/src/branch/${encodeURIComponent(String(e.ref_name))}`
+    : baseUrl
   return {
     provider: 'codeberg',
     id: String(e.id ?? `${e.op_type}-${e.created}`),
@@ -472,8 +744,16 @@ function mapEvent(e: any): ForgeContribution | null {
   }
 }
 
-async function cbFetch<T>(path: string, query?: Record<string, unknown>, opts?: ForgeReadOptions): Promise<T> {
-  return await $fetch(`${API}${path}`, { headers: cbHeaders(opts), query, signal: opts?.signal }) as T
+async function cbFetch<T>(
+  path: string,
+  query?: Record<string, unknown>,
+  opts?: ForgeReadOptions
+): Promise<T> {
+  return (await $fetch(`${API}${path}`, {
+    headers: cbHeaders(opts),
+    query,
+    signal: opts?.signal
+  })) as T
 }
 
 export const codebergProvider: ForgeProvider = {
@@ -499,13 +779,15 @@ export const codebergProvider: ForgeProvider = {
     mergeQueue: false
   },
   webUrl: (owner, repo) => `${WEB}/${owner}/${repo}`,
-  ownerWebUrl: owner => `${WEB}/${owner}`,
+  ownerWebUrl: (owner) => `${WEB}/${owner}`,
 
   async getRepo(owner, repo, opts) {
     const [raw, languages, topics] = await Promise.all([
-      cbFetch<any>(`/repos/${owner}/${repo}`, undefined, opts),
-      cbFetch<Record<string, number>>(`/repos/${owner}/${repo}/languages`, undefined, opts).catch(() => null),
-      cbFetch<any>(`/repos/${owner}/${repo}/topics`, undefined, opts).catch(() => null)
+      cbFetch<CbRepoResponse>(`/repos/${owner}/${repo}`, undefined, opts),
+      cbFetch<Record<string, number>>(`/repos/${owner}/${repo}/languages`, undefined, opts).catch(
+        () => null
+      ),
+      cbFetch<CbTopicsResponse>(`/repos/${owner}/${repo}/topics`, undefined, opts).catch(() => null)
     ])
     const mapped = mapRepo(raw)
     mapped.language = topLanguage(languages)
@@ -515,39 +797,62 @@ export const codebergProvider: ForgeProvider = {
 
   async getOverview(owner, repo, opts) {
     const meta = await codebergProvider.getRepo!(owner, repo, opts)
-    const entries = await getRootTree(owner, repo, meta.defaultBranch, opts).catch(() => [] as ForgeTreeEntry[])
+    const entries = await getRootTree(owner, repo, meta.defaultBranch, opts).catch(
+      () => [] as ForgeTreeEntry[]
+    )
     const readme = await getReadme(owner, repo, meta.defaultBranch, entries, opts)
     return { repo: meta, entries, readme }
   },
 
   async listRepos(owner, opts) {
-    const data = await cbFetch<any[]>(`/users/${owner}/repos`, { limit: 60, page: 1, sort: 'updated' }, opts).catch(() => [])
+    const data = await cbFetch<CbRepoResponse[]>(
+      `/users/${owner}/repos`,
+      { limit: 60, page: 1, sort: 'updated' },
+      opts
+    ).catch(() => [])
     return (data ?? []).map(mapRepo)
   },
 
   async listBranches(repo, opts) {
-    const data = await cbFetch<any[]>(`/repos/${repo.owner}/${repo.name}/branches`, { limit: 100 }, opts)
-    return (data ?? []).map((b): ForgeBranch => ({
-      name: b.name,
-      isDefault: b.name === repo.ref?.defaultBranch,
-      commit: { sha: b.commit?.id, message: b.commit?.message, when: b.commit?.timestamp }
-    }))
+    const data = await cbFetch<CbBranchResponse[]>(
+      `/repos/${repo.owner}/${repo.name}/branches`,
+      { limit: 100 },
+      opts
+    )
+    return (data ?? []).map(
+      (b): ForgeBranch => ({
+        name: b.name,
+        isDefault: b.name === repo.ref?.defaultBranch,
+        commit: { sha: b.commit?.id, message: b.commit?.message, when: b.commit?.timestamp }
+      })
+    )
   },
 
   async getTree(repo, ref, path, opts) {
-    const data = await $fetch<any>(contentUrl(repo.owner, repo.name, path), {
-      headers: cbHeaders(opts),
-      query: { ref },
-      signal: opts?.signal
-    })
+    const data = await $fetch<CbContentResponse | CbContentResponse[]>(
+      contentUrl(repo.owner, repo.name, path),
+      {
+        headers: cbHeaders(opts),
+        query: { ref },
+        signal: opts?.signal
+      }
+    )
     const arr = Array.isArray(data) ? data : [data]
     return arr
-      .map((e: any): ForgeTreeEntry => ({ name: e.name, path: e.path, type: e.type === 'dir' ? 'dir' : 'file', size: e.size, sha: e.sha }))
+      .map(
+        (e: CbContentResponse): ForgeTreeEntry => ({
+          name: e.name ?? '',
+          path: e.path ?? '',
+          type: e.type === 'dir' ? 'dir' : 'file',
+          size: e.size,
+          sha: e.sha
+        })
+      )
       .sort(sortEntries)
   },
 
   async getBlob(repo, ref, path, opts) {
-    const r = await $fetch<any>(contentUrl(repo.owner, repo.name, path), {
+    const r = await $fetch<CbContentResponse>(contentUrl(repo.owner, repo.name, path), {
       headers: cbHeaders(opts),
       query: { ref },
       signal: opts?.signal
@@ -567,14 +872,22 @@ export const codebergProvider: ForgeProvider = {
   async listCommits(repo, ref, opts) {
     const limit = opts?.limit ?? 30
     const page = opts?.cursor ? Number(opts.cursor) : 1
-    const data = await cbFetch<any[]>(`/repos/${repo.owner}/${repo.name}/commits`, { sha: ref, page, limit }, opts)
+    const data = await cbFetch<CbCommitResponse[]>(
+      `/repos/${repo.owner}/${repo.name}/commits`,
+      { sha: ref, page, limit },
+      opts
+    )
     const items = (data ?? []).map(mapCommit)
     return { items, cursor: items.length === limit ? String(page + 1) : undefined }
   },
 
   async getCommit(repo, sha, opts) {
     const [r, diffText] = await Promise.all([
-      cbFetch<any>(`/repos/${repo.owner}/${repo.name}/git/commits/${sha}`, { stat: true, files: true, verification: false }, opts),
+      cbFetch<CbGitCommitResponse>(
+        `/repos/${repo.owner}/${repo.name}/git/commits/${sha}`,
+        { stat: true, files: true, verification: false },
+        opts
+      ),
       $fetch<string>(`${API}/repos/${repo.owner}/${repo.name}/git/commits/${sha}.diff`, {
         headers: cbHeaders(opts),
         signal: opts?.signal,
@@ -585,28 +898,42 @@ export const codebergProvider: ForgeProvider = {
     const base = mapCommit(r)
     return {
       ...base,
-      stat: { additions: r.stats?.additions, deletions: r.stats?.deletions, filesChanged: r.files?.length },
-      files: (r.files ?? []).map((f: any) => mapFileDiff(f, patches[f.filename] ?? null))
+      stat: {
+        additions: r.stats?.additions,
+        deletions: r.stats?.deletions,
+        filesChanged: r.files?.length
+      },
+      files: (r.files ?? []).map((f: CbFileDiffResponse) =>
+        mapFileDiff(f, patches[f.filename ?? ''] ?? null)
+      )
     } satisfies ForgeCommitDetail
   },
 
   async listIssues(repo, opts) {
     const limit = opts?.limit ?? 30
     const page = opts?.cursor ? Number(opts.cursor) : 1
-    const data = await cbFetch<any[]>(`/repos/${repo.owner}/${repo.name}/issues`, {
-      type: 'issues',
-      state: opts?.state ?? 'open',
-      page,
-      limit
-    }, opts)
+    const data = await cbFetch<CbIssueResponse[]>(
+      `/repos/${repo.owner}/${repo.name}/issues`,
+      {
+        type: 'issues',
+        state: opts?.state ?? 'open',
+        page,
+        limit
+      },
+      opts
+    )
     const items = (data ?? []).map(mapIssue)
     return { items, cursor: items.length === limit ? String(page + 1) : undefined }
   },
 
   async getIssue(repo, id, opts): Promise<ForgeIssueDetail> {
     const [issue, comments] = await Promise.all([
-      cbFetch<any>(`/repos/${repo.owner}/${repo.name}/issues/${id}`, undefined, opts),
-      cbFetch<any[]>(`/repos/${repo.owner}/${repo.name}/issues/${id}/comments`, { limit: 100 }, opts).catch(() => [])
+      cbFetch<CbIssueResponse>(`/repos/${repo.owner}/${repo.name}/issues/${id}`, undefined, opts),
+      cbFetch<CbCommentResponse[]>(
+        `/repos/${repo.owner}/${repo.name}/issues/${id}/comments`,
+        { limit: 100 },
+        opts
+      ).catch(() => [])
     ])
     return { ...mapIssue(issue), comments: (comments ?? []).map(mapComment) }
   },
@@ -614,26 +941,39 @@ export const codebergProvider: ForgeProvider = {
   async listPulls(repo, opts) {
     const limit = opts?.limit ?? 30
     const page = opts?.cursor ? Number(opts.cursor) : 1
-    const state = opts?.state === 'merged' || opts?.state === 'draft' ? 'all' : opts?.state ?? 'open'
-    const data = await cbFetch<any[]>(`/repos/${repo.owner}/${repo.name}/pulls`, { state, page, limit }, opts)
+    const state =
+      opts?.state === 'merged' || opts?.state === 'draft' ? 'all' : (opts?.state ?? 'open')
+    const data = await cbFetch<CbPullResponse[]>(
+      `/repos/${repo.owner}/${repo.name}/pulls`,
+      { state, page, limit },
+      opts
+    )
     let items = (data ?? []).map(mapPull)
     if (opts?.state === 'merged') {
-      items = items.filter(p => p.state === 'merged')
+      items = items.filter((p) => p.state === 'merged')
     }
     if (opts?.state === 'draft') {
-      items = items.filter(p => p.state === 'draft')
+      items = items.filter((p) => p.state === 'draft')
     }
     if (opts?.state === 'closed') {
-      items = items.filter(p => p.state === 'closed')
+      items = items.filter((p) => p.state === 'closed')
     }
     return { items, cursor: (data ?? []).length === limit ? String(page + 1) : undefined }
   },
 
   async getPull(repo, id, opts): Promise<ForgePullDetail> {
     const [pr, comments, commits] = await Promise.all([
-      cbFetch<any>(`/repos/${repo.owner}/${repo.name}/pulls/${id}`, undefined, opts),
-      cbFetch<any[]>(`/repos/${repo.owner}/${repo.name}/issues/${id}/comments`, { limit: 100 }, opts).catch(() => []),
-      cbFetch<any[]>(`/repos/${repo.owner}/${repo.name}/pulls/${id}/commits`, { limit: 100 }, opts).catch(() => [])
+      cbFetch<CbPullResponse>(`/repos/${repo.owner}/${repo.name}/pulls/${id}`, undefined, opts),
+      cbFetch<CbCommentResponse[]>(
+        `/repos/${repo.owner}/${repo.name}/issues/${id}/comments`,
+        { limit: 100 },
+        opts
+      ).catch(() => []),
+      cbFetch<CbCommitResponse[]>(
+        `/repos/${repo.owner}/${repo.name}/pulls/${id}/commits`,
+        { limit: 100 },
+        opts
+      ).catch(() => [])
     ])
     return {
       ...mapPull(pr),
@@ -644,19 +984,31 @@ export const codebergProvider: ForgeProvider = {
   },
 
   async getPullFiles(repo, id, opts) {
-    const data = await cbFetch<any[]>(`/repos/${repo.owner}/${repo.name}/pulls/${id}/files`, { limit: 100 }, opts)
-    return (data ?? []).map((f: any) => mapFileDiff(f))
+    const data = await cbFetch<CbFileDiffResponse[]>(
+      `/repos/${repo.owner}/${repo.name}/pulls/${id}/files`,
+      { limit: 100 },
+      opts
+    )
+    return (data ?? []).map((f: CbFileDiffResponse) => mapFileDiff(f))
   },
 
   async getPullCommits(repo, id, opts) {
-    const data = await cbFetch<any[]>(`/repos/${repo.owner}/${repo.name}/pulls/${id}/commits`, { limit: 100 }, opts)
+    const data = await cbFetch<CbCommitResponse[]>(
+      `/repos/${repo.owner}/${repo.name}/pulls/${id}/commits`,
+      { limit: 100 },
+      opts
+    )
     return (data ?? []).map(mapCommit)
   },
 
   async searchRepos(q, opts): Promise<Paginated<ForgeRepo>> {
     const page = opts?.cursor ? Number(opts.cursor) : 1
     const limit = opts?.limit ?? 20
-    const data = await cbFetch<any>(`/repos/search`, { q, sort: mapSort(opts?.sort), order: opts?.order, page, limit }, opts)
+    const data = await cbFetch<CbSearchReposResponse>(
+      `/repos/search`,
+      { q, sort: mapSort(opts?.sort), order: opts?.order, page, limit },
+      opts
+    )
     const items = (data?.data ?? []).map(mapRepo)
     return { items, cursor: items.length === limit ? String(page + 1) : undefined }
   },
@@ -664,16 +1016,22 @@ export const codebergProvider: ForgeProvider = {
   async searchIssues(q, opts): Promise<Paginated<ForgeIssue>> {
     const page = opts?.cursor ? Number(opts.cursor) : 1
     const limit = opts?.limit ?? 20
-    const data = await cbFetch<any[]>(`/repos/issues/search`, { q, type: 'issues', state: 'open', page, limit }, opts)
-    const items = (data ?? []).map((r: any) => mapSearchIssue(r, false))
+    const data = await cbFetch<CbSearchIssueResponse[]>(
+      `/repos/issues/search`,
+      { q, type: 'issues', state: 'open', page, limit },
+      opts
+    )
+    const items = (data ?? []).map((r: CbSearchIssueResponse) => mapSearchIssue(r, false))
     return { items, cursor: items.length === limit ? String(page + 1) : undefined }
   },
 
   async searchUsers(q, opts): Promise<Paginated<ForgeUser>> {
     const page = opts?.cursor ? Number(opts.cursor) : 1
     const limit = opts?.limit ?? 20
-    const data = await cbFetch<any>(`/users/search`, { q, page, limit }, opts)
-    const items = (data?.data ?? []).map(mapUser).filter((u: ForgeUser | undefined): u is ForgeUser => !!u)
+    const data = await cbFetch<CbSearchUsersResponse>(`/users/search`, { q, page, limit }, opts)
+    const items = (data?.data ?? [])
+      .map(mapUser)
+      .filter((u: ForgeUser | undefined): u is ForgeUser => !!u)
     return { items, cursor: items.length === limit ? String(page + 1) : undefined }
   },
 
@@ -683,8 +1041,12 @@ export const codebergProvider: ForgeProvider = {
       return []
     }
     const page = opts?.cursor ? Number(opts.cursor) : 1
-    const data = await cbFetch<any[]>(`/notifications`, { 'all': false, 'status-types': 'unread', 'page': page, 'limit': opts?.limit ?? 30 }, { ...opts, token })
-    return (data ?? []).map((n: any): ForgeNotification => {
+    const data = await cbFetch<CbNotificationResponse[]>(
+      `/notifications`,
+      { all: false, 'status-types': 'unread', page: page, limit: opts?.limit ?? 30 },
+      { ...opts, token }
+    )
+    return (data ?? []).map((n: CbNotificationResponse): ForgeNotification => {
       const repo = repoFromRaw(n.repository)
       const kind = notificationKind(String(n.subject?.type ?? ''))
       const number = notificationNumber(n.subject?.url ?? n.subject?.html_url)
@@ -699,7 +1061,7 @@ export const codebergProvider: ForgeProvider = {
         updatedAt: n.updated_at,
         repo: repo ? { owner: repo.owner, name: repo.name, fullName: repo.fullName } : undefined,
         to,
-        url: to ? null : n.subject?.html_url ?? repo?.url ?? null
+        url: to ? null : (n.subject?.html_url ?? repo?.url ?? null)
       }
     })
   },
@@ -711,12 +1073,14 @@ export const codebergProvider: ForgeProvider = {
     }
     const headers = cbHeaders({ ...opts, token })
     const [raw, me] = await Promise.all([
-      $fetch<any[]>(`${API}/notifications`, {
+      $fetch<CbNotificationResponse[]>(`${API}/notifications`, {
         headers,
-        query: { 'all': false, 'status-types': 'unread', 'limit': opts?.limit ?? 50 },
+        query: { all: false, 'status-types': 'unread', limit: opts?.limit ?? 50 },
         signal: opts?.signal
       }).catch(() => []),
-      $fetch<any>(`${API}/user`, { headers, signal: opts?.signal }).catch(() => null)
+      $fetch<CbUserResponse | null>(`${API}/user`, { headers, signal: opts?.signal }).catch(
+        () => null
+      )
     ])
     const myLogin = loginOf(me).toLowerCase()
     const items = await cbMapLimit(raw ?? [], 6, async (n): Promise<ForgeInboxItem | null> => {
@@ -744,8 +1108,14 @@ export const codebergProvider: ForgeProvider = {
       }
       try {
         const path = kind === 'pull' ? 'pulls' : 'issues'
-        const subj = await $fetch<any>(`${API}/repos/${repo.owner}/${repo.name}/${path}/${number}`, { headers, signal: opts?.signal })
-        const resolved = kind === 'pull' ? !!(subj.merged_at || subj.merged || subj.state === 'closed') : subj.state === 'closed'
+        const subj = await $fetch<CbPullResponse>(
+          `${API}/repos/${repo.owner}/${repo.name}/${path}/${number}`,
+          { headers, signal: opts?.signal }
+        )
+        const resolved =
+          kind === 'pull'
+            ? !!(subj.merged_at || subj.merged || subj.state === 'closed')
+            : subj.state === 'closed'
         item.state = kind === 'pull' ? pullState(subj) : subj.state === 'closed' ? 'closed' : 'open'
         item.resolved = resolved
         item.author = mapUser(subj.user)
@@ -753,16 +1123,23 @@ export const codebergProvider: ForgeProvider = {
         item.isBot = !!bk
         item.botKind = bk
         if (kind === 'pull') {
-          item.stat = { additions: subj.additions, deletions: subj.deletions, filesChanged: subj.changed_files }
+          item.stat = {
+            additions: subj.additions,
+            deletions: subj.deletions,
+            filesChanged: subj.changed_files
+          }
         }
         if (!resolved && n.unread && (subj.comments ?? 0) > 0) {
-          const comments = await $fetch<any[]>(`${API}/repos/${repo.owner}/${repo.name}/issues/${number}/comments`, {
-            headers,
-            query: { limit: 100 },
-            signal: opts?.signal
-          }).catch(() => [])
+          const comments = await $fetch<CbCommentResponse[]>(
+            `${API}/repos/${repo.owner}/${repo.name}/issues/${number}/comments`,
+            {
+              headers,
+              query: { limit: 100 },
+              signal: opts?.signal
+            }
+          ).catch(() => [])
           item.unreadComments = (comments ?? [])
-            .filter((c: any) => loginOf(c.user).toLowerCase() !== myLogin)
+            .filter((c: CbCommentResponse) => loginOf(c.user).toLowerCase() !== myLogin)
             .slice(-3)
             .map(mapComment)
         }
@@ -783,12 +1160,15 @@ export const codebergProvider: ForgeProvider = {
   },
 
   async createComment(repo, id, body, opts): Promise<ForgeComment> {
-    const c = await $fetch<any>(`${API}/repos/${repo.owner}/${repo.name}/issues/${id}/comments`, {
-      method: 'POST',
-      headers: cbHeaders(opts),
-      body: { body },
-      signal: opts?.signal
-    })
+    const c = await $fetch<CbCommentResponse>(
+      `${API}/repos/${repo.owner}/${repo.name}/issues/${id}/comments`,
+      {
+        method: 'POST',
+        headers: cbHeaders(opts),
+        body: { body },
+        signal: opts?.signal
+      }
+    )
     return mapComment(c)
   },
 
@@ -799,7 +1179,11 @@ export const codebergProvider: ForgeProvider = {
       body.body = input.body
     }
     if (input.comments?.length) {
-      body.comments = input.comments.map(c => ({ path: c.path, body: c.body, new_position: c.line }))
+      body.comments = input.comments.map((c) => ({
+        path: c.path,
+        body: c.body,
+        new_position: c.line
+      }))
     }
     await $fetch(`${API}/repos/${repo.owner}/${repo.name}/pulls/${id}/reviews`, {
       method: 'POST',
@@ -864,18 +1248,27 @@ export const codebergProvider: ForgeProvider = {
     if (!token) {
       return []
     }
-    const following = await cbFetch<any[]>(`/user/following`, { limit: 100 }, { ...opts, token }).catch(() => [])
+    const following = await cbFetch<CbUserResponse[]>(
+      `/user/following`,
+      { limit: 100 },
+      { ...opts, token }
+    ).catch(() => [])
     const perOwner = await cbMapLimit((following ?? []).slice(0, 20), 6, async (u) => {
       const login = loginOf(u)
       if (!login) {
         return [] as ForgeRepo[]
       }
-      const data = await cbFetch<any[]>(`/users/${login}/repos`, { limit: 5, page: 1, sort: 'updated' }, { ...opts, token }).catch(() => [])
+      const data = await cbFetch<CbRepoResponse[]>(
+        `/users/${login}/repos`,
+        { limit: 5, page: 1, sort: 'updated' },
+        { ...opts, token }
+      ).catch(() => [])
       return (data ?? []).map(mapRepo)
     })
     const seen = new Set<string>()
-    return perOwner.flat()
-      .filter(r => !r.isFork && !r.isPrivate)
+    return perOwner
+      .flat()
+      .filter((r) => !r.isFork && !r.isPrivate)
       .filter((r) => {
         if (seen.has(r.fullName)) {
           return false
@@ -891,14 +1284,22 @@ export const codebergProvider: ForgeProvider = {
     if (!token) {
       return []
     }
-    const data = await cbFetch<any[]>(`/user/following`, { limit: opts?.limit ?? 100 }, { ...opts, token }).catch(() => [])
+    const data = await cbFetch<CbUserResponse[]>(
+      `/user/following`,
+      { limit: opts?.limit ?? 100 },
+      { ...opts, token }
+    ).catch(() => [])
     return (data ?? []).map(mapUser).filter((u): u is ForgeUser => !!u)
   },
 
   async listUserEvents(login, opts): Promise<ForgeContribution[]> {
     const limit = Math.min(opts?.limit ?? 100, 100)
     const page = opts?.cursor ? Number(opts.cursor) : 1
-    const data = await cbFetch<any[]>(`/users/${encodeURIComponent(login)}/activities/feeds`, { 'only-performed-by': true, page, limit }, opts).catch(() => [])
+    const data = await cbFetch<CbActivityResponse[]>(
+      `/users/${encodeURIComponent(login)}/activities/feeds`,
+      { 'only-performed-by': true, page, limit },
+      opts
+    ).catch(() => [])
     return (data ?? []).map(mapEvent).filter((c): c is ForgeContribution => !!c)
   },
 
@@ -908,8 +1309,8 @@ export const codebergProvider: ForgeProvider = {
       return { authoredPulls: [], reviewRequests: [], assignedIssues: [] }
     }
     const run = (query: Record<string, unknown>, isPull: boolean): Promise<ForgeIssue[]> =>
-      cbFetch<any[]>(`/repos/issues/search`, query, { ...opts, token })
-        .then(items => (items ?? []).map((r: any) => mapSearchIssue(r, isPull)))
+      cbFetch<CbSearchIssueResponse[]>(`/repos/issues/search`, query, { ...opts, token })
+        .then((items) => (items ?? []).map((r: CbSearchIssueResponse) => mapSearchIssue(r, isPull)))
         .catch(() => [] as ForgeIssue[])
     const [authoredPulls, reviewRequests, assignedIssues] = await Promise.all([
       run({ type: 'pulls', state: 'open', created: true, limit: 50 }, true),

@@ -1,4 +1,4 @@
-import type { AsyncData, AsyncDataOptions } from '#app'
+import type { AsyncData, AsyncDataOptions, NuxtError } from '#app'
 import { TTL } from '~/lib/cache'
 
 interface LiveOptions {
@@ -21,7 +21,7 @@ export function useLiveAsyncData<T>(
   key: string | (() => string),
   handler: () => Promise<T>,
   options: AsyncDataOptions<T> & LiveOptions = {}
-): AsyncData<T | undefined, unknown> {
+): AsyncData<T | undefined, NuxtError> {
   const { staleAfter = TTL.SHORT, ...asyncOptions } = options
   const result = useAsyncData<T>(key, handler, asyncOptions)
 
@@ -49,5 +49,5 @@ export function useLiveAsyncData<T>(
     })
   }
 
-  return result as AsyncData<T | undefined, unknown>
+  return result as AsyncData<T | undefined, NuxtError>
 }

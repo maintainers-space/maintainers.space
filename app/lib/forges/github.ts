@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import type {
   ForgeActionJob,
   ForgeActionRun,
@@ -39,9 +38,374 @@ import { getForgeToken } from '~/lib/forges/token-store'
 
 const API = 'https://api.github.com'
 
-function ghHeaders(opts?: ForgeReadOptions, accept = 'application/vnd.github+json'): Record<string, string> {
+// Raw GitHub REST/GraphQL API response shapes -----------------------------
+// These mirror only the fields actually read by the mapX() functions below;
+// they are not exhaustive representations of GitHub's API responses.
+
+interface GhUserResponse {
+  login?: string
+  avatar_url?: string | null
+  html_url?: string | null
+  type?: string
+}
+
+interface GhLabelResponse {
+  name: string
+  color?: string | null
+  description?: string | null
+}
+
+interface GhRepoResponse {
+  owner?: GhUserResponse | null
+  name: string
+  full_name?: string
+  description?: string | null
+  default_branch?: string
+  html_url: string
+  homepage?: string | null
+  language?: string | null
+  topics?: string[]
+  stargazers_count?: number
+  forks_count?: number
+  subscribers_count?: number
+  watchers_count?: number
+  open_issues_count?: number
+  private?: boolean
+  fork?: boolean
+  license?: { spdx_id?: string | null } | null
+  created_at?: string | null
+  pushed_at?: string | null
+  updated_at?: string | null
+}
+
+interface GhIssueResponse {
+  number: number
+  title: string
+  state?: string
+  user?: GhUserResponse | null
+  body?: string | null
+  comments?: number
+  labels?: (string | GhLabelResponse)[]
+  created_at?: string | null
+  updated_at?: string | null
+  closed_at?: string | null
+  html_url?: string
+  pull_request?: unknown
+  /** Present on /search/issues results. */
+  repository_url?: string
+}
+
+interface GhPullResponse {
+  number: number
+  title: string
+  state?: string
+  merged_at?: string | null
+  merged?: boolean
+  draft?: boolean
+  user?: GhUserResponse | null
+  body?: string | null
+  comments?: number
+  labels?: { name: string; color?: string | null }[]
+  head?: { ref?: string }
+  base?: { ref?: string }
+  created_at?: string | null
+  updated_at?: string | null
+  closed_at?: string | null
+  html_url?: string
+  additions?: number
+  deletions?: number
+  changed_files?: number
+  commits?: number
+}
+
+interface GhCommentResponse {
+  id: number | string
+  user?: GhUserResponse | null
+  body?: string | null
+  created_at?: string | null
+  html_url?: string
+}
+
+interface GhCommitGitActor {
+  name?: string
+  email?: string
+  date?: string
+}
+
+interface GhCommitResponse {
+  sha: string
+  commit?: {
+    message?: string
+    author?: GhCommitGitActor | null
+    committer?: GhCommitGitActor | null
+  }
+  author?: GhUserResponse | null
+  committer?: GhUserResponse | null
+  html_url?: string
+  parents?: { sha: string }[]
+  stats?: { additions?: number; deletions?: number }
+  files?: GhFileDiffResponse[]
+}
+
+interface GhFileDiffResponse {
+  previous_filename?: string
+  filename: string
+  status?: string
+  additions?: number
+  deletions?: number
+  patch?: string | null
+  changes?: number
+}
+
+interface GhActionRunResponse {
+  id: number | string
+  name?: string
+  display_title?: string
+  run_number?: number
+  status?: string | null
+  conclusion?: string | null
+  event?: string
+  head_branch?: string
+  head_sha?: string
+  head_commit?: { message?: string } | null
+  actor?: GhUserResponse | null
+  created_at?: string | null
+  updated_at?: string | null
+  html_url?: string
+}
+
+interface GhActionRunsListResponse {
+  workflow_runs?: GhActionRunResponse[]
+  total_count?: number
+}
+
+interface GhActionJobResponse {
+  id: number | string
+  name: string
+  status?: string | null
+  conclusion?: string | null
+  started_at?: string | null
+  completed_at?: string | null
+  html_url?: string
+  steps?: { name: string; number?: number; status?: string | null; conclusion?: string | null }[]
+}
+
+interface GhActionJobsListResponse {
+  jobs?: GhActionJobResponse[]
+}
+
+/** Shape of a single entry returned by the repo-contents endpoint (file or dir listing). */
+interface GhTreeEntryResponse {
+  name: string
+  path: string
+  type?: string
+  size?: number
+  sha?: string
+  content?: string
+  encoding?: string
+}
+
+interface GhReadmeResponse {
+  name: string
+  content: string
+}
+
+interface GhBranchResponse {
+  name: string
+  commit?: { sha?: string }
+}
+
+interface GhMergeResultResponse {
+  merged?: boolean
+  message?: string
+}
+
+interface GhEventActor {
+  login?: string
+  avatar_url?: string
+}
+
+interface GhEventRepoRef {
+  name?: string
+}
+
+interface GhEventPushCommit {
+  sha?: string
+  message?: string
+}
+
+interface GhEventPayload {
+  size?: number
+  commits?: GhEventPushCommit[]
+  head?: string
+  ref?: string
+  ref_type?: string
+  action?: string
+  number?: number
+  pull_request?: { merged?: boolean; title?: string; number?: number; html_url?: string }
+  review?: { html_url?: string }
+  issue?: { title?: string; number?: number; html_url?: string }
+  comment?: { html_url?: string }
+  release?: { name?: string; tag_name?: string; html_url?: string }
+  forkee?: { html_url?: string }
+}
+
+/** A raw item from the GitHub events API (/users/:login/events). */
+interface GhEventResponse {
+  id?: string | number
+  type?: string
+  actor?: GhEventActor
+  repo?: GhEventRepoRef
+  created_at?: string
+  payload?: GhEventPayload
+}
+
+interface GhNotificationResponse {
+  id: string | number
+  repository?: {
+    owner?: { login?: string }
+    name?: string
+    full_name?: string
+    html_url?: string
+  }
+  subject?: {
+    type?: string
+    title?: string
+    url?: string
+  }
+  reason?: string
+  unread?: boolean
+  updated_at?: string
+  last_read_at?: string | null
+}
+
+interface GhSearchReposResponse {
+  items?: GhRepoResponse[]
+  total_count?: number
+  incomplete_results?: boolean
+}
+
+interface GhSearchIssuesResponse {
+  items?: GhIssueResponse[]
+  total_count?: number
+  incomplete_results?: boolean
+}
+
+interface GhSearchCodeItem {
+  repository?: {
+    owner?: GhUserResponse | null
+    name?: string
+    full_name?: string
+    html_url?: string
+  }
+  path: string
+  html_url?: string
+  text_matches?: { fragment?: string }[]
+}
+
+interface GhSearchCodeResponse {
+  items?: GhSearchCodeItem[]
+  total_count?: number
+}
+
+interface GhSearchUsersResponse {
+  items?: GhUserResponse[]
+  total_count?: number
+}
+
+/** A GraphQL author/actor reference (discussions, merge queue entries). */
+interface GhGraphqlActor {
+  login?: string
+  avatarUrl?: string
+  url?: string
+}
+
+interface GhGraphqlDiscussionCommentNode {
+  id: string
+  body: string
+  createdAt: string
+  url: string
+  author?: GhGraphqlActor | null
+}
+
+/**
+ * A discussion node from the GraphQL API. Serves the list, detail and search
+ * queries, which each select a slightly different subset of these fields.
+ */
+interface GhGraphqlDiscussionNode {
+  number: number
+  title: string
+  createdAt: string
+  updatedAt?: string
+  url: string
+  answerChosenAt?: string | null
+  category?: { name?: string } | null
+  comments?: { totalCount?: number; nodes?: GhGraphqlDiscussionCommentNode[] }
+  author?: GhGraphqlActor | null
+  /** Present on the single-discussion detail query. */
+  body?: string
+  /** Present on the cross-repo discussion search query. */
+  repository?: {
+    name: string
+    nameWithOwner: string
+    url: string
+    owner?: { login?: string }
+  }
+}
+
+interface GhGraphqlDiscussionListResponse {
+  repository?: {
+    discussions?: {
+      totalCount?: number
+      pageInfo?: { endCursor?: string; hasNextPage?: boolean }
+      nodes?: GhGraphqlDiscussionNode[]
+    }
+  }
+}
+
+interface GhGraphqlDiscussionDetailResponse {
+  repository?: {
+    discussion?: GhGraphqlDiscussionNode
+  }
+}
+
+interface GhGraphqlDiscussionSearchResponse {
+  search?: {
+    discussionCount?: number
+    pageInfo?: { endCursor?: string; hasNextPage?: boolean }
+    nodes?: (GhGraphqlDiscussionNode | null)[]
+  }
+}
+
+interface GhGraphqlPullRequestRef {
+  number?: number
+  title?: string
+  url?: string
+  author?: GhGraphqlActor | null
+}
+
+interface GhGraphqlMergeQueueEntryNode {
+  state?: string
+  enqueuedAt?: string | null
+  pullRequest?: GhGraphqlPullRequestRef
+}
+
+interface GhGraphqlMergeQueueResponse {
+  repository?: {
+    mergeQueue?: {
+      entries?: {
+        nodes?: (GhGraphqlMergeQueueEntryNode | null)[]
+      }
+    } | null
+  } | null
+}
+
+function ghHeaders(
+  opts?: ForgeReadOptions,
+  accept = 'application/vnd.github+json'
+): Record<string, string> {
   const headers: Record<string, string> = {
-    'Accept': accept,
+    Accept: accept,
     'X-GitHub-Api-Version': '2022-11-28'
   }
   const token = opts?.token ?? getForgeToken('github')
@@ -49,20 +413,29 @@ function ghHeaders(opts?: ForgeReadOptions, accept = 'application/vnd.github+jso
   return headers
 }
 
-async function ghGraphql<T>(query: string, variables: Record<string, unknown>, opts?: ForgeReadOptions): Promise<T> {
-  const res = await $fetch<{ data?: T, errors?: { message: string }[] }>(`${API}/graphql`, {
+async function ghGraphql<T>(
+  query: string,
+  variables: Record<string, unknown>,
+  opts?: ForgeReadOptions
+): Promise<T> {
+  const res = await $fetch<{ data?: T; errors?: { message: string }[] }>(`${API}/graphql`, {
     method: 'POST',
     headers: ghHeaders(opts),
     body: { query, variables },
     signal: opts?.signal
   })
-  if (res.errors?.length) throw createError({ statusCode: 400, statusMessage: res.errors[0]?.message ?? 'GraphQL error' })
+  if (res.errors?.length)
+    throw createError({ statusCode: 400, statusMessage: res.errors[0]?.message ?? 'GraphQL error' })
   return res.data as T
 }
 
 /** Bounded-concurrency map, so notification fan-out stays responsive. */
-async function ghMapLimit<T, R>(items: T[], concurrency: number, fn: (item: T) => Promise<R>): Promise<R[]> {
-  const results: R[] = new Array(items.length)
+async function ghMapLimit<T, R>(
+  items: T[],
+  concurrency: number,
+  fn: (item: T) => Promise<R>
+): Promise<R[]> {
+  const results: R[] = Array.from({ length: items.length })
   let cursor = 0
   async function worker(): Promise<void> {
     while (cursor < items.length) {
@@ -84,18 +457,27 @@ function botKindOf(login?: string | null): 'dependabot' | 'renovate' | null {
 }
 
 /** Best-effort HTTP status extraction from an ofetch error. */
-function errStatus(e: any): number | undefined {
-  return e?.statusCode ?? e?.status ?? e?.response?.status
+function errStatus(e: unknown): number | undefined {
+  if (!e || typeof e !== 'object') return undefined
+  const err = e as { statusCode?: number; status?: number; response?: { status?: number } }
+  return err.statusCode ?? err.status ?? err.response?.status
 }
 
-function mapDiscussion(d: any): ForgeDiscussion {
+function mapDiscussion(d: GhGraphqlDiscussionNode): ForgeDiscussion {
   return {
     provider: 'github',
     id: String(d.number),
     number: d.number,
     title: d.title,
     category: d.category?.name ?? null,
-    author: d.author ? { provider: 'github', login: d.author.login, avatarUrl: d.author.avatarUrl, url: d.author.url } : undefined,
+    author: d.author
+      ? {
+          provider: 'github',
+          login: d.author.login ?? '',
+          avatarUrl: d.author.avatarUrl,
+          url: d.author.url
+        }
+      : undefined,
     commentCount: d.comments?.totalCount,
     createdAt: d.createdAt,
     url: d.url,
@@ -105,7 +487,7 @@ function mapDiscussion(d: any): ForgeDiscussion {
 
 function decodeBase64Utf8(b64: string): string {
   const binary = atob(b64.replace(/\s/g, ''))
-  const bytes = Uint8Array.from(binary, ch => ch.charCodeAt(0))
+  const bytes = Uint8Array.from(binary, (ch) => ch.charCodeAt(0))
   return new TextDecoder().decode(bytes)
 }
 
@@ -127,7 +509,7 @@ function sortEntries(a: ForgeTreeEntry, b: ForgeTreeEntry): number {
   return a.name.localeCompare(b.name)
 }
 
-function mapUser(u: any): ForgeUser | undefined {
+function mapUser(u: GhUserResponse | null | undefined): ForgeUser | undefined {
   if (!u) return undefined
   return {
     provider: 'github',
@@ -137,7 +519,10 @@ function mapUser(u: any): ForgeUser | undefined {
   }
 }
 
-function mapCommitActor(gitActor: any, ghUser: any): ForgeCommitActor | undefined {
+function mapCommitActor(
+  gitActor: GhCommitGitActor | null | undefined,
+  ghUser: GhUserResponse | null | undefined
+): ForgeCommitActor | undefined {
   if (!gitActor && !ghUser) return undefined
   return {
     name: gitActor?.name,
@@ -148,7 +533,7 @@ function mapCommitActor(gitActor: any, ghUser: any): ForgeCommitActor | undefine
   }
 }
 
-function mapRepo(r: any): ForgeRepo {
+function mapRepo(r: GhRepoResponse): ForgeRepo {
   return {
     provider: 'github',
     owner: r.owner?.login ?? '',
@@ -157,7 +542,7 @@ function mapRepo(r: any): ForgeRepo {
     description: r.description ?? null,
     defaultBranch: r.default_branch || 'main',
     url: r.html_url,
-    ownerUrl: r.owner?.html_url,
+    ownerUrl: r.owner?.html_url ?? undefined,
     ownerAvatar: r.owner?.avatar_url ?? null,
     homepage: r.homepage || null,
     language: r.language ?? null,
@@ -174,7 +559,7 @@ function mapRepo(r: any): ForgeRepo {
   }
 }
 
-function mapIssue(r: any): ForgeIssue {
+function mapIssue(r: GhIssueResponse): ForgeIssue {
   return {
     provider: 'github',
     id: String(r.number),
@@ -184,7 +569,11 @@ function mapIssue(r: any): ForgeIssue {
     author: mapUser(r.user),
     body: r.body ?? null,
     commentCount: r.comments,
-    labels: (r.labels ?? []).map((l: any) => (typeof l === 'string' ? { name: l } : { name: l.name, color: l.color, description: l.description })),
+    labels: (r.labels ?? []).map((l) =>
+      typeof l === 'string'
+        ? { name: l }
+        : { name: l.name, color: l.color, description: l.description }
+    ),
     createdAt: r.created_at ?? null,
     updatedAt: r.updated_at ?? null,
     closedAt: r.closed_at ?? null,
@@ -193,14 +582,14 @@ function mapIssue(r: any): ForgeIssue {
   }
 }
 
-function pullState(r: any): ForgePullState {
+function pullState(r: GhPullResponse): ForgePullState {
   if (r.merged_at || r.merged) return 'merged'
   if (r.state === 'closed') return 'closed'
   if (r.draft) return 'draft'
   return 'open'
 }
 
-function mapPull(r: any): ForgePull {
+function mapPull(r: GhPullResponse): ForgePull {
   return {
     provider: 'github',
     id: String(r.number),
@@ -210,7 +599,7 @@ function mapPull(r: any): ForgePull {
     author: mapUser(r.user),
     body: r.body ?? null,
     commentCount: r.comments,
-    labels: (r.labels ?? []).map((l: any) => ({ name: l.name, color: l.color })),
+    labels: (r.labels ?? []).map((l) => ({ name: l.name, color: l.color })),
     sourceBranch: r.head?.ref,
     targetBranch: r.base?.ref,
     createdAt: r.created_at ?? null,
@@ -221,7 +610,7 @@ function mapPull(r: any): ForgePull {
   }
 }
 
-function mapComment(r: any): ForgeComment {
+function mapComment(r: GhCommentResponse): ForgeComment {
   return {
     id: String(r.id),
     author: mapUser(r.user),
@@ -231,7 +620,7 @@ function mapComment(r: any): ForgeComment {
   }
 }
 
-function mapCommit(r: any): ForgeCommit {
+function mapCommit(r: GhCommitResponse): ForgeCommit {
   const sha: string = r.sha
   return {
     sha,
@@ -240,13 +629,13 @@ function mapCommit(r: any): ForgeCommit {
     author: mapCommitActor(r.commit?.author, r.author),
     committer: mapCommitActor(r.commit?.committer, r.committer),
     url: r.html_url,
-    parents: (r.parents ?? []).map((p: any) => p.sha)
+    parents: (r.parents ?? []).map((p) => p.sha)
   }
 }
 
-function mapFileDiff(f: any): ForgeFileDiff {
-  const status: ForgeFileDiff['status']
-    = f.status === 'added'
+function mapFileDiff(f: GhFileDiffResponse): ForgeFileDiff {
+  const status: ForgeFileDiff['status'] =
+    f.status === 'added'
       ? 'added'
       : f.status === 'removed'
         ? 'removed'
@@ -268,19 +657,31 @@ function mapFileDiff(f: any): ForgeFileDiff {
   }
 }
 
-function ghRunStatus(status: string | null, conclusion: string | null): ForgeRunStatus {
-  if (status && status !== 'completed') return status === 'queued' || status === 'waiting' || status === 'pending' ? 'queued' : 'running'
+function ghRunStatus(
+  status: string | null | undefined,
+  conclusion: string | null | undefined
+): ForgeRunStatus {
+  if (status && status !== 'completed')
+    return status === 'queued' || status === 'waiting' || status === 'pending'
+      ? 'queued'
+      : 'running'
   switch (conclusion) {
-    case 'success': return 'success'
-    case 'failure': return 'failure'
-    case 'cancelled': return 'cancelled'
-    case 'skipped': return 'skipped'
-    case 'timed_out': return 'timed_out'
-    default: return 'unknown'
+    case 'success':
+      return 'success'
+    case 'failure':
+      return 'failure'
+    case 'cancelled':
+      return 'cancelled'
+    case 'skipped':
+      return 'skipped'
+    case 'timed_out':
+      return 'timed_out'
+    default:
+      return 'unknown'
   }
 }
 
-function mapRun(r: any): ForgeActionRun {
+function mapRun(r: GhActionRunResponse): ForgeActionRun {
   return {
     provider: 'github',
     id: String(r.id),
@@ -297,7 +698,7 @@ function mapRun(r: any): ForgeActionRun {
   }
 }
 
-function mapJob(j: any): ForgeActionJob {
+function mapJob(j: GhActionJobResponse): ForgeActionJob {
   return {
     id: String(j.id),
     name: j.name,
@@ -305,26 +706,48 @@ function mapJob(j: any): ForgeActionJob {
     startedAt: j.started_at ?? null,
     completedAt: j.completed_at ?? null,
     url: j.html_url,
-    steps: (j.steps ?? []).map((s: any) => ({ name: s.name, number: s.number, status: ghRunStatus(s.status, s.conclusion) }))
+    steps: (j.steps ?? []).map((s) => ({
+      name: s.name,
+      number: s.number,
+      status: ghRunStatus(s.status, s.conclusion)
+    }))
   }
 }
 
-async function getRootTree(owner: string, repo: string, opts?: ForgeReadOptions): Promise<ForgeTreeEntry[]> {
-  const data = await $fetch<any>(`${API}/repos/${owner}/${repo}/contents`, { headers: ghHeaders(opts), signal: opts?.signal })
+async function getRootTree(
+  owner: string,
+  repo: string,
+  opts?: ForgeReadOptions
+): Promise<ForgeTreeEntry[]> {
+  const data = await $fetch<GhTreeEntryResponse | GhTreeEntryResponse[]>(
+    `${API}/repos/${owner}/${repo}/contents`,
+    {
+      headers: ghHeaders(opts),
+      signal: opts?.signal
+    }
+  )
   const arr = Array.isArray(data) ? data : [data]
   return arr
-    .map((e: any): ForgeTreeEntry => ({ name: e.name, path: e.path, type: e.type === 'dir' ? 'dir' : 'file', size: e.size, sha: e.sha }))
+    .map(
+      (e): ForgeTreeEntry => ({
+        name: e.name,
+        path: e.path,
+        type: e.type === 'dir' ? 'dir' : 'file',
+        size: e.size,
+        sha: e.sha
+      })
+    )
     .sort(sortEntries)
 }
 
 async function getReadme(owner: string, repo: string, ref?: string, opts?: ForgeReadOptions) {
   try {
-    const r = await $fetch<any>(`${API}/repos/${owner}/${repo}/readme`, {
+    const r = await $fetch<GhReadmeResponse>(`${API}/repos/${owner}/${repo}/readme`, {
       headers: ghHeaders(opts),
       query: ref ? { ref } : undefined,
       signal: opts?.signal
     })
-    return { filename: r.name as string, content: decodeBase64Utf8(r.content) }
+    return { filename: r.name, content: decodeBase64Utf8(r.content) }
   } catch {
     return null
   }
@@ -347,14 +770,24 @@ const EVENT_IMPACT: Record<ForgeEventKind, number> = {
 }
 
 /** Map a raw GitHub events-API item into a normalized contribution (or null). */
-function mapEvent(e: any): ForgeContribution | null {
+function mapEvent(e: GhEventResponse): ForgeContribution | null {
   const type = String(e?.type ?? '')
-  const actor = mapUser({ login: e?.actor?.login, avatar_url: e?.actor?.avatar_url, html_url: `https://github.com/${e?.actor?.login}` })
+  const actor = mapUser({
+    login: e?.actor?.login,
+    avatar_url: e?.actor?.avatar_url,
+    html_url: `https://github.com/${e?.actor?.login}`
+  })
   const repoFull = String(e?.repo?.name ?? '')
   const [owner = '', name = ''] = repoFull.split('/')
   if (!actor || !owner || !name) return null
   const repo = { owner, name, fullName: repoFull, url: `https://github.com/${repoFull}` }
-  const base = { provider: 'github' as const, id: String(e.id), actor, repo, createdAt: String(e.created_at ?? '') }
+  const base = {
+    provider: 'github' as const,
+    id: String(e.id),
+    actor,
+    repo,
+    createdAt: String(e.created_at ?? '')
+  }
   const p = e.payload ?? {}
 
   let kind: ForgeEventKind
@@ -379,7 +812,12 @@ function mapEvent(e: any): ForgeContribution | null {
     }
     case 'PullRequestEvent': {
       const merged = !!p.pull_request?.merged
-      kind = p.action === 'closed' && merged ? 'pr_merged' : p.action === 'opened' || p.action === 'reopened' ? 'pr_opened' : 'other'
+      kind =
+        p.action === 'closed' && merged
+          ? 'pr_merged'
+          : p.action === 'opened' || p.action === 'reopened'
+            ? 'pr_opened'
+            : 'other'
       title = p.pull_request?.title
       number = p.number ?? p.pull_request?.number
       url = p.pull_request?.html_url
@@ -393,7 +831,12 @@ function mapEvent(e: any): ForgeContribution | null {
       break
     }
     case 'IssuesEvent': {
-      kind = p.action === 'closed' ? 'issue_closed' : p.action === 'opened' || p.action === 'reopened' ? 'issue_opened' : 'other'
+      kind =
+        p.action === 'closed'
+          ? 'issue_closed'
+          : p.action === 'opened' || p.action === 'reopened'
+            ? 'issue_opened'
+            : 'other'
       title = p.issue?.title
       number = p.issue?.number
       url = p.issue?.html_url
@@ -412,9 +855,10 @@ function mapEvent(e: any): ForgeContribution | null {
       kind = 'create'
       refType = p.ref_type
       title = p.ref ? `${p.ref_type} ${p.ref}` : p.ref_type
-      url = p.ref && p.ref_type !== 'repository'
-        ? `https://github.com/${repoFull}/tree/${p.ref}`
-        : `https://github.com/${repoFull}`
+      url =
+        p.ref && p.ref_type !== 'repository'
+          ? `https://github.com/${repoFull}/tree/${p.ref}`
+          : `https://github.com/${repoFull}`
       break
     }
     case 'ReleaseEvent': {
@@ -463,14 +907,24 @@ export const githubProvider: ForgeProvider = {
     mergeQueue: true
   },
   webUrl: (owner, repo) => `https://github.com/${owner}/${repo}`,
-  ownerWebUrl: owner => `https://github.com/${owner}`,
+  ownerWebUrl: (owner) => `https://github.com/${owner}`,
 
   async getRepo(owner, repo, opts) {
-    return mapRepo(await $fetch(`${API}/repos/${owner}/${repo}`, { headers: ghHeaders(opts), signal: opts?.signal }))
+    return mapRepo(
+      await $fetch<GhRepoResponse>(`${API}/repos/${owner}/${repo}`, {
+        headers: ghHeaders(opts),
+        signal: opts?.signal
+      })
+    )
   },
 
   async getOverview(owner, repo, opts) {
-    const meta = mapRepo(await $fetch(`${API}/repos/${owner}/${repo}`, { headers: ghHeaders(opts), signal: opts?.signal }))
+    const meta = mapRepo(
+      await $fetch<GhRepoResponse>(`${API}/repos/${owner}/${repo}`, {
+        headers: ghHeaders(opts),
+        signal: opts?.signal
+      })
+    )
     const [entries, readme] = await Promise.all([
       getRootTree(owner, repo, opts).catch(() => [] as ForgeTreeEntry[]),
       getReadme(owner, repo, undefined, opts)
@@ -479,35 +933,58 @@ export const githubProvider: ForgeProvider = {
   },
 
   async listRepos(owner, opts) {
-    const data = await $fetch<unknown[]>(`${API}/users/${owner}/repos`, {
+    const data = await $fetch<GhRepoResponse[]>(`${API}/users/${owner}/repos`, {
       headers: ghHeaders(opts),
       query: { per_page: 60, sort: 'updated', type: 'owner' },
       signal: opts?.signal
     })
-    return (data as any[]).map(mapRepo)
+    return data.map(mapRepo)
   },
 
   async listBranches(repo, opts) {
-    const data = await $fetch<any[]>(`${API}/repos/${repo.owner}/${repo.name}/branches`, {
-      headers: ghHeaders(opts), query: { per_page: 100 }, signal: opts?.signal
-    })
+    const data = await $fetch<GhBranchResponse[]>(
+      `${API}/repos/${repo.owner}/${repo.name}/branches`,
+      {
+        headers: ghHeaders(opts),
+        query: { per_page: 100 },
+        signal: opts?.signal
+      }
+    )
     return data.map((b): ForgeBranch => ({ name: b.name, commit: { sha: b.commit?.sha } }))
   },
 
   async getTree(repo, ref, path, opts) {
-    const data = await $fetch<any>(`${API}/repos/${repo.owner}/${repo.name}/contents/${encodePath(path)}`, {
-      headers: ghHeaders(opts), query: { ref }, signal: opts?.signal
-    })
+    const data = await $fetch<GhTreeEntryResponse | GhTreeEntryResponse[]>(
+      `${API}/repos/${repo.owner}/${repo.name}/contents/${encodePath(path)}`,
+      {
+        headers: ghHeaders(opts),
+        query: { ref },
+        signal: opts?.signal
+      }
+    )
     const arr = Array.isArray(data) ? data : [data]
     return arr
-      .map((e: any): ForgeTreeEntry => ({ name: e.name, path: e.path, type: e.type === 'dir' ? 'dir' : 'file', size: e.size, sha: e.sha }))
+      .map(
+        (e): ForgeTreeEntry => ({
+          name: e.name,
+          path: e.path,
+          type: e.type === 'dir' ? 'dir' : 'file',
+          size: e.size,
+          sha: e.sha
+        })
+      )
       .sort(sortEntries)
   },
 
   async getBlob(repo, ref, path, opts) {
-    const r = await $fetch<any>(`${API}/repos/${repo.owner}/${repo.name}/contents/${encodePath(path)}`, {
-      headers: ghHeaders(opts), query: { ref }, signal: opts?.signal
-    })
+    const r = await $fetch<GhTreeEntryResponse>(
+      `${API}/repos/${repo.owner}/${repo.name}/contents/${encodePath(path)}`,
+      {
+        headers: ghHeaders(opts),
+        query: { ref },
+        signal: opts?.signal
+      }
+    )
     const b64: string = r.content ?? ''
     const binary = looksBinary(b64)
     return {
@@ -523,19 +1000,34 @@ export const githubProvider: ForgeProvider = {
   async listCommits(repo, ref, opts) {
     const limit = opts?.limit ?? 30
     const page = opts?.cursor ? Number(opts.cursor) : 1
-    const data = await $fetch<any[]>(`${API}/repos/${repo.owner}/${repo.name}/commits`, {
-      headers: ghHeaders(opts), query: { sha: ref, per_page: limit, page }, signal: opts?.signal
-    })
+    const data = await $fetch<GhCommitResponse[]>(
+      `${API}/repos/${repo.owner}/${repo.name}/commits`,
+      {
+        headers: ghHeaders(opts),
+        query: { sha: ref, per_page: limit, page },
+        signal: opts?.signal
+      }
+    )
     const items = data.map(mapCommit)
     return { items, cursor: items.length === limit ? String(page + 1) : undefined }
   },
 
   async getCommit(repo, sha, opts) {
-    const r = await $fetch<any>(`${API}/repos/${repo.owner}/${repo.name}/commits/${sha}`, { headers: ghHeaders(opts), signal: opts?.signal })
+    const r = await $fetch<GhCommitResponse>(
+      `${API}/repos/${repo.owner}/${repo.name}/commits/${sha}`,
+      {
+        headers: ghHeaders(opts),
+        signal: opts?.signal
+      }
+    )
     const base = mapCommit(r)
     return {
       ...base,
-      stat: { additions: r.stats?.additions, deletions: r.stats?.deletions, filesChanged: r.files?.length },
+      stat: {
+        additions: r.stats?.additions,
+        deletions: r.stats?.deletions,
+        filesChanged: r.files?.length
+      },
       files: (r.files ?? []).map(mapFileDiff)
     } satisfies ForgeCommitDetail
   },
@@ -543,19 +1035,26 @@ export const githubProvider: ForgeProvider = {
   async listIssues(repo, opts) {
     const limit = opts?.limit ?? 30
     const page = opts?.cursor ? Number(opts.cursor) : 1
-    const data = await $fetch<any[]>(`${API}/repos/${repo.owner}/${repo.name}/issues`, {
+    const data = await $fetch<GhIssueResponse[]>(`${API}/repos/${repo.owner}/${repo.name}/issues`, {
       headers: ghHeaders(opts),
       query: { state: opts?.state ?? 'open', per_page: limit, page, sort: 'updated' },
       signal: opts?.signal
     })
-    const items = data.filter(r => !r.pull_request).map(mapIssue)
+    const items = data.filter((r) => !r.pull_request).map(mapIssue)
     return { items, cursor: data.length === limit ? String(page + 1) : undefined }
   },
 
   async getIssue(repo, id, opts): Promise<ForgeIssueDetail> {
     const [issue, comments] = await Promise.all([
-      $fetch<any>(`${API}/repos/${repo.owner}/${repo.name}/issues/${id}`, { headers: ghHeaders(opts), signal: opts?.signal }),
-      $fetch<any[]>(`${API}/repos/${repo.owner}/${repo.name}/issues/${id}/comments`, { headers: ghHeaders(opts), query: { per_page: 100 }, signal: opts?.signal }).catch(() => [])
+      $fetch<GhIssueResponse>(`${API}/repos/${repo.owner}/${repo.name}/issues/${id}`, {
+        headers: ghHeaders(opts),
+        signal: opts?.signal
+      }),
+      $fetch<GhCommentResponse[]>(`${API}/repos/${repo.owner}/${repo.name}/issues/${id}/comments`, {
+        headers: ghHeaders(opts),
+        query: { per_page: 100 },
+        signal: opts?.signal
+      }).catch(() => [])
     ])
     return { ...mapIssue(issue), comments: comments.map(mapComment) }
   },
@@ -563,22 +1062,32 @@ export const githubProvider: ForgeProvider = {
   async listPulls(repo, opts) {
     const limit = opts?.limit ?? 30
     const page = opts?.cursor ? Number(opts.cursor) : 1
-    const state = opts?.state === 'merged' || opts?.state === 'draft' ? 'all' : (opts?.state ?? 'open')
-    const data = await $fetch<any[]>(`${API}/repos/${repo.owner}/${repo.name}/pulls`, {
-      headers: ghHeaders(opts), query: { state, per_page: limit, page, sort: 'updated', direction: 'desc' }, signal: opts?.signal
+    const state =
+      opts?.state === 'merged' || opts?.state === 'draft' ? 'all' : (opts?.state ?? 'open')
+    const data = await $fetch<GhPullResponse[]>(`${API}/repos/${repo.owner}/${repo.name}/pulls`, {
+      headers: ghHeaders(opts),
+      query: { state, per_page: limit, page, sort: 'updated', direction: 'desc' },
+      signal: opts?.signal
     })
     let items = data.map(mapPull)
-    if (opts?.state === 'merged') items = items.filter(p => p.state === 'merged')
-    if (opts?.state === 'draft') items = items.filter(p => p.state === 'draft')
+    if (opts?.state === 'merged') items = items.filter((p) => p.state === 'merged')
+    if (opts?.state === 'draft') items = items.filter((p) => p.state === 'draft')
     // GitHub's `state=closed` bundles merged PRs in; "Closed" should mean closed-not-merged.
-    if (opts?.state === 'closed') items = items.filter(p => p.state === 'closed')
+    if (opts?.state === 'closed') items = items.filter((p) => p.state === 'closed')
     return { items, cursor: data.length === limit ? String(page + 1) : undefined }
   },
 
   async getPull(repo, id, opts): Promise<ForgePullDetail> {
     const [pr, comments] = await Promise.all([
-      $fetch<any>(`${API}/repos/${repo.owner}/${repo.name}/pulls/${id}`, { headers: ghHeaders(opts), signal: opts?.signal }),
-      $fetch<any[]>(`${API}/repos/${repo.owner}/${repo.name}/issues/${id}/comments`, { headers: ghHeaders(opts), query: { per_page: 100 }, signal: opts?.signal }).catch(() => [])
+      $fetch<GhPullResponse>(`${API}/repos/${repo.owner}/${repo.name}/pulls/${id}`, {
+        headers: ghHeaders(opts),
+        signal: opts?.signal
+      }),
+      $fetch<GhCommentResponse[]>(`${API}/repos/${repo.owner}/${repo.name}/issues/${id}/comments`, {
+        headers: ghHeaders(opts),
+        query: { per_page: 100 },
+        signal: opts?.signal
+      }).catch(() => [])
     ])
     return {
       ...mapPull(pr),
@@ -589,16 +1098,26 @@ export const githubProvider: ForgeProvider = {
   },
 
   async getPullFiles(repo, id, opts) {
-    const data = await $fetch<any[]>(`${API}/repos/${repo.owner}/${repo.name}/pulls/${id}/files`, {
-      headers: ghHeaders(opts), query: { per_page: 100 }, signal: opts?.signal
-    })
+    const data = await $fetch<GhFileDiffResponse[]>(
+      `${API}/repos/${repo.owner}/${repo.name}/pulls/${id}/files`,
+      {
+        headers: ghHeaders(opts),
+        query: { per_page: 100 },
+        signal: opts?.signal
+      }
+    )
     return data.map(mapFileDiff)
   },
 
   async getPullCommits(repo, id, opts) {
-    const data = await $fetch<any[]>(`${API}/repos/${repo.owner}/${repo.name}/pulls/${id}/commits`, {
-      headers: ghHeaders(opts), query: { per_page: 100 }, signal: opts?.signal
-    })
+    const data = await $fetch<GhCommitResponse[]>(
+      `${API}/repos/${repo.owner}/${repo.name}/pulls/${id}/commits`,
+      {
+        headers: ghHeaders(opts),
+        query: { per_page: 100 },
+        signal: opts?.signal
+      }
+    )
     return data.map(mapCommit)
   },
 
@@ -616,22 +1135,33 @@ export const githubProvider: ForgeProvider = {
         }
       }
     }`
-    let data: any
+    let data: GhGraphqlMergeQueueResponse | undefined
     try {
-      data = await ghGraphql<any>(query, { owner: repo.owner, name: repo.name, branch: branch ?? null }, opts)
+      data = await ghGraphql<GhGraphqlMergeQueueResponse>(
+        query,
+        { owner: repo.owner, name: repo.name, branch: branch ?? null },
+        opts
+      )
     } catch {
       return null
     }
     const mq = data?.repository?.mergeQueue
     if (!mq) return null
-    const nodes: any[] = (mq.entries?.nodes ?? []).filter(Boolean)
+    const nodes = (mq.entries?.nodes ?? []).filter((n): n is GhGraphqlMergeQueueEntryNode => !!n)
     const entries: ForgeMergeQueueEntry[] = nodes.map((n, i) => {
       const a = n.pullRequest?.author
       return {
         position: i + 1,
         number: n.pullRequest?.number,
         title: n.pullRequest?.title ?? '',
-        author: a ? { provider: 'github', login: a.login ?? '', avatarUrl: a.avatarUrl ?? null, url: a.url ?? null } : undefined,
+        author: a
+          ? {
+              provider: 'github',
+              login: a.login ?? '',
+              avatarUrl: a.avatarUrl ?? null,
+              url: a.url ?? null
+            }
+          : undefined,
         status: n.state ?? undefined,
         enqueuedAt: n.enqueuedAt ?? null,
         url: n.pullRequest?.url ?? null,
@@ -645,17 +1175,36 @@ export const githubProvider: ForgeProvider = {
   async listActionRuns(repo, opts) {
     const limit = opts?.limit ?? 30
     const page = opts?.cursor ? Number(opts.cursor) : 1
-    const data = await $fetch<any>(`${API}/repos/${repo.owner}/${repo.name}/actions/runs`, {
-      headers: ghHeaders(opts), query: { per_page: limit, page }, signal: opts?.signal
-    })
+    const data = await $fetch<GhActionRunsListResponse>(
+      `${API}/repos/${repo.owner}/${repo.name}/actions/runs`,
+      {
+        headers: ghHeaders(opts),
+        query: { per_page: limit, page },
+        signal: opts?.signal
+      }
+    )
     const runs = (data.workflow_runs ?? []).map(mapRun)
-    return { items: runs, total: data.total_count, cursor: runs.length === limit ? String(page + 1) : undefined }
+    return {
+      items: runs,
+      total: data.total_count,
+      cursor: runs.length === limit ? String(page + 1) : undefined
+    }
   },
 
   async getActionRun(repo, id, opts) {
     const [run, jobs] = await Promise.all([
-      $fetch<any>(`${API}/repos/${repo.owner}/${repo.name}/actions/runs/${id}`, { headers: ghHeaders(opts), signal: opts?.signal }),
-      $fetch<any>(`${API}/repos/${repo.owner}/${repo.name}/actions/runs/${id}/jobs`, { headers: ghHeaders(opts), query: { per_page: 100 }, signal: opts?.signal }).catch(() => ({ jobs: [] }))
+      $fetch<GhActionRunResponse>(`${API}/repos/${repo.owner}/${repo.name}/actions/runs/${id}`, {
+        headers: ghHeaders(opts),
+        signal: opts?.signal
+      }),
+      $fetch<GhActionJobsListResponse>(
+        `${API}/repos/${repo.owner}/${repo.name}/actions/runs/${id}/jobs`,
+        {
+          headers: ghHeaders(opts),
+          query: { per_page: 100 },
+          signal: opts?.signal
+        }
+      ).catch(() => ({ jobs: [] }))
     ])
     return { ...mapRun(run), jobs: (jobs.jobs ?? []).map(mapJob) }
   },
@@ -672,14 +1221,26 @@ export const githubProvider: ForgeProvider = {
         }
       }
     }`
-    const res = await ghGraphql<any>(query, { owner: repo.owner, name: repo.name, first: opts?.limit ?? 30, after: opts?.cursor ?? null }, opts)
+    const res = await ghGraphql<GhGraphqlDiscussionListResponse>(
+      query,
+      { owner: repo.owner, name: repo.name, first: opts?.limit ?? 30, after: opts?.cursor ?? null },
+      opts
+    )
     const conn = res?.repository?.discussions
-    const items = (conn?.nodes ?? []).map((d: any): ForgeDiscussion => mapDiscussion(d))
-    return { items, total: conn?.totalCount, cursor: conn?.pageInfo?.hasNextPage ? conn.pageInfo.endCursor : undefined }
+    const items = (conn?.nodes ?? []).map((d): ForgeDiscussion => mapDiscussion(d))
+    return {
+      items,
+      total: conn?.totalCount,
+      cursor: conn?.pageInfo?.hasNextPage ? conn.pageInfo.endCursor : undefined
+    }
   },
 
   async getDiscussion(repo, id, opts): Promise<ForgeDiscussionDetail> {
-    if (!opts?.token) throw createError({ statusCode: 401, statusMessage: 'A GitHub token is required to view discussions.' })
+    if (!opts?.token)
+      throw createError({
+        statusCode: 401,
+        statusMessage: 'A GitHub token is required to view discussions.'
+      })
     const query = `query($owner:String!,$name:String!,$number:Int!){
       repository(owner:$owner,name:$name){
         discussion(number:$number){ number title body createdAt updatedAt url answerChosenAt
@@ -687,52 +1248,81 @@ export const githubProvider: ForgeProvider = {
           comments(first:50){ nodes{ id body createdAt url author{login avatarUrl url} } } }
       }
     }`
-    const res = await ghGraphql<any>(query, { owner: repo.owner, name: repo.name, number: Number(id) }, opts)
+    const res = await ghGraphql<GhGraphqlDiscussionDetailResponse>(
+      query,
+      { owner: repo.owner, name: repo.name, number: Number(id) },
+      opts
+    )
     const d = res?.repository?.discussion
     if (!d) throw createError({ statusCode: 404, statusMessage: 'Discussion not found.' })
     return {
       ...mapDiscussion(d),
       body: d.body,
-      comments: (d.comments?.nodes ?? []).map((c: any): ForgeComment => ({
-        id: String(c.id),
-        author: c.author ? { provider: 'github', login: c.author.login, avatarUrl: c.author.avatarUrl, url: c.author.url } : undefined,
-        body: c.body ?? '',
-        createdAt: c.createdAt,
-        url: c.url
-      }))
+      comments: (d.comments?.nodes ?? []).map(
+        (c): ForgeComment => ({
+          id: String(c.id),
+          author: c.author
+            ? {
+                provider: 'github',
+                login: c.author.login ?? '',
+                avatarUrl: c.author.avatarUrl,
+                url: c.author.url
+              }
+            : undefined,
+          body: c.body ?? '',
+          createdAt: c.createdAt,
+          url: c.url
+        })
+      )
     }
   },
 
   async searchRepos(q, opts): Promise<Paginated<ForgeRepo>> {
     const page = opts?.cursor ? Number(opts.cursor) : 1
     const perPage = opts?.limit ?? 20
-    const data = await $fetch<any>(`${API}/search/repositories`, {
+    const data = await $fetch<GhSearchReposResponse>(`${API}/search/repositories`, {
       headers: ghHeaders(opts),
       query: { q, per_page: perPage, page, sort: mapSort(opts?.sort), order: opts?.order },
       signal: opts?.signal
     })
     const items = (data.items ?? []).map(mapRepo)
-    return { items, total: data.total_count, incomplete: data.incomplete_results, cursor: items.length === perPage ? String(page + 1) : undefined }
+    return {
+      items,
+      total: data.total_count,
+      incomplete: data.incomplete_results,
+      cursor: items.length === perPage ? String(page + 1) : undefined
+    }
   },
 
   async searchIssues(q, opts): Promise<Paginated<ForgeIssue>> {
     const page = opts?.cursor ? Number(opts.cursor) : 1
     const perPage = opts?.limit ?? 20
-    const data = await $fetch<any>(`${API}/search/issues`, {
+    const data = await $fetch<GhSearchIssuesResponse>(`${API}/search/issues`, {
       headers: ghHeaders(opts, 'application/vnd.github.text-match+json'),
       query: { q, per_page: perPage, page, sort: mapSort(opts?.sort), order: opts?.order },
       signal: opts?.signal
     })
-    const items = (data.items ?? []).map((r: any) => {
+    const items = (data.items ?? []).map((r) => {
       const issue = mapIssue(r)
       const repoUrl = r.repository_url ? String(r.repository_url) : ''
       const parts = repoUrl.split('/')
       const name = parts.pop() || ''
       const owner = parts.pop() || ''
-      issue.repo = { provider: 'github', owner, name, fullName: `${owner}/${name}`, url: `https://github.com/${owner}/${name}` }
+      issue.repo = {
+        provider: 'github',
+        owner,
+        name,
+        fullName: `${owner}/${name}`,
+        url: `https://github.com/${owner}/${name}`
+      }
       return issue
     })
-    return { items, total: data.total_count, incomplete: data.incomplete_results, cursor: items.length === perPage ? String(page + 1) : undefined }
+    return {
+      items,
+      total: data.total_count,
+      incomplete: data.incomplete_results,
+      cursor: items.length === perPage ? String(page + 1) : undefined
+    }
   },
 
   async searchCode(q, opts): Promise<Paginated<ForgeSearchCode>> {
@@ -740,31 +1330,53 @@ export const githubProvider: ForgeProvider = {
     if (!opts?.token) return { items: [], incomplete: true }
     const page = opts?.cursor ? Number(opts.cursor) : 1
     const perPage = opts?.limit ?? 20
-    const data = await $fetch<any>(`${API}/search/code`, {
+    const data = await $fetch<GhSearchCodeResponse>(`${API}/search/code`, {
       headers: ghHeaders(opts, 'application/vnd.github.text-match+json'),
       query: { q, per_page: perPage, page },
       signal: opts?.signal
     })
-    const items = (data.items ?? []).map((r: any): ForgeSearchCode => ({
-      provider: 'github',
-      repo: { owner: r.repository?.owner?.login ?? '', name: r.repository?.name ?? '', fullName: r.repository?.full_name ?? '', url: r.repository?.html_url },
-      path: r.path,
-      url: r.html_url,
-      fragments: (r.text_matches ?? []).map((m: any) => m.fragment).filter(Boolean)
-    }))
-    return { items, total: data.total_count, cursor: items.length === perPage ? String(page + 1) : undefined }
+    const items = (data.items ?? []).map(
+      (r): ForgeSearchCode => ({
+        provider: 'github',
+        repo: {
+          owner: r.repository?.owner?.login ?? '',
+          name: r.repository?.name ?? '',
+          fullName: r.repository?.full_name ?? '',
+          url: r.repository?.html_url
+        },
+        path: r.path,
+        url: r.html_url,
+        fragments: (r.text_matches ?? []).map((m) => m.fragment).filter(Boolean) as string[]
+      })
+    )
+    return {
+      items,
+      total: data.total_count,
+      cursor: items.length === perPage ? String(page + 1) : undefined
+    }
   },
 
   async searchUsers(q, opts): Promise<Paginated<ForgeUser>> {
     const page = opts?.cursor ? Number(opts.cursor) : 1
     const perPage = opts?.limit ?? 20
-    const data = await $fetch<any>(`${API}/search/users`, {
-      headers: ghHeaders(opts), query: { q, per_page: perPage, page }, signal: opts?.signal
+    const data = await $fetch<GhSearchUsersResponse>(`${API}/search/users`, {
+      headers: ghHeaders(opts),
+      query: { q, per_page: perPage, page },
+      signal: opts?.signal
     })
-    const items = (data.items ?? []).map((u: any): ForgeUser => ({
-      provider: 'github', login: u.login, avatarUrl: u.avatar_url, url: u.html_url
-    }))
-    return { items, total: data.total_count, cursor: items.length === perPage ? String(page + 1) : undefined }
+    const items = (data.items ?? []).map(
+      (u): ForgeUser => ({
+        provider: 'github',
+        login: u.login ?? '',
+        avatarUrl: u.avatar_url,
+        url: u.html_url
+      })
+    )
+    return {
+      items,
+      total: data.total_count,
+      cursor: items.length === perPage ? String(page + 1) : undefined
+    }
   },
 
   async searchDiscussions(q, opts): Promise<Paginated<ForgeDiscussion>> {
@@ -780,30 +1392,47 @@ export const githubProvider: ForgeProvider = {
         } }
       }
     }`
-    const res = await ghGraphql<any>(query, { q, first: opts?.limit ?? 20, after: opts?.cursor ?? null }, opts)
+    const res = await ghGraphql<GhGraphqlDiscussionSearchResponse>(
+      query,
+      { q, first: opts?.limit ?? 20, after: opts?.cursor ?? null },
+      opts
+    )
     const conn = res?.search
-    const items = (conn?.nodes ?? []).filter(Boolean).map((d: any): ForgeDiscussion => {
-      const base = mapDiscussion(d)
-      const r = d.repository
-      if (r) base.repo = { provider: 'github', owner: r.owner?.login ?? '', name: r.name ?? '', fullName: r.nameWithOwner ?? '', url: r.url }
-      return base
-    })
-    return { items, total: conn?.discussionCount, cursor: conn?.pageInfo?.hasNextPage ? conn.pageInfo.endCursor : undefined }
+    const items = (conn?.nodes ?? [])
+      .filter((d): d is GhGraphqlDiscussionNode => !!d)
+      .map((d): ForgeDiscussion => {
+        const base = mapDiscussion(d)
+        const r = d.repository
+        if (r)
+          base.repo = {
+            provider: 'github',
+            owner: r.owner?.login ?? '',
+            name: r.name ?? '',
+            fullName: r.nameWithOwner ?? '',
+            url: r.url
+          }
+        return base
+      })
+    return {
+      items,
+      total: conn?.discussionCount,
+      cursor: conn?.pageInfo?.hasNextPage ? conn.pageInfo.endCursor : undefined
+    }
   },
 
   async listNotifications(opts): Promise<ForgeNotification[]> {
     if (!opts?.token) return []
-    const data = await $fetch<any[]>(`${API}/notifications`, {
+    const data = await $fetch<GhNotificationResponse[]>(`${API}/notifications`, {
       headers: ghHeaders(opts),
       query: { per_page: opts?.limit ?? 30, all: false },
       signal: opts?.signal
     })
-    return (data ?? []).map((n: any): ForgeNotification => {
+    return (data ?? []).map((n): ForgeNotification => {
       const owner = n.repository?.owner?.login ?? ''
       const name = n.repository?.name ?? ''
       const type = String(n.subject?.type ?? '').toLowerCase()
-      const kind: ForgeNotification['kind']
-        = type === 'pullrequest'
+      const kind: ForgeNotification['kind'] =
+        type === 'pullrequest'
           ? 'pull'
           : type === 'issue'
             ? 'issue'
@@ -817,9 +1446,12 @@ export const githubProvider: ForgeProvider = {
       const apiUrl = String(n.subject?.url ?? '')
       const numMatch = apiUrl.match(/\/(?:issues|pulls)\/(\d+)$/)
       const seg = kind === 'pull' ? 'pulls' : 'issues'
-      const to = owner && name && numMatch
-        ? `/github/${owner}/${name}/${seg}/${numMatch[1]}`
-        : owner && name ? `/github/${owner}/${name}` : null
+      const to =
+        owner && name && numMatch
+          ? `/github/${owner}/${name}/${seg}/${numMatch[1]}`
+          : owner && name
+            ? `/github/${owner}/${name}`
+            : null
       return {
         provider: 'github',
         id: String(n.id),
@@ -828,7 +1460,10 @@ export const githubProvider: ForgeProvider = {
         reason: n.reason,
         unread: !!n.unread,
         updatedAt: n.updated_at,
-        repo: owner && name ? { owner, name, fullName: n.repository?.full_name ?? `${owner}/${name}` } : undefined,
+        repo:
+          owner && name
+            ? { owner, name, fullName: n.repository?.full_name ?? `${owner}/${name}` }
+            : undefined,
         to,
         url: n.repository?.html_url
       }
@@ -840,8 +1475,12 @@ export const githubProvider: ForgeProvider = {
     if (!token) return []
     const headers = ghHeaders(opts)
     const [raw, me] = await Promise.all([
-      $fetch<any[]>(`${API}/notifications`, { headers, query: { per_page: opts?.limit ?? 50, all: false }, signal: opts?.signal }).catch(() => []),
-      $fetch<any>(`${API}/user`, { headers, signal: opts?.signal }).catch(() => null)
+      $fetch<GhNotificationResponse[]>(`${API}/notifications`, {
+        headers,
+        query: { per_page: opts?.limit ?? 50, all: false },
+        signal: opts?.signal
+      }).catch(() => []),
+      $fetch<GhUserResponse>(`${API}/user`, { headers, signal: opts?.signal }).catch(() => null)
     ])
     const myLogin = String(me?.login ?? '').toLowerCase()
 
@@ -852,8 +1491,8 @@ export const githubProvider: ForgeProvider = {
       const apiUrl = String(n.subject?.url ?? '')
       const numMatch = apiUrl.match(/\/(?:issues|pulls)\/(\d+)$/)
       const number = numMatch ? Number(numMatch[1]) : undefined
-      const kind: ForgeNotification['kind']
-        = type === 'pullrequest'
+      const kind: ForgeNotification['kind'] =
+        type === 'pullrequest'
           ? 'pull'
           : type === 'issue'
             ? 'issue'
@@ -863,13 +1502,18 @@ export const githubProvider: ForgeProvider = {
                 ? 'commit'
                 : type === 'release'
                   ? 'release'
-                  : type === 'checksuite' ? 'ci' : 'other'
+                  : type === 'checksuite'
+                    ? 'ci'
+                    : 'other'
       const seg = kind === 'pull' ? 'pulls' : 'issues'
-      const to = kind === 'ci' && owner && name
-        ? `/github/${owner}/${name}/actions`
-        : owner && name && number
-          ? `/github/${owner}/${name}/${seg}/${number}`
-          : owner && name ? `/github/${owner}/${name}` : null
+      const to =
+        kind === 'ci' && owner && name
+          ? `/github/${owner}/${name}/actions`
+          : owner && name && number
+            ? `/github/${owner}/${name}/${seg}/${number}`
+            : owner && name
+              ? `/github/${owner}/${name}`
+              : null
 
       const item: ForgeInboxItem = {
         provider: 'github',
@@ -879,7 +1523,10 @@ export const githubProvider: ForgeProvider = {
         reason: n.reason,
         unread: !!n.unread,
         updatedAt: n.updated_at,
-        repo: owner && name ? { owner, name, fullName: n.repository?.full_name ?? `${owner}/${name}` } : undefined,
+        repo:
+          owner && name
+            ? { owner, name, fullName: n.repository?.full_name ?? `${owner}/${name}` }
+            : undefined,
         to,
         url: n.repository?.html_url,
         number
@@ -889,31 +1536,44 @@ export const githubProvider: ForgeProvider = {
       // group them under "recently resolved".
       if ((kind === 'pull' || kind === 'issue') && apiUrl && number) {
         try {
-          const subj = await $fetch<any>(apiUrl, { headers, signal: opts?.signal })
-          const resolved = kind === 'pull' ? !!(subj.merged_at || subj.state === 'closed') : subj.state === 'closed'
-          item.state = kind === 'pull' ? pullState(subj) : (subj.state === 'closed' ? 'closed' : 'open')
+          const subj = await $fetch<GhPullResponse>(apiUrl, { headers, signal: opts?.signal })
+          const resolved =
+            kind === 'pull'
+              ? !!(subj.merged_at || subj.state === 'closed')
+              : subj.state === 'closed'
+          item.state =
+            kind === 'pull' ? pullState(subj) : subj.state === 'closed' ? 'closed' : 'open'
           item.resolved = resolved
           item.author = mapUser(subj.user)
           const bk = botKindOf(subj.user?.login)
           item.isBot = !!bk
           item.botKind = bk
           if (kind === 'pull') {
-            item.stat = { additions: subj.additions, deletions: subj.deletions, filesChanged: subj.changed_files }
+            item.stat = {
+              additions: subj.additions,
+              deletions: subj.deletions,
+              filesChanged: subj.changed_files
+            }
           }
           if (!resolved && n.unread && (subj.comments ?? 0) > 0) {
             const since = n.last_read_at
-            const cs = await $fetch<any[]>(`${API}/repos/${owner}/${name}/issues/${number}/comments`, {
-              headers,
-              query: since ? { since, per_page: 100 } : { per_page: 100 },
-              signal: opts?.signal
-            }).catch(() => [])
+            const cs = await $fetch<GhCommentResponse[]>(
+              `${API}/repos/${owner}/${name}/issues/${number}/comments`,
+              {
+                headers,
+                query: since ? { since, per_page: 100 } : { per_page: 100 },
+                signal: opts?.signal
+              }
+            ).catch(() => [])
             item.unreadComments = (cs ?? [])
-              .filter((c: any) => String(c.user?.login ?? '').toLowerCase() !== myLogin)
-              .filter((c: any) => !since || String(c.created_at) > String(since))
+              .filter((c) => String(c.user?.login ?? '').toLowerCase() !== myLogin)
+              .filter((c) => !since || String(c.created_at) > String(since))
               .slice(-3)
               .map(mapComment)
           }
-        } catch { /* subject unreadable (deleted / no access): keep un-enriched */ }
+        } catch {
+          /* subject unreadable (deleted / no access): keep un-enriched */
+        }
       }
       return item
     })
@@ -929,12 +1589,15 @@ export const githubProvider: ForgeProvider = {
   },
 
   async createComment(repo, id, body, opts): Promise<ForgeComment> {
-    const c = await $fetch<any>(`${API}/repos/${repo.owner}/${repo.name}/issues/${id}/comments`, {
-      method: 'POST',
-      headers: ghHeaders(opts),
-      body: { body },
-      signal: opts?.signal
-    })
+    const c = await $fetch<GhCommentResponse>(
+      `${API}/repos/${repo.owner}/${repo.name}/issues/${id}/comments`,
+      {
+        method: 'POST',
+        headers: ghHeaders(opts),
+        body: { body },
+        signal: opts?.signal
+      }
+    )
     return mapComment(c)
   },
 
@@ -942,7 +1605,7 @@ export const githubProvider: ForgeProvider = {
     const body: Record<string, unknown> = { event: input.event }
     if (input.body) body.body = input.body
     if (input.comments?.length) {
-      body.comments = input.comments.map(c => ({
+      body.comments = input.comments.map((c) => ({
         path: c.path,
         line: c.line,
         side: 'RIGHT',
@@ -963,12 +1626,15 @@ export const githubProvider: ForgeProvider = {
     let lastErr: unknown
     for (const method of methods) {
       try {
-        const r = await $fetch<any>(`${API}/repos/${repo.owner}/${repo.name}/pulls/${id}/merge`, {
-          method: 'PUT',
-          headers: ghHeaders(opts),
-          body: { merge_method: method },
-          signal: opts?.signal
-        })
+        const r = await $fetch<GhMergeResultResponse>(
+          `${API}/repos/${repo.owner}/${repo.name}/pulls/${id}/merge`,
+          {
+            method: 'PUT',
+            headers: ghHeaders(opts),
+            body: { merge_method: method },
+            signal: opts?.signal
+          }
+        )
         return { merged: !!r.merged, message: r.message }
       } catch (e) {
         lastErr = e
@@ -1009,54 +1675,57 @@ export const githubProvider: ForgeProvider = {
     if (!token) return []
     const headers = ghHeaders(opts)
     // Only people, not orgs: /user/following mixes in Organization accounts.
-    const following = await $fetch<any[]>(`${API}/user/following`, {
+    const following = await $fetch<GhUserResponse[]>(`${API}/user/following`, {
       headers,
       query: { per_page: 100 },
       signal: opts?.signal
     }).catch(() => [])
-    const owners = (following as any[])
-      .filter(u => String(u.type) === 'User')
-      .map(u => String(u.login))
-    const perOwner = await Promise.all(owners.slice(0, 20).map(async (login) => {
-      try {
-        const data = await $fetch<any[]>(`${API}/users/${login}/repos`, {
-          headers,
-          query: { per_page: 5, sort: 'pushed', type: 'owner' },
-          signal: opts?.signal
-        })
-        return (data ?? []).map(mapRepo)
-      } catch {
-        return [] as ForgeRepo[]
-      }
-    }))
+    const owners = following.filter((u) => String(u.type) === 'User').map((u) => String(u.login))
+    const perOwner = await Promise.all(
+      owners.slice(0, 20).map(async (login) => {
+        try {
+          const data = await $fetch<GhRepoResponse[]>(`${API}/users/${login}/repos`, {
+            headers,
+            query: { per_page: 5, sort: 'pushed', type: 'owner' },
+            signal: opts?.signal
+          })
+          return (data ?? []).map(mapRepo)
+        } catch {
+          return [] as ForgeRepo[]
+        }
+      })
+    )
     const seen = new Set<string>()
     return perOwner
       .flat()
-      .filter(r => !r.isFork && !r.isPrivate)
-      .filter(r => (seen.has(r.fullName) ? false : (seen.add(r.fullName), true)))
+      .filter((r) => !r.isFork && !r.isPrivate)
+      .filter((r) => (seen.has(r.fullName) ? false : (seen.add(r.fullName), true)))
       .sort((a, b) => String(b.updatedAt ?? '').localeCompare(String(a.updatedAt ?? '')))
   },
 
   async listFollowing(opts): Promise<ForgeUser[]> {
     const token = opts?.token ?? getForgeToken('github')
     if (!token) return []
-    const data = await $fetch<any[]>(`${API}/user/following`, {
+    const data = await $fetch<GhUserResponse[]>(`${API}/user/following`, {
       headers: ghHeaders(opts),
       query: { per_page: opts?.limit ?? 100 },
       signal: opts?.signal
     }).catch(() => [])
     return (data ?? [])
-      .filter(u => String(u.type) === 'User')
-      .map(u => mapUser(u))
+      .filter((u) => String(u.type) === 'User')
+      .map((u) => mapUser(u))
       .filter((u): u is ForgeUser => !!u)
   },
 
   async listUserEvents(login, opts): Promise<ForgeContribution[]> {
-    const data = await $fetch<any[]>(`${API}/users/${encodeURIComponent(login)}/events`, {
-      headers: ghHeaders(opts),
-      query: { per_page: Math.min(opts?.limit ?? 100, 100) },
-      signal: opts?.signal
-    }).catch(() => [])
+    const data = await $fetch<GhEventResponse[]>(
+      `${API}/users/${encodeURIComponent(login)}/events`,
+      {
+        headers: ghHeaders(opts),
+        query: { per_page: Math.min(opts?.limit ?? 100, 100) },
+        signal: opts?.signal
+      }
+    ).catch(() => [])
     return (data ?? []).map(mapEvent).filter((c): c is ForgeContribution => !!c)
   },
 
@@ -1065,7 +1734,7 @@ export const githubProvider: ForgeProvider = {
     if (!token) return { authoredPulls: [], reviewRequests: [], assignedIssues: [] }
     const run = (q: string): Promise<ForgeIssue[]> =>
       githubProvider.searchIssues!(q, { token, sort: 'updated', order: 'desc', limit: 8 })
-        .then(r => r.items)
+        .then((r) => r.items)
         .catch(() => [] as ForgeIssue[])
     const [authoredPulls, reviewRequests, assignedIssues] = await Promise.all([
       run('is:open is:pr author:@me archived:false'),
@@ -1082,9 +1751,13 @@ function encodePath(path: string): string {
 
 function mapSort(sort?: ForgeSearchOptions['sort']): string | undefined {
   switch (sort) {
-    case 'stars': return 'stars'
-    case 'forks': return 'forks'
-    case 'updated': return 'updated'
-    default: return undefined
+    case 'stars':
+      return 'stars'
+    case 'forks':
+      return 'forks'
+    case 'updated':
+      return 'updated'
+    default:
+      return undefined
   }
 }

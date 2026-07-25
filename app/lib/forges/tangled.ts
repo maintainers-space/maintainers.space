@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any -- XRPC responses are untyped JSON */
 import { resolveHandleToDid } from '~/lib/atproto/public'
 import { noCacheHeaders } from '~/lib/reload-nav'
 import type {
@@ -58,6 +57,107 @@ interface ResolvedRepo {
   value: TangledRepoValue
 }
 
+interface TangledAuthorInfo {
+  Name?: string
+  Email?: string
+  When?: string
+}
+
+// Commit records come back from two different Tangled endpoints with
+// differently-cased fields (`sh.tangled.repo.log`/`diff` vs. the raw git
+// plumbing used elsewhere), so both casings are optional here.
+interface TangledCommitRecord {
+  this?: string
+  SHA?: string
+  message?: string
+  Message?: string
+  author?: TangledAuthorInfo
+  Author?: TangledAuthorInfo
+  parent?: string
+}
+
+interface TangledDiffFileRecord {
+  name?: { old?: string; new?: string }
+  is_new?: boolean
+  is_delete?: boolean
+  is_rename?: boolean
+  is_binary?: boolean
+  text_fragments?: TangledFragment[]
+}
+
+interface TangledDiffResponse {
+  commit?: TangledCommitRecord
+  stat?: { insertions?: number; deletions?: number; files_changed?: number }
+  diff?: TangledDiffFileRecord[]
+}
+
+interface TangledIssueValue {
+  title?: string
+  body?: string
+  createdAt?: string
+}
+
+interface TangledIssueRecord {
+  uri: string
+  value?: TangledIssueValue
+  state?: string
+  commentCount?: number
+  stateUpdatedAt?: string
+}
+
+interface TangledPullRef {
+  branch?: string
+  repoDid?: string
+}
+
+interface TangledPullValue {
+  title?: string
+  body?: string
+  createdAt?: string
+  source?: TangledPullRef
+  target?: TangledPullRef
+}
+
+interface TangledPullRecord {
+  uri: string
+  value?: TangledPullValue
+  state?: string
+  status?: string
+  commentCount?: number
+  stateUpdatedAt?: string
+}
+
+// `sh.tangled.repo.compare` returns raw `git format-patch` entries (used for
+// cross-branch, same-repo PR diffs), hence the PascalCase fields.
+interface TangledFormatPatchFile {
+  OldName?: string
+  NewName?: string
+  IsNew?: boolean
+  IsDelete?: boolean
+  IsRename?: boolean
+  IsBinary?: boolean
+  TextFragments?: TangledFragment[]
+}
+
+interface TangledFormatPatchEntry {
+  SHA?: string
+  Title?: string
+  Body?: string
+  Author?: { Name?: string; Email?: string }
+  AuthorDate?: string
+  Files?: TangledFormatPatchFile[]
+}
+
+interface TangledCommentValue {
+  body?: string
+  createdAt?: string
+}
+
+interface TangledCommentRecord {
+  uri: string
+  value?: TangledCommentValue
+}
+
 function rkeyFromUri(uri: string): string {
   return uri.split('/').pop() ?? ''
 }
@@ -80,21 +180,44 @@ function tangledUser(did: string): ForgeUser {
   return { provider: 'tangled', login: did, ref: { did } }
 }
 
-async function bobbin<T>(nsid: string, query: Record<string, unknown>, opts?: ForgeReadOptions): Promise<T> {
-  return await $fetch(`${BOBBIN}/${nsid}`, { query, signal: opts?.signal, headers: noCacheHeaders() }) as T
+async function bobbin<T>(
+  nsid: string,
+  query: Record<string, unknown>,
+  opts?: ForgeReadOptions
+): Promise<T> {
+  return (await $fetch(`${BOBBIN}/${nsid}`, {
+    query,
+    signal: opts?.signal,
+    headers: noCacheHeaders()
+  })) as T
 }
 
 async function listRepoRecords(did: string, opts?: ForgeReadOptions): Promise<TangledListItem[]> {
-  const data = await bobbin<{ items?: TangledListItem[] }>('sh.tangled.repo.listRepos', { subject: did, limit: 100 }, opts)
+  const data = await bobbin<{ items?: TangledListItem[] }>(
+    'sh.tangled.repo.listRepos',
+    { subject: did, limit: 100 },
+    opts
+  )
   return data.items ?? []
 }
 
 // Cache resolved repo records so detail pages don't re-list on every call.
 const repoCache = new Map<string, Promise<ResolvedRepo>>()
 
-async function resolveRepo(owner: string, repo: string, ref?: Record<string, unknown>, opts?: ForgeReadOptions): Promise<ResolvedRepo> {
+async function resolveRepo(
+  owner: string,
+  repo: string,
+  ref?: Record<string, unknown>,
+  opts?: ForgeReadOptions
+): Promise<ResolvedRepo> {
   if (ref?.atUri) {
-    return { atUri: String(ref.atUri), repoDid: ref.repoDid as string | undefined, knot: ref.knot as string | undefined, spindle: ref.spindle as string | undefined, value: {} }
+    return {
+      atUri: String(ref.atUri),
+      repoDid: ref.repoDid as string | undefined,
+      knot: ref.knot as string | undefined,
+      spindle: ref.spindle as string | undefined,
+      value: {}
+    }
   }
   const key = `${owner}/${repo}`
   const hit = repoCache.get(key)
@@ -102,11 +225,22 @@ async function resolveRepo(owner: string, repo: string, ref?: Record<string, unk
   const promise = (async () => {
     const did = await resolveHandleToDid(owner)
     const items = await listRepoRecords(did, opts)
-    const match = items.find(it => it.value?.name === repo) ?? items.find(it => rkeyFromUri(it.uri) === repo)
+    const match =
+      items.find((it) => it.value?.name === repo) ??
+      items.find((it) => rkeyFromUri(it.uri) === repo)
     if (!match) {
-      throw createError({ statusCode: 404, statusMessage: `Repository "${repo}" was not found on Tangled for ${owner}.` })
+      throw createError({
+        statusCode: 404,
+        statusMessage: `Repository "${repo}" was not found on Tangled for ${owner}.`
+      })
     }
-    return { atUri: match.uri, repoDid: match.value?.repoDid, knot: match.value?.knot, spindle: match.value?.spindle, value: match.value ?? {} }
+    return {
+      atUri: match.uri,
+      repoDid: match.value?.repoDid,
+      knot: match.value?.knot,
+      spindle: match.value?.spindle,
+      value: match.value ?? {}
+    }
   })()
   repoCache.set(key, promise)
   promise.catch(() => repoCache.delete(key))
@@ -115,17 +249,28 @@ async function resolveRepo(owner: string, repo: string, ref?: Record<string, unk
 
 async function getDefaultBranch(atUri: string, opts?: ForgeReadOptions): Promise<string> {
   try {
-    const data = await bobbin<{ name?: string }>('sh.tangled.repo.getDefaultBranch', { repo: atUri }, opts)
+    const data = await bobbin<{ name?: string }>(
+      'sh.tangled.repo.getDefaultBranch',
+      { repo: atUri },
+      opts
+    )
     return data.name || 'main'
   } catch {
     return 'main'
   }
 }
 
-async function countStars(repoDid: string | undefined, opts?: ForgeReadOptions): Promise<number | undefined> {
+async function countStars(
+  repoDid: string | undefined,
+  opts?: ForgeReadOptions
+): Promise<number | undefined> {
   if (!repoDid) return undefined
   try {
-    const data = await bobbin<{ count?: number }>('sh.tangled.feed.countStars', { subject: repoDid }, opts)
+    const data = await bobbin<{ count?: number }>(
+      'sh.tangled.feed.countStars',
+      { subject: repoDid },
+      opts
+    )
     return data.count
   } catch {
     return undefined
@@ -134,23 +279,37 @@ async function countStars(repoDid: string | undefined, opts?: ForgeReadOptions):
 
 interface TangledTree {
   ref?: string
-  readme?: { filename?: string, contents?: string } | null
-  files?: Array<{ name: string, mode: string, size?: number, last_commit?: { message?: string, when?: string, hash?: string } }>
+  readme?: { filename?: string; contents?: string } | null
+  files?: Array<{
+    name: string
+    mode: string
+    size?: number
+    last_commit?: { message?: string; when?: string; hash?: string }
+  }>
 }
 
 function mapTreeFiles(tree: TangledTree, basePath = ''): ForgeTreeEntry[] {
   return (tree.files ?? [])
-    .map((f): ForgeTreeEntry => ({
-      name: f.name,
-      path: basePath ? `${basePath}/${f.name}` : f.name,
-      type: isDirMode(f.mode) ? 'dir' : 'file',
-      size: f.size,
-      lastCommit: f.last_commit ? { message: f.last_commit.message, when: f.last_commit.when, hash: f.last_commit.hash } : undefined
-    }))
+    .map(
+      (f): ForgeTreeEntry => ({
+        name: f.name,
+        path: basePath ? `${basePath}/${f.name}` : f.name,
+        type: isDirMode(f.mode) ? 'dir' : 'file',
+        size: f.size,
+        lastCommit: f.last_commit
+          ? { message: f.last_commit.message, when: f.last_commit.when, hash: f.last_commit.hash }
+          : undefined
+      })
+    )
     .sort(sortEntries)
 }
 
-function makeRepo(owner: string, repo: string, resolved: ResolvedRepo, extra?: Partial<ForgeRepo>): ForgeRepo {
+function makeRepo(
+  owner: string,
+  repo: string,
+  resolved: ResolvedRepo,
+  extra?: Partial<ForgeRepo>
+): ForgeRepo {
   const value = resolved.value ?? {}
   const name = value.name || repo
   return {
@@ -166,12 +325,21 @@ function makeRepo(owner: string, repo: string, resolved: ResolvedRepo, extra?: P
     topics: value.topics ?? [],
     createdAt: value.createdAt ?? null,
     updatedAt: value.createdAt ?? null,
-    ref: { atUri: resolved.atUri, ownerDid: resolved.atUri ? didFromUri(resolved.atUri) : undefined, knot: resolved.knot, repoDid: resolved.repoDid, spindle: resolved.spindle },
+    ref: {
+      atUri: resolved.atUri,
+      ownerDid: resolved.atUri ? didFromUri(resolved.atUri) : undefined,
+      knot: resolved.knot,
+      repoDid: resolved.repoDid,
+      spindle: resolved.spindle
+    },
     ...extra
   }
 }
 
-interface TangledFragmentLine { Op: number, Line: string }
+interface TangledFragmentLine {
+  Op: number
+  Line: string
+}
 interface TangledFragment {
   OldPosition: number
   OldLines: number
@@ -193,7 +361,7 @@ function fragmentsToPatch(fragments: TangledFragment[]): string {
   return out
 }
 
-function countPatch(fragments: TangledFragment[]): { additions: number, deletions: number } {
+function countPatch(fragments: TangledFragment[]): { additions: number; deletions: number } {
   let additions = 0
   let deletions = 0
   for (const frag of fragments ?? []) {
@@ -207,23 +375,30 @@ function countPatch(fragments: TangledFragment[]): { additions: number, deletion
 
 function ciStatus(s?: string): ForgeRunStatus {
   switch (s) {
-    case 'success': return 'success'
-    case 'failed': return 'failure'
-    case 'cancelled': return 'cancelled'
-    case 'timeout': return 'timed_out'
-    case 'running': return 'running'
-    case 'pending': return 'pending'
-    default: return 'unknown'
+    case 'success':
+      return 'success'
+    case 'failed':
+      return 'failure'
+    case 'cancelled':
+      return 'cancelled'
+    case 'timeout':
+      return 'timed_out'
+    case 'running':
+      return 'running'
+    case 'pending':
+      return 'pending'
+    default:
+      return 'unknown'
   }
 }
 
 function rollupStatus(workflows: Array<{ status?: string }>): ForgeRunStatus {
-  const statuses = workflows.map(w => ciStatus(w.status))
-  if (statuses.some(s => s === 'failure')) return 'failure'
-  if (statuses.some(s => s === 'running' || s === 'pending' || s === 'queued')) return 'running'
-  if (statuses.some(s => s === 'timed_out')) return 'timed_out'
-  if (statuses.some(s => s === 'cancelled')) return 'cancelled'
-  if (statuses.length && statuses.every(s => s === 'success')) return 'success'
+  const statuses = workflows.map((w) => ciStatus(w.status))
+  if (statuses.some((s) => s === 'failure')) return 'failure'
+  if (statuses.some((s) => s === 'running' || s === 'pending' || s === 'queued')) return 'running'
+  if (statuses.some((s) => s === 'timed_out')) return 'timed_out'
+  if (statuses.some((s) => s === 'cancelled')) return 'cancelled'
+  if (statuses.length && statuses.every((s) => s === 'success')) return 'success'
   return 'unknown'
 }
 
@@ -233,7 +408,14 @@ interface TangledPipeline {
   commit?: string
   createdAt?: string
   trigger?: { ref?: string }
-  workflows?: Array<{ id?: string, name?: string, status?: string, startedAt?: string, finishedAt?: string, error?: string }>
+  workflows?: Array<{
+    id?: string
+    name?: string
+    status?: string
+    startedAt?: string
+    finishedAt?: string
+    error?: string
+  }>
 }
 
 function mapPipeline(p: TangledPipeline): ForgeActionRun {
@@ -246,14 +428,16 @@ function mapPipeline(p: TangledPipeline): ForgeActionRun {
     branch,
     commitSha: p.commit ?? null,
     createdAt: p.createdAt ?? null,
-    jobs: (p.workflows ?? []).map((w): ForgeActionJob => ({
-      id: w.id || w.name || '',
-      name: w.name || w.id || 'workflow',
-      status: ciStatus(w.status),
-      startedAt: w.startedAt ?? null,
-      completedAt: w.finishedAt ?? null,
-      error: w.error ?? null
-    }))
+    jobs: (p.workflows ?? []).map(
+      (w): ForgeActionJob => ({
+        id: w.id || w.name || '',
+        name: w.name || w.id || 'workflow',
+        status: ciStatus(w.status),
+        startedAt: w.startedAt ?? null,
+        completedAt: w.finishedAt ?? null,
+        error: w.error ?? null
+      })
+    )
   }
 }
 
@@ -280,11 +464,14 @@ export const tangledProvider: ForgeProvider = {
     mergeQueue: false
   },
   webUrl: (owner, repo) => `https://tangled.org/${owner}/${repo}`,
-  ownerWebUrl: owner => `https://tangled.org/${owner}`,
+  ownerWebUrl: (owner) => `https://tangled.org/${owner}`,
 
   async getRepo(owner, repo, opts) {
     const resolved = await resolveRepo(owner, repo, undefined, opts)
-    const [branch, stars] = await Promise.all([getDefaultBranch(resolved.atUri, opts), countStars(resolved.repoDid, opts)])
+    const [branch, stars] = await Promise.all([
+      getDefaultBranch(resolved.atUri, opts),
+      countStars(resolved.repoDid, opts)
+    ])
     return makeRepo(owner, repo, resolved, { defaultBranch: branch, stars })
   },
 
@@ -330,14 +517,18 @@ export const tangledProvider: ForgeProvider = {
   async listBranches(repo, opts): Promise<ForgeBranch[]> {
     const resolved = await resolveRepo(repo.owner, repo.name, repo.ref, opts)
     try {
-      const data = await bobbin<{ branches?: Array<{ reference?: { name?: string, hash?: string }, is_default?: boolean }> }>(
-        'sh.tangled.repo.branches', { repo: resolved.atUri }, opts
-      )
-      return (data.branches ?? []).map((b): ForgeBranch => ({
-        name: b.reference?.name || '',
-        isDefault: b.is_default,
-        commit: { sha: b.reference?.hash }
-      })).filter(b => b.name)
+      const data = await bobbin<{
+        branches?: Array<{ reference?: { name?: string; hash?: string }; is_default?: boolean }>
+      }>('sh.tangled.repo.branches', { repo: resolved.atUri }, opts)
+      return (data.branches ?? [])
+        .map(
+          (b): ForgeBranch => ({
+            name: b.reference?.name || '',
+            isDefault: b.is_default,
+            commit: { sha: b.reference?.hash }
+          })
+        )
+        .filter((b) => b.name)
     } catch {
       return []
     }
@@ -345,15 +536,24 @@ export const tangledProvider: ForgeProvider = {
 
   async getTree(repo, ref, path, opts) {
     const resolved = await resolveRepo(repo.owner, repo.name, repo.ref, opts)
-    const tree = await bobbin<TangledTree>('sh.tangled.repo.tree', { repo: resolved.atUri, ref, path }, opts)
+    const tree = await bobbin<TangledTree>(
+      'sh.tangled.repo.tree',
+      { repo: resolved.atUri, ref, path },
+      opts
+    )
     return mapTreeFiles(tree, path)
   },
 
   async getBlob(repo, ref, path, opts): Promise<ForgeBlob> {
     const resolved = await resolveRepo(repo.owner, repo.name, repo.ref, opts)
-    const data = await bobbin<{ content?: string, encoding?: string, isBinary?: boolean, mimeType?: string, size?: number, path?: string }>(
-      'sh.tangled.repo.blob', { repo: resolved.atUri, ref, path, raw: false }, opts
-    )
+    const data = await bobbin<{
+      content?: string
+      encoding?: string
+      isBinary?: boolean
+      mimeType?: string
+      size?: number
+      path?: string
+    }>('sh.tangled.repo.blob', { repo: resolved.atUri, ref, path, raw: false }, opts)
     const isBinary = !!data.isBinary || data.encoding === 'base64'
     return {
       path: data.path || path,
@@ -369,21 +569,29 @@ export const tangledProvider: ForgeProvider = {
   async listCommits(repo, ref, opts) {
     const resolved = await resolveRepo(repo.owner, repo.name, repo.ref, opts)
     const limit = opts?.limit ?? 30
-    const data = await bobbin<{ commits?: any[], total?: number }>(
-      'sh.tangled.repo.log', { repo: resolved.atUri, ref, limit, cursor: opts?.cursor }, opts
+    const data = await bobbin<{ commits?: TangledCommitRecord[]; total?: number }>(
+      'sh.tangled.repo.log',
+      { repo: resolved.atUri, ref, limit, cursor: opts?.cursor },
+      opts
     )
     const commits = (data.commits ?? []).map(mapTangledCommit)
     const last = commits[commits.length - 1]
-    return { items: commits, total: data.total, cursor: commits.length === limit && last ? last.sha : undefined }
+    return {
+      items: commits,
+      total: data.total,
+      cursor: commits.length === limit && last ? last.sha : undefined
+    }
   },
 
   async getCommit(repo, sha, opts): Promise<ForgeCommitDetail> {
     const resolved = await resolveRepo(repo.owner, repo.name, repo.ref, opts)
-    const data = await bobbin<{ diff?: { commit?: any, stat?: { insertions?: number, deletions?: number, files_changed?: number }, diff?: any[] } }>(
-      'sh.tangled.repo.diff', { repo: resolved.atUri, ref: sha }, opts
+    const data = await bobbin<{ diff?: TangledDiffResponse }>(
+      'sh.tangled.repo.diff',
+      { repo: resolved.atUri, ref: sha },
+      opts
     )
     const commit = mapTangledCommit(data.diff?.commit ?? { this: sha })
-    const files: ForgeFileDiff[] = (data.diff?.diff ?? []).map((f: any): ForgeFileDiff => {
+    const files: ForgeFileDiff[] = (data.diff?.diff ?? []).map((f): ForgeFileDiff => {
       const counts = countPatch(f.text_fragments ?? [])
       return {
         oldPath: f.name?.old,
@@ -397,7 +605,11 @@ export const tangledProvider: ForgeProvider = {
     })
     return {
       ...commit,
-      stat: { additions: data.diff?.stat?.insertions, deletions: data.diff?.stat?.deletions, filesChanged: data.diff?.stat?.files_changed },
+      stat: {
+        additions: data.diff?.stat?.insertions,
+        deletions: data.diff?.stat?.deletions,
+        filesChanged: data.diff?.stat?.files_changed
+      },
       files
     }
   },
@@ -405,16 +617,28 @@ export const tangledProvider: ForgeProvider = {
   async listIssues(repo, opts) {
     const resolved = await resolveRepo(repo.owner, repo.name, repo.ref, opts)
     if (!resolved.repoDid) return { items: [] }
-    const query: Record<string, unknown> = { subject: resolved.repoDid, limit: opts?.limit ?? 50, cursor: opts?.cursor }
+    const query: Record<string, unknown> = {
+      subject: resolved.repoDid,
+      limit: opts?.limit ?? 50,
+      cursor: opts?.cursor
+    }
     if (opts?.state && opts.state !== 'all') query.state = opts.state
-    const data = await bobbin<{ items?: any[], cursor?: string }>('sh.tangled.repo.listIssues', query, opts)
+    const data = await bobbin<{ items?: TangledIssueRecord[]; cursor?: string }>(
+      'sh.tangled.repo.listIssues',
+      query,
+      opts
+    )
     return { items: (data.items ?? []).map(mapTangledIssue), cursor: data.cursor }
   },
 
   async getIssue(repo, id, opts): Promise<ForgeIssueDetail> {
     const resolved = await resolveRepo(repo.owner, repo.name, repo.ref, opts)
-    const list = await bobbin<{ items?: any[] }>('sh.tangled.repo.listIssues', { subject: resolved.repoDid, limit: 200 }, opts)
-    const match = (list.items ?? []).find(it => rkeyFromUri(it.uri) === id)
+    const list = await bobbin<{ items?: TangledIssueRecord[] }>(
+      'sh.tangled.repo.listIssues',
+      { subject: resolved.repoDid, limit: 200 },
+      opts
+    )
+    const match = (list.items ?? []).find((it) => rkeyFromUri(it.uri) === id)
     if (!match) throw createError({ statusCode: 404, statusMessage: `Issue "${id}" not found.` })
     const comments = await listTangledComments(match.uri, opts)
     return { ...mapTangledIssue(match), comments }
@@ -423,34 +647,55 @@ export const tangledProvider: ForgeProvider = {
   async listPulls(repo, opts) {
     const resolved = await resolveRepo(repo.owner, repo.name, repo.ref, opts)
     if (!resolved.repoDid) return { items: [] }
-    const query: Record<string, unknown> = { subject: resolved.repoDid, limit: opts?.limit ?? 50, cursor: opts?.cursor }
+    const query: Record<string, unknown> = {
+      subject: resolved.repoDid,
+      limit: opts?.limit ?? 50,
+      cursor: opts?.cursor
+    }
     if (opts?.state && opts.state !== 'all') query.status = opts.state
-    const data = await bobbin<{ items?: any[], cursor?: string }>('sh.tangled.repo.listPulls', query, opts)
+    const data = await bobbin<{ items?: TangledPullRecord[]; cursor?: string }>(
+      'sh.tangled.repo.listPulls',
+      query,
+      opts
+    )
     let items = (data.items ?? []).map(mapTangledPull)
     // "Closed" means closed-not-merged; never surface merged PRs under it.
-    if (opts?.state === 'closed') items = items.filter(p => p.state === 'closed')
+    if (opts?.state === 'closed') items = items.filter((p) => p.state === 'closed')
     return { items, cursor: data.cursor }
   },
 
   async getPull(repo, id, opts): Promise<ForgePullDetail> {
     const resolved = await resolveRepo(repo.owner, repo.name, repo.ref, opts)
-    const list = await bobbin<{ items?: any[] }>('sh.tangled.repo.listPulls', { subject: resolved.repoDid, limit: 200 }, opts)
-    const match = (list.items ?? []).find(it => rkeyFromUri(it.uri) === id)
-    if (!match) throw createError({ statusCode: 404, statusMessage: `Pull request "${id}" not found.` })
+    const list = await bobbin<{ items?: TangledPullRecord[] }>(
+      'sh.tangled.repo.listPulls',
+      { subject: resolved.repoDid, limit: 200 },
+      opts
+    )
+    const match = (list.items ?? []).find((it) => rkeyFromUri(it.uri) === id)
+    if (!match)
+      throw createError({ statusCode: 404, statusMessage: `Pull request "${id}" not found.` })
     const comments = await listTangledComments(match.uri, opts)
     return { ...mapTangledPull(match), comments }
   },
 
   async getPullFiles(repo, id, opts): Promise<ForgeFileDiff[]> {
     const resolved = await resolveRepo(repo.owner, repo.name, repo.ref, opts)
-    const list = await bobbin<{ items?: any[] }>('sh.tangled.repo.listPulls', { subject: resolved.repoDid, limit: 200 }, opts)
-    const match = (list.items ?? []).find(it => rkeyFromUri(it.uri) === id)
+    const list = await bobbin<{ items?: TangledPullRecord[] }>(
+      'sh.tangled.repo.listPulls',
+      { subject: resolved.repoDid, limit: 200 },
+      opts
+    )
+    const match = (list.items ?? []).find((it) => rkeyFromUri(it.uri) === id)
     const src = match?.value?.source
     const tgt = match?.value?.target
     // Cross-repo (fork) PR patches live as gzipped blobs; only same-repo diffs are cheaply comparable.
     if (!src || !tgt || src.repoDid !== tgt.repoDid) return []
     try {
-      const data = await bobbin<{ format_patch?: any[] }>('sh.tangled.repo.compare', { repo: resolved.atUri, rev1: tgt.branch, rev2: src.branch }, opts)
+      const data = await bobbin<{ format_patch?: TangledFormatPatchEntry[] }>(
+        'sh.tangled.repo.compare',
+        { repo: resolved.atUri, rev1: tgt.branch, rev2: src.branch },
+        opts
+      )
       const files: ForgeFileDiff[] = []
       for (const fp of data.format_patch ?? []) {
         for (const f of fp.Files ?? []) {
@@ -458,7 +703,13 @@ export const tangledProvider: ForgeProvider = {
           files.push({
             oldPath: f.OldName,
             path: f.NewName || f.OldName || '',
-            status: f.IsNew ? 'added' : f.IsDelete ? 'removed' : f.IsRename ? 'renamed' : 'modified',
+            status: f.IsNew
+              ? 'added'
+              : f.IsDelete
+                ? 'removed'
+                : f.IsRename
+                  ? 'renamed'
+                  : 'modified',
             additions: counts.additions,
             deletions: counts.deletions,
             isBinary: f.IsBinary,
@@ -474,19 +725,29 @@ export const tangledProvider: ForgeProvider = {
 
   async getPullCommits(repo, id, opts): Promise<ForgeCommit[]> {
     const resolved = await resolveRepo(repo.owner, repo.name, repo.ref, opts)
-    const list = await bobbin<{ items?: any[] }>('sh.tangled.repo.listPulls', { subject: resolved.repoDid, limit: 200 }, opts)
-    const match = (list.items ?? []).find(it => rkeyFromUri(it.uri) === id)
+    const list = await bobbin<{ items?: TangledPullRecord[] }>(
+      'sh.tangled.repo.listPulls',
+      { subject: resolved.repoDid, limit: 200 },
+      opts
+    )
+    const match = (list.items ?? []).find((it) => rkeyFromUri(it.uri) === id)
     const src = match?.value?.source
     const tgt = match?.value?.target
     if (!src || !tgt || src.repoDid !== tgt.repoDid) return []
     try {
-      const data = await bobbin<{ format_patch?: any[] }>('sh.tangled.repo.compare', { repo: resolved.atUri, rev1: tgt.branch, rev2: src.branch }, opts)
-      return (data.format_patch ?? []).map((fp: any): ForgeCommit => ({
-        sha: fp.SHA,
-        shortSha: fp.SHA ? String(fp.SHA).slice(0, 7) : '',
-        message: [fp.Title, fp.Body].filter(Boolean).join('\n\n'),
-        author: { name: fp.Author?.Name, email: fp.Author?.Email, when: fp.AuthorDate }
-      }))
+      const data = await bobbin<{ format_patch?: TangledFormatPatchEntry[] }>(
+        'sh.tangled.repo.compare',
+        { repo: resolved.atUri, rev1: tgt.branch, rev2: src.branch },
+        opts
+      )
+      return (data.format_patch ?? []).map(
+        (fp): ForgeCommit => ({
+          sha: fp.SHA ?? '',
+          shortSha: fp.SHA ? String(fp.SHA).slice(0, 7) : '',
+          message: [fp.Title, fp.Body].filter(Boolean).join('\n\n'),
+          author: { name: fp.Author?.Name, email: fp.Author?.Email, when: fp.AuthorDate }
+        })
+      )
     } catch {
       return []
     }
@@ -496,11 +757,18 @@ export const tangledProvider: ForgeProvider = {
     const resolved = await resolveRepo(repo.owner, repo.name, repo.ref, opts)
     if (!resolved.spindle || !resolved.repoDid) return { items: [] }
     try {
-      const data = await $fetch<{ pipelines?: TangledPipeline[], cursor?: string, total?: number }>(
+      const data = await $fetch<{ pipelines?: TangledPipeline[]; cursor?: string; total?: number }>(
         `https://${resolved.spindle}/xrpc/sh.tangled.ci.queryPipelines`,
-        { query: { repo: resolved.repoDid, limit: opts?.limit ?? 50, cursor: opts?.cursor }, signal: opts?.signal }
+        {
+          query: { repo: resolved.repoDid, limit: opts?.limit ?? 50, cursor: opts?.cursor },
+          signal: opts?.signal
+        }
       )
-      return { items: (data.pipelines ?? []).map(mapPipeline), cursor: data.cursor, total: data.total }
+      return {
+        items: (data.pipelines ?? []).map(mapPipeline),
+        cursor: data.cursor,
+        total: data.total
+      }
     } catch {
       return { items: [] }
     }
@@ -508,7 +776,8 @@ export const tangledProvider: ForgeProvider = {
 
   async getActionRun(repo, id, opts): Promise<ForgeActionRun> {
     const resolved = await resolveRepo(repo.owner, repo.name, repo.ref, opts)
-    if (!resolved.spindle) throw createError({ statusCode: 404, statusMessage: 'No CI configured for this repo.' })
+    if (!resolved.spindle)
+      throw createError({ statusCode: 404, statusMessage: 'No CI configured for this repo.' })
     const data = await $fetch<TangledPipeline>(
       `https://${resolved.spindle}/xrpc/sh.tangled.ci.getPipeline`,
       { query: { pipeline: id }, signal: opts?.signal }
@@ -520,18 +789,20 @@ export const tangledProvider: ForgeProvider = {
   // recent issue, PR and CI activity on the viewer's own repos instead.
   async listNotifications(opts): Promise<ForgeNotification[]> {
     const items = await collectTangledInbox(opts)
-    return items.map((it): ForgeNotification => ({
-      provider: 'tangled',
-      id: it.id,
-      kind: it.kind,
-      title: it.title,
-      reason: it.reason,
-      unread: it.unread,
-      updatedAt: it.updatedAt,
-      repo: it.repo,
-      to: it.to,
-      url: it.url
-    }))
+    return items.map(
+      (it): ForgeNotification => ({
+        provider: 'tangled',
+        id: it.id,
+        kind: it.kind,
+        title: it.title,
+        reason: it.reason,
+        unread: it.unread,
+        updatedAt: it.updatedAt,
+        repo: it.repo,
+        to: it.to,
+        url: it.url
+      })
+    )
   },
 
   async listInbox(opts): Promise<ForgeInboxItem[]> {
@@ -565,7 +836,12 @@ export const tangledProvider: ForgeProvider = {
           id: `repo:${rec.uri}`,
           kind: 'create',
           actor: { provider: 'tangled', login: handle, ref: { did } },
-          repo: { owner: handle, name, fullName: `${handle}/${name}`, url: `https://tangled.org/${handle}/${name}` },
+          repo: {
+            owner: handle,
+            name,
+            fullName: `${handle}/${name}`,
+            url: `https://tangled.org/${handle}/${name}`
+          },
           title: name,
           url: `/tangled/${handle}/${name}`,
           createdAt,
@@ -604,103 +880,120 @@ async function collectTangledInbox(opts?: ForgeReadOptions): Promise<ForgeInboxI
   const cutoff = Date.now() - 30 * 86_400_000
   const recent = (ts?: string | null): boolean => !!ts && new Date(ts).getTime() >= cutoff
 
-  const perRepo = await Promise.all(records.slice(0, 10).map(async (rec): Promise<ForgeInboxItem[]> => {
-    const repoDid = rec.value?.repoDid
-    const spindle = rec.value?.spindle
-    const name = rec.value?.name || rkeyFromUri(rec.uri)
-    if (!repoDid) return []
-    const base = `/tangled/${ownerHandle}/${name}`
-    const repoRef = { owner: ownerHandle, name, fullName: `${ownerHandle}/${name}` }
+  const perRepo = await Promise.all(
+    records.slice(0, 10).map(async (rec): Promise<ForgeInboxItem[]> => {
+      const repoDid = rec.value?.repoDid
+      const spindle = rec.value?.spindle
+      const name = rec.value?.name || rkeyFromUri(rec.uri)
+      if (!repoDid) return []
+      const base = `/tangled/${ownerHandle}/${name}`
+      const repoRef = { owner: ownerHandle, name, fullName: `${ownerHandle}/${name}` }
 
-    const [issues, pulls, pipelines] = await Promise.all([
-      bobbin<{ items?: any[] }>('sh.tangled.repo.listIssues', { subject: repoDid, limit: 12 }, opts).catch(() => ({ items: [] as any[] })),
-      bobbin<{ items?: any[] }>('sh.tangled.repo.listPulls', { subject: repoDid, limit: 12 }, opts).catch(() => ({ items: [] as any[] })),
-      spindle
-        ? $fetch<{ pipelines?: TangledPipeline[] }>(`https://${spindle}/xrpc/sh.tangled.ci.queryPipelines`, { query: { repo: repoDid, limit: 20 }, signal: opts?.signal }).catch(() => ({ pipelines: [] as TangledPipeline[] }))
-        : Promise.resolve({ pipelines: [] as TangledPipeline[] })
-    ])
+      const [issues, pulls, pipelines] = await Promise.all([
+        bobbin<{ items?: TangledIssueRecord[] }>(
+          'sh.tangled.repo.listIssues',
+          { subject: repoDid, limit: 12 },
+          opts
+        ).catch(() => ({ items: [] as TangledIssueRecord[] })),
+        bobbin<{ items?: TangledPullRecord[] }>(
+          'sh.tangled.repo.listPulls',
+          { subject: repoDid, limit: 12 },
+          opts
+        ).catch(() => ({ items: [] as TangledPullRecord[] })),
+        spindle
+          ? $fetch<{ pipelines?: TangledPipeline[] }>(
+              `https://${spindle}/xrpc/sh.tangled.ci.queryPipelines`,
+              { query: { repo: repoDid, limit: 20 }, signal: opts?.signal }
+            ).catch(() => ({ pipelines: [] as TangledPipeline[] }))
+          : Promise.resolve({ pipelines: [] as TangledPipeline[] })
+      ])
 
-    const out: ForgeInboxItem[] = []
-    for (const it of issues.items ?? []) {
-      const m = mapTangledIssue(it)
-      const updated = m.updatedAt ?? m.createdAt
-      if (!recent(updated)) continue
-      const resolved = m.state === 'closed'
-      out.push({
-        provider: 'tangled',
-        id: `issue:${name}:${m.id}`,
-        kind: 'issue',
-        title: m.title,
-        reason: resolved ? 'closed issue' : 'issue',
-        unread: false,
-        updatedAt: updated,
-        repo: repoRef,
-        to: `${base}/issues/${m.id}`,
-        url: `https://tangled.org${base}/issues/${m.id}`,
-        state: resolved ? 'closed' : 'open',
-        resolved,
-        author: m.author
-      })
-    }
-    for (const it of pulls.items ?? []) {
-      const m = mapTangledPull(it)
-      const updated = m.updatedAt ?? m.createdAt
-      if (!recent(updated)) continue
-      const resolved = m.state === 'closed' || m.state === 'merged'
-      out.push({
-        provider: 'tangled',
-        id: `pull:${name}:${m.id}`,
-        kind: 'pull',
-        title: m.title,
-        reason: `${m.state} pull request`,
-        unread: false,
-        updatedAt: updated,
-        repo: repoRef,
-        to: `${base}/pulls/${m.id}`,
-        url: `https://tangled.org${base}/pulls/${m.id}`,
-        state: m.state,
-        resolved,
-        author: m.author
-      })
-    }
-    for (const p of pipelines.pipelines ?? []) {
-      const run = mapPipeline(p)
-      if (run.status !== 'failure' && run.status !== 'timed_out') continue
-      if (!recent(run.createdAt)) continue
-      out.push({
-        provider: 'tangled',
-        id: `ci:${name}:${run.id}`,
-        kind: 'ci',
-        title: `CI failed${run.branch ? ` on ${run.branch}` : ''} · ${name}`,
-        reason: 'pipeline failed',
-        unread: false,
-        updatedAt: run.createdAt,
-        repo: repoRef,
-        to: `${base}/actions`,
-        url: `https://tangled.org${base}/actions`,
-        resolved: false
-      })
-    }
-    return out
-  }))
+      const out: ForgeInboxItem[] = []
+      for (const it of issues.items ?? []) {
+        const m = mapTangledIssue(it)
+        const updated = m.updatedAt ?? m.createdAt
+        if (!recent(updated)) continue
+        const resolved = m.state === 'closed'
+        out.push({
+          provider: 'tangled',
+          id: `issue:${name}:${m.id}`,
+          kind: 'issue',
+          title: m.title,
+          reason: resolved ? 'closed issue' : 'issue',
+          unread: false,
+          updatedAt: updated,
+          repo: repoRef,
+          to: `${base}/issues/${m.id}`,
+          url: `https://tangled.org${base}/issues/${m.id}`,
+          state: resolved ? 'closed' : 'open',
+          resolved,
+          author: m.author
+        })
+      }
+      for (const it of pulls.items ?? []) {
+        const m = mapTangledPull(it)
+        const updated = m.updatedAt ?? m.createdAt
+        if (!recent(updated)) continue
+        const resolved = m.state === 'closed' || m.state === 'merged'
+        out.push({
+          provider: 'tangled',
+          id: `pull:${name}:${m.id}`,
+          kind: 'pull',
+          title: m.title,
+          reason: `${m.state} pull request`,
+          unread: false,
+          updatedAt: updated,
+          repo: repoRef,
+          to: `${base}/pulls/${m.id}`,
+          url: `https://tangled.org${base}/pulls/${m.id}`,
+          state: m.state,
+          resolved,
+          author: m.author
+        })
+      }
+      for (const p of pipelines.pipelines ?? []) {
+        const run = mapPipeline(p)
+        if (run.status !== 'failure' && run.status !== 'timed_out') continue
+        if (!recent(run.createdAt)) continue
+        out.push({
+          provider: 'tangled',
+          id: `ci:${name}:${run.id}`,
+          kind: 'ci',
+          title: `CI failed${run.branch ? ` on ${run.branch}` : ''} · ${name}`,
+          reason: 'pipeline failed',
+          unread: false,
+          updatedAt: run.createdAt,
+          repo: repoRef,
+          to: `${base}/actions`,
+          url: `https://tangled.org${base}/actions`,
+          resolved: false
+        })
+      }
+      return out
+    })
+  )
   return perRepo.flat()
 }
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
-function mapTangledCommit(c: any): ForgeCommit {
+function mapTangledCommit(c: TangledCommitRecord): ForgeCommit {
   const sha: string = c.this || c.SHA || ''
   return {
     sha,
     shortSha: sha ? sha.slice(0, 7) : '',
     message: c.message || c.Message || '',
-    author: c.author || c.Author
-      ? { name: (c.author?.Name ?? c.Author?.Name), email: (c.author?.Email ?? c.Author?.Email), when: (c.author?.When ?? c.Author?.When) }
-      : undefined,
+    author:
+      c.author || c.Author
+        ? {
+            name: c.author?.Name ?? c.Author?.Name,
+            email: c.author?.Email ?? c.Author?.Email,
+            when: c.author?.When ?? c.Author?.When
+          }
+        : undefined,
     parents: c.parent ? [c.parent] : undefined
   }
 }
 
-function mapTangledIssue(it: any): ForgeIssue {
+function mapTangledIssue(it: TangledIssueRecord): ForgeIssue {
   const value = it.value ?? {}
   return {
     provider: 'tangled',
@@ -716,14 +1009,14 @@ function mapTangledIssue(it: any): ForgeIssue {
   }
 }
 
-function tangledPullState(it: any): ForgePullState {
+function tangledPullState(it: TangledPullRecord): ForgePullState {
   const s = it.state ?? it.status
   if (s === 'merged') return 'merged'
   if (s === 'closed') return 'closed'
   return 'open'
 }
 
-function mapTangledPull(it: any): ForgePull {
+function mapTangledPull(it: TangledPullRecord): ForgePull {
   const value = it.value ?? {}
   return {
     provider: 'tangled',
@@ -741,17 +1034,25 @@ function mapTangledPull(it: any): ForgePull {
   }
 }
 
-async function listTangledComments(subjectAtUri: string, opts?: ForgeReadOptions): Promise<ForgeComment[]> {
+async function listTangledComments(
+  subjectAtUri: string,
+  opts?: ForgeReadOptions
+): Promise<ForgeComment[]> {
   try {
-    const data = await bobbin<{ items?: any[] }>('sh.tangled.feed.listComments', { subject: subjectAtUri, limit: 100, order: 'asc' }, opts)
-    return (data.items ?? []).map((c: any): ForgeComment => ({
-      id: rkeyFromUri(c.uri),
-      author: tangledUser(didFromUri(c.uri)),
-      body: c.value?.body ?? '',
-      createdAt: c.value?.createdAt ?? null
-    }))
+    const data = await bobbin<{ items?: TangledCommentRecord[] }>(
+      'sh.tangled.feed.listComments',
+      { subject: subjectAtUri, limit: 100, order: 'asc' },
+      opts
+    )
+    return (data.items ?? []).map(
+      (c): ForgeComment => ({
+        id: rkeyFromUri(c.uri),
+        author: tangledUser(didFromUri(c.uri)),
+        body: c.value?.body ?? '',
+        createdAt: c.value?.createdAt ?? null
+      })
+    )
   } catch {
     return []
   }
 }
-/* eslint-enable @typescript-eslint/no-explicit-any */

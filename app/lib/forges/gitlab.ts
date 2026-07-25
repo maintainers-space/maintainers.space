@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import type {
   ForgeActionJob,
   ForgeActionRun,
@@ -36,6 +35,245 @@ import type {
 
 import { getForgeToken } from '~/lib/forges/token-store'
 
+// Raw GitLab REST API v4 response shapes — only the fields this file actually
+// reads. These are intentionally loose (most fields optional) since GitLab's
+// real payloads carry many more fields than we use.
+
+interface GlUserResponse {
+  id?: number
+  username?: string
+  name?: string | null
+  avatar_url?: string | null
+  web_url?: string | null
+}
+
+interface GlNamespaceResponse {
+  full_path?: string
+  web_url?: string
+  avatar_url?: string | null
+}
+
+interface GlLicenseResponse {
+  nickname?: string | null
+  name?: string | null
+}
+
+interface GlProjectResponse {
+  id: number
+  path: string
+  path_with_namespace?: string
+  description?: string | null
+  default_branch?: string | null
+  web_url: string
+  namespace?: GlNamespaceResponse | null
+  avatar_url?: string | null
+  topics?: string[]
+  tag_list?: string[]
+  star_count?: number
+  forks_count?: number
+  open_issues_count?: number
+  visibility?: string
+  forked_from_project?: unknown
+  license?: GlLicenseResponse | null
+  created_at?: string | null
+  last_activity_at?: string | null
+  updated_at?: string | null
+}
+
+/** Fields shared by merge-request-shaped payloads (MRs and MR-ish todo targets). */
+interface GlMrStateFields {
+  state?: string
+  merged_at?: string | null
+  draft?: boolean
+  work_in_progress?: boolean
+}
+
+interface GlReferencesResponse {
+  full?: string
+}
+
+interface GlLabelResponse {
+  name: string
+  color?: string | null
+  description?: string | null
+}
+
+interface GlIssueResponse {
+  iid: number
+  title: string
+  state?: string
+  author?: GlUserResponse
+  description?: string | null
+  web_url?: string
+  user_notes_count?: number
+  labels?: (string | GlLabelResponse)[]
+  created_at?: string | null
+  updated_at?: string | null
+  closed_at?: string | null
+  references?: GlReferencesResponse
+}
+
+interface GlMergeRequestResponse extends GlMrStateFields {
+  iid: number
+  title: string
+  author?: GlUserResponse
+  description?: string | null
+  web_url?: string
+  user_notes_count?: number
+  labels?: (string | GlLabelResponse)[]
+  source_branch?: string
+  target_branch?: string
+  created_at?: string | null
+  updated_at?: string | null
+  closed_at?: string | null
+  changes_count?: string | number | null
+  merge_error?: string | null
+  references?: GlReferencesResponse
+}
+
+interface GlNoteResponse {
+  id: number
+  author?: GlUserResponse
+  body?: string
+  created_at?: string | null
+  system?: boolean
+}
+
+interface GlCommitResponse {
+  id: string
+  short_id?: string
+  message?: string
+  title?: string
+  author_name?: string
+  author_email?: string
+  authored_date?: string
+  committer_name?: string
+  committer_email?: string
+  committed_date?: string
+  created_at?: string
+  web_url?: string
+  parent_ids?: string[]
+  stats?: { additions?: number; deletions?: number }
+}
+
+interface GlDiffResponse {
+  old_path?: string
+  new_path?: string
+  new_file?: boolean
+  deleted_file?: boolean
+  renamed_file?: boolean
+  diff?: string
+}
+
+interface GlPipelineResponse {
+  id: number
+  name?: string | null
+  status?: string
+  source?: string | null
+  ref?: string | null
+  sha?: string | null
+  created_at?: string | null
+  updated_at?: string | null
+  web_url?: string
+}
+
+interface GlJobResponse {
+  id: number
+  name: string
+  status?: string
+  started_at?: string | null
+  finished_at?: string | null
+  web_url?: string
+}
+
+interface GlEventResponse {
+  id: number
+  project_id?: number
+  created_at?: string | null
+  action_name?: string
+  action?: string
+  target_type?: string | null
+  target_title?: string | null
+  target_iid?: number
+  author?: { username?: string; name?: string; avatar_url?: string | null }
+  author_username?: string
+  push_data?: {
+    commit_count?: number
+    commit_title?: string | null
+    ref?: string | null
+  }
+}
+
+interface GlTreeItemResponse {
+  id?: string
+  name: string
+  path: string
+  type?: string
+}
+
+interface GlBranchResponse {
+  name: string
+  default?: boolean
+  commit?: { id?: string }
+}
+
+interface GlFileResponse {
+  file_path?: string
+  content?: string
+  size?: number
+}
+
+interface GlMergeRequestChangesResponse {
+  changes?: GlDiffResponse[]
+}
+
+interface GlMergeTrainCarResponse {
+  target_branch?: string
+  status?: string
+  created_at?: string | null
+  merge_request?: {
+    iid?: number
+    title?: string
+    author?: GlUserResponse
+    web_url?: string | null
+  }
+  user?: GlUserResponse
+}
+
+interface GlBlobSearchResponse {
+  project_id?: number
+  path?: string
+  filename?: string
+  data?: string
+}
+
+interface GlTodoTargetResponse extends GlMrStateFields {
+  title?: string
+  iid?: number
+  author?: GlUserResponse
+}
+
+interface GlTodoResponse {
+  id: number
+  action_name?: string
+  target_type?: string
+  target?: GlTodoTargetResponse
+  body?: string
+  state?: string
+  updated_at?: string | null
+  created_at?: string | null
+  target_url?: string | null
+  project?: {
+    path_with_namespace?: string
+    path?: string
+    namespace?: { full_path?: string }
+  }
+}
+
+interface GlStarrerResponse {
+  user?: { id?: number }
+}
+
 // GitLab.com REST API v4. A self-managed host could be supported later by making
 // this configurable; for now koinon targets gitlab.com like it targets github.com.
 const API = 'https://gitlab.com/api/v4'
@@ -60,8 +298,12 @@ function enc(v: string): string {
 }
 
 /** Bounded-concurrency map, mirroring the GitHub provider's fan-out helper. */
-async function glMapLimit<T, R>(items: T[], concurrency: number, fn: (item: T) => Promise<R>): Promise<R[]> {
-  const results: R[] = new Array(items.length)
+async function glMapLimit<T, R>(
+  items: T[],
+  concurrency: number,
+  fn: (item: T) => Promise<R>
+): Promise<R[]> {
+  const results: R[] = Array.from({ length: items.length })
   let cursor = 0
   async function worker(): Promise<void> {
     while (cursor < items.length) {
@@ -81,8 +323,10 @@ function botKindOf(login?: string | null): 'dependabot' | 'renovate' | null {
   return null
 }
 
-function errStatus(e: any): number | undefined {
-  return e?.statusCode ?? e?.status ?? e?.response?.status
+function errStatus(e: unknown): number | undefined {
+  if (!e || typeof e !== 'object') return undefined
+  const err = e as { statusCode?: number; status?: number; response?: { status?: number } }
+  return err.statusCode ?? err.status ?? err.response?.status
 }
 
 function sortEntries(a: ForgeTreeEntry, b: ForgeTreeEntry): number {
@@ -92,7 +336,7 @@ function sortEntries(a: ForgeTreeEntry, b: ForgeTreeEntry): number {
 
 function decodeBase64Utf8(b64: string): string {
   const binary = atob(b64.replace(/\s/g, ''))
-  const bytes = Uint8Array.from(binary, ch => ch.charCodeAt(0))
+  const bytes = Uint8Array.from(binary, (ch) => ch.charCodeAt(0))
   return new TextDecoder().decode(bytes)
 }
 
@@ -106,7 +350,7 @@ function looksBinary(b64: string): boolean {
   }
 }
 
-function mapUser(u: any): ForgeUser | undefined {
+function mapUser(u: GlUserResponse | null | undefined): ForgeUser | undefined {
   if (!u) return undefined
   return {
     provider: 'gitlab',
@@ -117,8 +361,13 @@ function mapUser(u: any): ForgeUser | undefined {
   }
 }
 
-function mapRepo(r: any): ForgeRepo {
-  const owner = r.namespace?.full_path ?? String(r.path_with_namespace ?? '').split('/').slice(0, -1).join('/')
+function mapRepo(r: GlProjectResponse): ForgeRepo {
+  const owner =
+    r.namespace?.full_path ??
+    String(r.path_with_namespace ?? '')
+      .split('/')
+      .slice(0, -1)
+      .join('/')
   return {
     provider: 'gitlab',
     owner,
@@ -145,14 +394,16 @@ function mapRepo(r: any): ForgeRepo {
   }
 }
 
-function mapCommit(r: any): ForgeCommit {
+function mapCommit(r: GlCommitResponse): ForgeCommit {
   const sha: string = r.id
-  const actor: ForgeCommitActor | undefined = r.author_name || r.author_email
-    ? { name: r.author_name, email: r.author_email, when: r.authored_date ?? r.created_at }
-    : undefined
-  const committer: ForgeCommitActor | undefined = r.committer_name || r.committer_email
-    ? { name: r.committer_name, email: r.committer_email, when: r.committed_date ?? r.created_at }
-    : undefined
+  const actor: ForgeCommitActor | undefined =
+    r.author_name || r.author_email
+      ? { name: r.author_name, email: r.author_email, when: r.authored_date ?? r.created_at }
+      : undefined
+  const committer: ForgeCommitActor | undefined =
+    r.committer_name || r.committer_email
+      ? { name: r.committer_name, email: r.committer_email, when: r.committed_date ?? r.created_at }
+      : undefined
   return {
     sha,
     shortSha: r.short_id ?? (sha ? sha.slice(0, 8) : ''),
@@ -165,7 +416,7 @@ function mapCommit(r: any): ForgeCommit {
 }
 
 /** Count +/- lines in a GitLab unified-diff body (ignores the file/hunk headers). */
-function countDiff(diff?: string): { additions: number, deletions: number } {
+function countDiff(diff?: string): { additions: number; deletions: number } {
   let additions = 0
   let deletions = 0
   for (const line of String(diff ?? '').split('\n')) {
@@ -175,12 +426,18 @@ function countDiff(diff?: string): { additions: number, deletions: number } {
   return { additions, deletions }
 }
 
-function mapDiff(f: any): ForgeFileDiff {
+function mapDiff(f: GlDiffResponse): ForgeFileDiff {
   const counts = countDiff(f.diff)
   return {
     oldPath: f.old_path,
     path: f.new_path || f.old_path || '',
-    status: f.new_file ? 'added' : f.deleted_file ? 'removed' : f.renamed_file ? 'renamed' : 'modified',
+    status: f.new_file
+      ? 'added'
+      : f.deleted_file
+        ? 'removed'
+        : f.renamed_file
+          ? 'renamed'
+          : 'modified',
     additions: counts.additions,
     deletions: counts.deletions,
     isBinary: !f.diff,
@@ -191,7 +448,9 @@ function mapDiff(f: any): ForgeFileDiff {
 /** Project web base ("https://gitlab.com/owner/repo") from any project URL. */
 function projectBaseOf(webUrl?: string): string {
   if (!webUrl) return ''
-  return String(webUrl).replace(/\/-\/.*$/, '').replace(/\/+$/, '')
+  return String(webUrl)
+    .replace(/\/-\/.*$/, '')
+    .replace(/\/+$/, '')
 }
 
 // GitLab stores uploaded attachments (often SVG diagrams) as project-relative
@@ -203,10 +462,13 @@ function absolutizeUploads(md: string | null | undefined, base: string): string 
   if (!base) return md
   return md
     .replace(/(\]\()(\/uploads\/)/g, (_m, p: string, u: string) => `${p}${base}${u}`)
-    .replace(/((?:src|href)\s*=\s*["'])(\/uploads\/)/g, (_m, p: string, u: string) => `${p}${base}${u}`)
+    .replace(
+      /((?:src|href)\s*=\s*["'])(\/uploads\/)/g,
+      (_m, p: string, u: string) => `${p}${base}${u}`
+    )
 }
 
-function mapIssue(r: any): ForgeIssue {
+function mapIssue(r: GlIssueResponse): ForgeIssue {
   return {
     provider: 'gitlab',
     id: String(r.iid),
@@ -216,7 +478,11 @@ function mapIssue(r: any): ForgeIssue {
     author: mapUser(r.author),
     body: absolutizeUploads(r.description, projectBaseOf(r.web_url)),
     commentCount: r.user_notes_count,
-    labels: (r.labels ?? []).map((l: any) => (typeof l === 'string' ? { name: l } : { name: l.name, color: l.color, description: l.description })),
+    labels: (r.labels ?? []).map((l) =>
+      typeof l === 'string'
+        ? { name: l }
+        : { name: l.name, color: l.color, description: l.description }
+    ),
     createdAt: r.created_at ?? null,
     updatedAt: r.updated_at ?? null,
     closedAt: r.closed_at ?? null,
@@ -225,14 +491,14 @@ function mapIssue(r: any): ForgeIssue {
   }
 }
 
-function mrState(r: any): ForgePullState {
+function mrState(r: GlMrStateFields): ForgePullState {
   if (r.state === 'merged' || r.merged_at) return 'merged'
   if (r.state === 'closed') return 'closed'
   if (r.draft || r.work_in_progress) return 'draft'
   return 'open'
 }
 
-function mapPull(r: any): ForgePull {
+function mapPull(r: GlMergeRequestResponse): ForgePull {
   return {
     provider: 'gitlab',
     id: String(r.iid),
@@ -242,7 +508,9 @@ function mapPull(r: any): ForgePull {
     author: mapUser(r.author),
     body: absolutizeUploads(r.description, projectBaseOf(r.web_url)),
     commentCount: r.user_notes_count,
-    labels: (r.labels ?? []).map((l: any) => (typeof l === 'string' ? { name: l } : { name: l.name, color: l.color })),
+    labels: (r.labels ?? []).map((l) =>
+      typeof l === 'string' ? { name: l } : { name: l.name, color: l.color }
+    ),
     sourceBranch: r.source_branch,
     targetBranch: r.target_branch,
     createdAt: r.created_at ?? null,
@@ -254,7 +522,7 @@ function mapPull(r: any): ForgePull {
 }
 
 /** GitLab notes → comments, dropping system notes (label changes, etc.). */
-function mapNote(r: any, base = ''): ForgeComment {
+function mapNote(r: GlNoteResponse, base = ''): ForgeComment {
   return {
     id: String(r.id),
     author: mapUser(r.author),
@@ -265,18 +533,31 @@ function mapNote(r: any, base = ''): ForgeComment {
 
 function glRunStatus(s?: string): ForgeRunStatus {
   switch (s) {
-    case 'success': return 'success'
-    case 'failed': return 'failure'
-    case 'canceled': case 'cancelled': return 'cancelled'
-    case 'skipped': return 'skipped'
-    case 'running': return 'running'
-    case 'pending': case 'created': case 'waiting_for_resource': case 'preparing': case 'scheduled': return 'pending'
-    case 'manual': return 'queued'
-    default: return 'unknown'
+    case 'success':
+      return 'success'
+    case 'failed':
+      return 'failure'
+    case 'canceled':
+    case 'cancelled':
+      return 'cancelled'
+    case 'skipped':
+      return 'skipped'
+    case 'running':
+      return 'running'
+    case 'pending':
+    case 'created':
+    case 'waiting_for_resource':
+    case 'preparing':
+    case 'scheduled':
+      return 'pending'
+    case 'manual':
+      return 'queued'
+    default:
+      return 'unknown'
   }
 }
 
-function mapPipeline(r: any): ForgeActionRun {
+function mapPipeline(r: GlPipelineResponse): ForgeActionRun {
   return {
     provider: 'gitlab',
     id: String(r.id),
@@ -291,7 +572,7 @@ function mapPipeline(r: any): ForgeActionRun {
   }
 }
 
-function mapJob(j: any): ForgeActionJob {
+function mapJob(j: GlJobResponse): ForgeActionJob {
   return {
     id: String(j.id),
     name: j.name,
@@ -303,21 +584,44 @@ function mapJob(j: any): ForgeActionJob {
 }
 
 const EVENT_IMPACT: Record<ForgeEventKind, number> = {
-  pr_merged: 10, release: 8, pr_opened: 6, pr_review: 4, issue_opened: 3,
-  issue_closed: 2, create: 1.5, push: 1, comment: 1, fork: 0.5, star: 0.25, other: 0
+  pr_merged: 10,
+  release: 8,
+  pr_opened: 6,
+  pr_review: 4,
+  issue_opened: 3,
+  issue_closed: 2,
+  create: 1.5,
+  push: 1,
+  comment: 1,
+  fork: 0.5,
+  star: 0.25,
+  other: 0
 }
 
 /** Map a GitLab events-API item into a normalized contribution (or null). */
-function mapEvent(e: any, repoIndex: Map<number, any>): ForgeContribution | null {
-  const actor = mapUser({ username: e.author?.username ?? e.author_username, name: e.author?.name, avatar_url: e.author?.avatar_url })
+function mapEvent(
+  e: GlEventResponse,
+  repoIndex: Map<number, GlProjectResponse>
+): ForgeContribution | null {
+  const actor = mapUser({
+    username: e.author?.username ?? e.author_username,
+    name: e.author?.name,
+    avatar_url: e.author?.avatar_url
+  })
   if (!actor) return null
-  const proj = repoIndex.get(e.project_id)
+  const proj = e.project_id != null ? repoIndex.get(e.project_id) : undefined
   const owner = proj?.namespace?.full_path ?? ''
   const name = proj?.path ?? ''
   const fullName = proj?.path_with_namespace ?? (owner && name ? `${owner}/${name}` : '')
   if (!fullName) return null
   const repo = { owner, name, fullName, url: proj?.web_url ?? `${WEB}/${fullName}` }
-  const base = { provider: 'gitlab' as const, id: String(e.id), actor, repo, createdAt: String(e.created_at ?? '') }
+  const base = {
+    provider: 'gitlab' as const,
+    id: String(e.id),
+    actor,
+    repo,
+    createdAt: String(e.created_at ?? '')
+  }
 
   const action = String(e.action_name ?? e.action ?? '')
   const target = String(e.target_type ?? '')
@@ -351,17 +655,36 @@ function mapEvent(e: any, repoIndex: Map<number, any>): ForgeContribution | null
   return { ...base, kind, title, url, number, count, impact: EVENT_IMPACT[kind] }
 }
 
-async function glFetch<T>(path: string, query?: Record<string, unknown>, opts?: ForgeReadOptions): Promise<T> {
-  return await $fetch(`${API}${path}`, { headers: glHeaders(opts), query, signal: opts?.signal }) as T
+async function glFetch<T>(
+  path: string,
+  query?: Record<string, unknown>,
+  opts?: ForgeReadOptions
+): Promise<T> {
+  return (await $fetch(`${API}${path}`, {
+    headers: glHeaders(opts),
+    query,
+    signal: opts?.signal
+  })) as T
 }
 
-async function getReadme(id: string, ref: string, entries: ForgeTreeEntry[], opts?: ForgeReadOptions) {
-  const readme = entries.find(e => e.type === 'file' && /^readme(\.[a-z]+)?$/i.test(e.name))
+async function getReadme(
+  id: string,
+  ref: string,
+  entries: ForgeTreeEntry[],
+  opts?: ForgeReadOptions
+) {
+  const readme = entries.find((e) => e.type === 'file' && /^readme(\.[a-z]+)?$/i.test(e.name))
   if (!readme) return null
   try {
-    const raw = await $fetch<string>(`${API}/projects/${id}/repository/files/${enc(readme.path)}/raw`, {
-      headers: glHeaders(opts), query: { ref }, signal: opts?.signal, responseType: 'text'
-    })
+    const raw = await $fetch<string>(
+      `${API}/projects/${id}/repository/files/${enc(readme.path)}/raw`,
+      {
+        headers: glHeaders(opts),
+        query: { ref },
+        signal: opts?.signal,
+        responseType: 'text'
+      }
+    )
     return { filename: readme.name, content: String(raw) }
   } catch {
     return null
@@ -373,8 +696,8 @@ const userIdCache = new Map<string, Promise<number | null>>()
 function resolveUserId(login: string, opts?: ForgeReadOptions): Promise<number | null> {
   const hit = userIdCache.get(login)
   if (hit) return hit
-  const p = glFetch<any[]>(`/users`, { username: login }, opts)
-    .then(list => (list?.[0]?.id ?? null))
+  const p = glFetch<GlUserResponse[]>(`/users`, { username: login }, opts)
+    .then((list) => list?.[0]?.id ?? null)
     .catch(() => null)
   userIdCache.set(login, p)
   return p
@@ -403,21 +726,46 @@ export const gitlabProvider: ForgeProvider = {
     mergeQueue: true
   },
   webUrl: (owner, repo) => `${WEB}/${owner}/${repo}`,
-  ownerWebUrl: owner => `${WEB}/${owner}`,
+  ownerWebUrl: (owner) => `${WEB}/${owner}`,
 
   async getRepo(owner, repo, opts) {
-    return mapRepo(await glFetch(`/projects/${enc(`${owner}/${repo}`)}`, { license: true }, opts))
+    return mapRepo(
+      await glFetch<GlProjectResponse>(
+        `/projects/${enc(`${owner}/${repo}`)}`,
+        { license: true },
+        opts
+      )
+    )
   },
 
   async getOverview(owner, repo, opts) {
-    const meta = mapRepo(await glFetch<any>(`/projects/${enc(`${owner}/${repo}`)}`, { license: true }, opts))
+    const meta = mapRepo(
+      await glFetch<GlProjectResponse>(
+        `/projects/${enc(`${owner}/${repo}`)}`,
+        { license: true },
+        opts
+      )
+    )
     const id = String(meta.ref?.id ?? enc(`${owner}/${repo}`))
     const [tree, languages] = await Promise.all([
-      glFetch<any[]>(`/projects/${id}/repository/tree`, { ref: meta.defaultBranch, per_page: 100 }, opts).catch(() => [] as any[]),
-      glFetch<Record<string, number>>(`/projects/${id}/languages`, undefined, opts).catch(() => ({}))
+      glFetch<GlTreeItemResponse[]>(
+        `/projects/${id}/repository/tree`,
+        { ref: meta.defaultBranch, per_page: 100 },
+        opts
+      ).catch(() => [] as GlTreeItemResponse[]),
+      glFetch<Record<string, number>>(`/projects/${id}/languages`, undefined, opts).catch(
+        () => ({})
+      )
     ])
     const entries = (tree ?? [])
-      .map((e: any): ForgeTreeEntry => ({ name: e.name, path: e.path, type: e.type === 'tree' ? 'dir' : 'file', sha: e.id }))
+      .map(
+        (e): ForgeTreeEntry => ({
+          name: e.name,
+          path: e.path,
+          type: e.type === 'tree' ? 'dir' : 'file',
+          sha: e.id
+        })
+      )
       .sort(sortEntries)
     const topLang = Object.entries(languages ?? {}).sort((a, b) => b[1] - a[1])[0]?.[0]
     if (topLang) meta.language = topLang
@@ -427,29 +775,54 @@ export const gitlabProvider: ForgeProvider = {
 
   async listRepos(owner, opts) {
     const query = { per_page: 60, order_by: 'last_activity_at', sort: 'desc' }
-    let data: any[]
+    let data: GlProjectResponse[]
     try {
-      data = await glFetch<any[]>(`/users/${enc(owner)}/projects`, query, opts)
+      data = await glFetch<GlProjectResponse[]>(`/users/${enc(owner)}/projects`, query, opts)
     } catch {
-      data = await glFetch<any[]>(`/groups/${enc(owner)}/projects`, { ...query, include_subgroups: false }, opts).catch(() => [])
+      data = await glFetch<GlProjectResponse[]>(
+        `/groups/${enc(owner)}/projects`,
+        { ...query, include_subgroups: false },
+        opts
+      ).catch(() => [])
     }
     return (data ?? []).map(mapRepo)
   },
 
   async listBranches(repo, opts) {
-    const data = await glFetch<any[]>(`/projects/${projectId(repo)}/repository/branches`, { per_page: 100 }, opts)
-    return (data ?? []).map((b): ForgeBranch => ({ name: b.name, isDefault: b.default, commit: { sha: b.commit?.id } }))
+    const data = await glFetch<GlBranchResponse[]>(
+      `/projects/${projectId(repo)}/repository/branches`,
+      { per_page: 100 },
+      opts
+    )
+    return (data ?? []).map(
+      (b): ForgeBranch => ({ name: b.name, isDefault: b.default, commit: { sha: b.commit?.id } })
+    )
   },
 
   async getTree(repo, ref, path, opts) {
-    const data = await glFetch<any[]>(`/projects/${projectId(repo)}/repository/tree`, { ref, path, per_page: 100 }, opts)
+    const data = await glFetch<GlTreeItemResponse[]>(
+      `/projects/${projectId(repo)}/repository/tree`,
+      { ref, path, per_page: 100 },
+      opts
+    )
     return (data ?? [])
-      .map((e: any): ForgeTreeEntry => ({ name: e.name, path: e.path, type: e.type === 'tree' ? 'dir' : 'file', sha: e.id }))
+      .map(
+        (e): ForgeTreeEntry => ({
+          name: e.name,
+          path: e.path,
+          type: e.type === 'tree' ? 'dir' : 'file',
+          sha: e.id
+        })
+      )
       .sort(sortEntries)
   },
 
   async getBlob(repo, ref, path, opts) {
-    const r = await glFetch<any>(`/projects/${projectId(repo)}/repository/files/${enc(path)}`, { ref }, opts)
+    const r = await glFetch<GlFileResponse>(
+      `/projects/${projectId(repo)}/repository/files/${enc(path)}`,
+      { ref },
+      opts
+    )
     const b64: string = r.content ?? ''
     const binary = looksBinary(b64)
     return {
@@ -465,7 +838,11 @@ export const gitlabProvider: ForgeProvider = {
   async listCommits(repo, ref, opts) {
     const limit = opts?.limit ?? 30
     const page = opts?.cursor ? Number(opts.cursor) : 1
-    const data = await glFetch<any[]>(`/projects/${projectId(repo)}/repository/commits`, { ref_name: ref, per_page: limit, page }, opts)
+    const data = await glFetch<GlCommitResponse[]>(
+      `/projects/${projectId(repo)}/repository/commits`,
+      { ref_name: ref, per_page: limit, page },
+      opts
+    )
     const items = (data ?? []).map(mapCommit)
     return { items, cursor: items.length === limit ? String(page + 1) : undefined }
   },
@@ -473,13 +850,21 @@ export const gitlabProvider: ForgeProvider = {
   async getCommit(repo, sha, opts) {
     const id = projectId(repo)
     const [c, diff] = await Promise.all([
-      glFetch<any>(`/projects/${id}/repository/commits/${sha}`, undefined, opts),
-      glFetch<any[]>(`/projects/${id}/repository/commits/${sha}/diff`, { per_page: 100 }, opts).catch(() => [])
+      glFetch<GlCommitResponse>(`/projects/${id}/repository/commits/${sha}`, undefined, opts),
+      glFetch<GlDiffResponse[]>(
+        `/projects/${id}/repository/commits/${sha}/diff`,
+        { per_page: 100 },
+        opts
+      ).catch(() => [])
     ])
     const base = mapCommit(c)
     return {
       ...base,
-      stat: { additions: c.stats?.additions, deletions: c.stats?.deletions, filesChanged: (diff ?? []).length },
+      stat: {
+        additions: c.stats?.additions,
+        deletions: c.stats?.deletions,
+        filesChanged: (diff ?? []).length
+      },
       files: (diff ?? []).map(mapDiff)
     } satisfies ForgeCommitDetail
   },
@@ -487,42 +872,82 @@ export const gitlabProvider: ForgeProvider = {
   async listIssues(repo, opts) {
     const limit = opts?.limit ?? 30
     const page = opts?.cursor ? Number(opts.cursor) : 1
-    const state = opts?.state === 'open' ? 'opened' : opts?.state === 'closed' ? 'closed' : undefined
-    const data = await glFetch<any[]>(`/projects/${projectId(repo)}/issues`, {
-      state, per_page: limit, page, order_by: 'updated_at', sort: 'desc'
-    }, opts)
-    return { items: (data ?? []).map(mapIssue), cursor: (data ?? []).length === limit ? String(page + 1) : undefined }
+    const state =
+      opts?.state === 'open' ? 'opened' : opts?.state === 'closed' ? 'closed' : undefined
+    const data = await glFetch<GlIssueResponse[]>(
+      `/projects/${projectId(repo)}/issues`,
+      {
+        state,
+        per_page: limit,
+        page,
+        order_by: 'updated_at',
+        sort: 'desc'
+      },
+      opts
+    )
+    return {
+      items: (data ?? []).map(mapIssue),
+      cursor: (data ?? []).length === limit ? String(page + 1) : undefined
+    }
   },
 
   async getIssue(repo, id, opts): Promise<ForgeIssueDetail> {
     const pid = projectId(repo)
     const [issue, notes] = await Promise.all([
-      glFetch<any>(`/projects/${pid}/issues/${id}`, undefined, opts),
-      glFetch<any[]>(`/projects/${pid}/issues/${id}/notes`, { per_page: 100, sort: 'asc', order_by: 'created_at' }, opts).catch(() => [])
+      glFetch<GlIssueResponse>(`/projects/${pid}/issues/${id}`, undefined, opts),
+      glFetch<GlNoteResponse[]>(
+        `/projects/${pid}/issues/${id}/notes`,
+        { per_page: 100, sort: 'asc', order_by: 'created_at' },
+        opts
+      ).catch(() => [])
     ])
-    return { ...mapIssue(issue), comments: (notes ?? []).filter((n: any) => !n.system).map((n: any) => mapNote(n, projectBaseOf(issue.web_url))) }
+    return {
+      ...mapIssue(issue),
+      comments: (notes ?? [])
+        .filter((n) => !n.system)
+        .map((n) => mapNote(n, projectBaseOf(issue.web_url)))
+    }
   },
 
   async listPulls(repo, opts) {
     const limit = opts?.limit ?? 30
     const page = opts?.cursor ? Number(opts.cursor) : 1
-    const state = opts?.state === 'open'
-      ? 'opened'
-      : opts?.state === 'merged' ? 'merged' : opts?.state === 'closed' ? 'closed' : opts?.state === 'draft' ? 'opened' : undefined
-    const data = await glFetch<any[]>(`/projects/${projectId(repo)}/merge_requests`, {
-      state, per_page: limit, page, order_by: 'updated_at', sort: 'desc'
-    }, opts)
+    const state =
+      opts?.state === 'open'
+        ? 'opened'
+        : opts?.state === 'merged'
+          ? 'merged'
+          : opts?.state === 'closed'
+            ? 'closed'
+            : opts?.state === 'draft'
+              ? 'opened'
+              : undefined
+    const data = await glFetch<GlMergeRequestResponse[]>(
+      `/projects/${projectId(repo)}/merge_requests`,
+      {
+        state,
+        per_page: limit,
+        page,
+        order_by: 'updated_at',
+        sort: 'desc'
+      },
+      opts
+    )
     let items = (data ?? []).map(mapPull)
-    if (opts?.state === 'draft') items = items.filter(p => p.state === 'draft')
-    if (opts?.state === 'closed') items = items.filter(p => p.state === 'closed')
+    if (opts?.state === 'draft') items = items.filter((p) => p.state === 'draft')
+    if (opts?.state === 'closed') items = items.filter((p) => p.state === 'closed')
     return { items, cursor: (data ?? []).length === limit ? String(page + 1) : undefined }
   },
 
   async getPull(repo, id, opts): Promise<ForgePullDetail> {
     const pid = projectId(repo)
     const [mr, notes] = await Promise.all([
-      glFetch<any>(`/projects/${pid}/merge_requests/${id}`, undefined, opts),
-      glFetch<any[]>(`/projects/${pid}/merge_requests/${id}/notes`, { per_page: 100, sort: 'asc', order_by: 'created_at' }, opts).catch(() => [])
+      glFetch<GlMergeRequestResponse>(`/projects/${pid}/merge_requests/${id}`, undefined, opts),
+      glFetch<GlNoteResponse[]>(
+        `/projects/${pid}/merge_requests/${id}/notes`,
+        { per_page: 100, sort: 'asc', order_by: 'created_at' },
+        opts
+      ).catch(() => [])
     ])
     let stat: ForgePullDetail['stat']
     if (mr.changes_count != null) {
@@ -531,19 +956,29 @@ export const gitlabProvider: ForgeProvider = {
     return {
       ...mapPull(mr),
       stat,
-      comments: (notes ?? []).filter((n: any) => !n.system).map((n: any) => mapNote(n, projectBaseOf(mr.web_url)))
+      comments: (notes ?? [])
+        .filter((n) => !n.system)
+        .map((n) => mapNote(n, projectBaseOf(mr.web_url)))
     }
   },
 
   async getPullFiles(repo, id, opts) {
     const pid = projectId(repo)
-    const data = await glFetch<any>(`/projects/${pid}/merge_requests/${id}/changes`, undefined, opts).catch(() => null)
+    const data = await glFetch<GlMergeRequestChangesResponse>(
+      `/projects/${pid}/merge_requests/${id}/changes`,
+      undefined,
+      opts
+    ).catch(() => null)
     const changes = data?.changes ?? []
-    return (changes as any[]).map(mapDiff)
+    return changes.map(mapDiff)
   },
 
   async getPullCommits(repo, id, opts) {
-    const data = await glFetch<any[]>(`/projects/${projectId(repo)}/merge_requests/${id}/commits`, { per_page: 100 }, opts)
+    const data = await glFetch<GlCommitResponse[]>(
+      `/projects/${projectId(repo)}/merge_requests/${id}/commits`,
+      { per_page: 100 },
+      opts
+    )
     return (data ?? []).map(mapCommit)
   },
 
@@ -552,9 +987,9 @@ export const gitlabProvider: ForgeProvider = {
     const path = branch
       ? `/projects/${pid}/merge_trains/${enc(branch)}`
       : `/projects/${pid}/merge_trains`
-    let cars: any[]
+    let cars: GlMergeTrainCarResponse[]
     try {
-      cars = await glFetch<any[]>(path, { scope: 'active', per_page: 50 }, opts)
+      cars = await glFetch<GlMergeTrainCarResponse[]>(path, { scope: 'active', per_page: 50 }, opts)
     } catch {
       return null
     }
@@ -563,7 +998,7 @@ export const gitlabProvider: ForgeProvider = {
     // The branch-less endpoint mixes every train; a train is per target branch,
     // so collapse to the busiest branch to present a single coherent queue.
     const target = branch ?? list[0]?.target_branch
-    if (target) list = list.filter(c => (c.target_branch ?? target) === target)
+    if (target) list = list.filter((c) => (c.target_branch ?? target) === target)
     const entries: ForgeMergeQueueEntry[] = list.map((c, i) => {
       const mr = c.merge_request ?? {}
       return {
@@ -584,9 +1019,16 @@ export const gitlabProvider: ForgeProvider = {
   async listActionRuns(repo, opts) {
     const limit = opts?.limit ?? 30
     const page = opts?.cursor ? Number(opts.cursor) : 1
-    const data = await glFetch<any[]>(`/projects/${projectId(repo)}/pipelines`, {
-      per_page: limit, page, order_by: 'id', sort: 'desc'
-    }, opts).catch(() => [])
+    const data = await glFetch<GlPipelineResponse[]>(
+      `/projects/${projectId(repo)}/pipelines`,
+      {
+        per_page: limit,
+        page,
+        order_by: 'id',
+        sort: 'desc'
+      },
+      opts
+    ).catch(() => [])
     const items = (data ?? []).map(mapPipeline)
     return { items, cursor: items.length === limit ? String(page + 1) : undefined }
   },
@@ -594,8 +1036,12 @@ export const gitlabProvider: ForgeProvider = {
   async getActionRun(repo, id, opts) {
     const pid = projectId(repo)
     const [run, jobs] = await Promise.all([
-      glFetch<any>(`/projects/${pid}/pipelines/${id}`, undefined, opts),
-      glFetch<any[]>(`/projects/${pid}/pipelines/${id}/jobs`, { per_page: 100 }, opts).catch(() => [])
+      glFetch<GlPipelineResponse>(`/projects/${pid}/pipelines/${id}`, undefined, opts),
+      glFetch<GlJobResponse[]>(
+        `/projects/${pid}/pipelines/${id}/jobs`,
+        { per_page: 100 },
+        opts
+      ).catch(() => [])
     ])
     return { ...mapPipeline(run), jobs: (jobs ?? []).map(mapJob) }
   },
@@ -603,10 +1049,25 @@ export const gitlabProvider: ForgeProvider = {
   async searchRepos(q, opts): Promise<Paginated<ForgeRepo>> {
     const page = opts?.cursor ? Number(opts.cursor) : 1
     const perPage = opts?.limit ?? 20
-    const order = opts?.sort === 'stars' ? 'star_count' : opts?.sort === 'created' ? 'created_at' : opts?.sort === 'updated' ? 'updated_at' : undefined
-    const data = await glFetch<any[]>(`/projects`, {
-      search: q, per_page: perPage, page, order_by: order ?? 'star_count', sort: opts?.order ?? 'desc'
-    }, opts)
+    const order =
+      opts?.sort === 'stars'
+        ? 'star_count'
+        : opts?.sort === 'created'
+          ? 'created_at'
+          : opts?.sort === 'updated'
+            ? 'updated_at'
+            : undefined
+    const data = await glFetch<GlProjectResponse[]>(
+      `/projects`,
+      {
+        search: q,
+        per_page: perPage,
+        page,
+        order_by: order ?? 'star_count',
+        sort: opts?.order ?? 'desc'
+      },
+      opts
+    )
     const items = (data ?? []).map(mapRepo)
     return { items, cursor: items.length === perPage ? String(page + 1) : undefined }
   },
@@ -616,8 +1077,12 @@ export const gitlabProvider: ForgeProvider = {
     if (!(opts?.token ?? getForgeToken('gitlab'))) return { items: [], incomplete: true }
     const page = opts?.cursor ? Number(opts.cursor) : 1
     const perPage = opts?.limit ?? 20
-    const data = await glFetch<any[]>(`/search`, { scope: 'issues', search: q, per_page: perPage, page }, opts).catch(() => [])
-    const items = (data ?? []).map((r: any) => {
+    const data = await glFetch<GlIssueResponse[]>(
+      `/search`,
+      { scope: 'issues', search: q, per_page: perPage, page },
+      opts
+    ).catch(() => [])
+    const items = (data ?? []).map((r) => {
       const issue = mapIssue(r)
       // Global results carry project_id but not the path; the web_url still routes.
       issue.url = r.web_url
@@ -630,29 +1095,43 @@ export const gitlabProvider: ForgeProvider = {
     if (!(opts?.token ?? getForgeToken('gitlab'))) return { items: [], incomplete: true }
     const page = opts?.cursor ? Number(opts.cursor) : 1
     const perPage = opts?.limit ?? 20
-    const data = await glFetch<any[]>(`/search`, { scope: 'blobs', search: q, per_page: perPage, page }, opts).catch(() => [])
-    const items = (data ?? []).map((r: any): ForgeSearchCode => ({
-      provider: 'gitlab',
-      repo: { owner: '', name: '', fullName: String(r.project_id ?? ''), url: undefined },
-      path: r.path ?? r.filename ?? '',
-      url: undefined,
-      fragments: r.data ? [String(r.data)] : []
-    }))
+    const data = await glFetch<GlBlobSearchResponse[]>(
+      `/search`,
+      { scope: 'blobs', search: q, per_page: perPage, page },
+      opts
+    ).catch(() => [])
+    const items = (data ?? []).map(
+      (r): ForgeSearchCode => ({
+        provider: 'gitlab',
+        repo: { owner: '', name: '', fullName: String(r.project_id ?? ''), url: undefined },
+        path: r.path ?? r.filename ?? '',
+        url: undefined,
+        fragments: r.data ? [String(r.data)] : []
+      })
+    )
     return { items, cursor: items.length === perPage ? String(page + 1) : undefined }
   },
 
   async searchUsers(q, opts): Promise<Paginated<ForgeUser>> {
     const page = opts?.cursor ? Number(opts.cursor) : 1
     const perPage = opts?.limit ?? 20
-    const data = await glFetch<any[]>(`/users`, { search: q, per_page: perPage, page }, opts).catch(() => [])
+    const data = await glFetch<GlUserResponse[]>(
+      `/users`,
+      { search: q, per_page: perPage, page },
+      opts
+    ).catch(() => [])
     const items = (data ?? []).map(mapUser).filter((u): u is ForgeUser => !!u)
     return { items, cursor: items.length === perPage ? String(page + 1) : undefined }
   },
 
   async listNotifications(opts): Promise<ForgeNotification[]> {
     if (!(opts?.token ?? getForgeToken('gitlab'))) return []
-    const todos = await glFetch<any[]>(`/todos`, { per_page: opts?.limit ?? 30, state: 'pending' }, opts).catch(() => [])
-    return (todos ?? []).map((t: any): ForgeNotification => {
+    const todos = await glFetch<GlTodoResponse[]>(
+      `/todos`,
+      { per_page: opts?.limit ?? 30, state: 'pending' },
+      opts
+    ).catch(() => [])
+    return (todos ?? []).map((t): ForgeNotification => {
       const kind = todoKind(t)
       const { owner, name, fullName } = todoRepo(t)
       return {
@@ -674,8 +1153,12 @@ export const gitlabProvider: ForgeProvider = {
     const token = opts?.token ?? getForgeToken('gitlab')
     if (!token) return []
     const [todos, me] = await Promise.all([
-      glFetch<any[]>(`/todos`, { per_page: opts?.limit ?? 50, state: 'pending' }, opts).catch(() => []),
-      glFetch<any>(`/user`, undefined, opts).catch(() => null)
+      glFetch<GlTodoResponse[]>(
+        `/todos`,
+        { per_page: opts?.limit ?? 50, state: 'pending' },
+        opts
+      ).catch(() => []),
+      glFetch<GlUserResponse>(`/user`, undefined, opts).catch(() => null)
     ])
     const myLogin = String(me?.username ?? '').toLowerCase()
 
@@ -696,11 +1179,12 @@ export const gitlabProvider: ForgeProvider = {
         url: t.target_url,
         number
       }
-      const target = t.target ?? {}
+      const target: GlTodoTargetResponse = t.target ?? {}
       if (kind === 'pull' || kind === 'issue') {
         const st = mrState(target)
-        item.state = kind === 'pull' ? st : (target.state === 'closed' ? 'closed' : 'open')
-        item.resolved = kind === 'pull' ? (st === 'merged' || st === 'closed') : target.state === 'closed'
+        item.state = kind === 'pull' ? st : target.state === 'closed' ? 'closed' : 'open'
+        item.resolved =
+          kind === 'pull' ? st === 'merged' || st === 'closed' : target.state === 'closed'
         item.author = mapUser(target.author)
         const bk = botKindOf(target.author?.username)
         item.isBot = !!bk
@@ -710,8 +1194,9 @@ export const gitlabProvider: ForgeProvider = {
       }
       return item
     })
-    return items.filter((x): x is ForgeInboxItem => !!x)
-      .filter(i => i.author?.login?.toLowerCase() !== myLogin || i.kind === 'ci')
+    return items
+      .filter((x): x is ForgeInboxItem => !!x)
+      .filter((i) => i.author?.login?.toLowerCase() !== myLogin || i.kind === 'ci')
   },
 
   async markNotificationRead(threadId, opts): Promise<void> {
@@ -723,50 +1208,77 @@ export const gitlabProvider: ForgeProvider = {
     // The generic signature doesn't say issue vs MR; try MR first, fall back to issue.
     for (const kind of ['merge_requests', 'issues'] as const) {
       try {
-        const note = await $fetch<any>(`${API}/projects/${pid}/${kind}/${id}/notes`, {
-          method: 'POST', headers: glHeaders(opts), body: { body }, signal: opts?.signal
+        const note = await $fetch<GlNoteResponse>(`${API}/projects/${pid}/${kind}/${id}/notes`, {
+          method: 'POST',
+          headers: glHeaders(opts),
+          body: { body },
+          signal: opts?.signal
         })
         return mapNote(note)
       } catch (e) {
         if (errStatus(e) !== 404) throw e
       }
     }
-    throw createError({ statusCode: 404, statusMessage: 'Could not find the issue or merge request to comment on.' })
+    throw createError({
+      statusCode: 404,
+      statusMessage: 'Could not find the issue or merge request to comment on.'
+    })
   },
 
   async createReview(repo, id, input, opts): Promise<void> {
     const pid = projectId(repo)
     if (input.event === 'APPROVE') {
-      await $fetch(`${API}/projects/${pid}/merge_requests/${id}/approve`, { method: 'POST', headers: glHeaders(opts), signal: opts?.signal })
+      await $fetch(`${API}/projects/${pid}/merge_requests/${id}/approve`, {
+        method: 'POST',
+        headers: glHeaders(opts),
+        signal: opts?.signal
+      })
     }
     if (input.body) {
       await $fetch(`${API}/projects/${pid}/merge_requests/${id}/notes`, {
-        method: 'POST', headers: glHeaders(opts), body: { body: input.body }, signal: opts?.signal
+        method: 'POST',
+        headers: glHeaders(opts),
+        body: { body: input.body },
+        signal: opts?.signal
       }).catch(() => {})
     }
   },
 
   async mergePull(repo, id, opts): Promise<ForgeMergeResult> {
-    const r = await $fetch<any>(`${API}/projects/${projectId(repo)}/merge_requests/${id}/merge`, {
-      method: 'PUT', headers: glHeaders(opts), signal: opts?.signal
-    })
-    return { merged: r.state === 'merged', message: r.merge_error }
+    const r = await $fetch<GlMergeRequestResponse>(
+      `${API}/projects/${projectId(repo)}/merge_requests/${id}/merge`,
+      {
+        method: 'PUT',
+        headers: glHeaders(opts),
+        signal: opts?.signal
+      }
+    )
+    return { merged: r.state === 'merged', message: r.merge_error ?? undefined }
   },
 
   async isStarred(repo, opts): Promise<boolean> {
     const token = opts?.token ?? getForgeToken('gitlab')
     if (!token) return false
-    const me = await glFetch<any>('/user', undefined, opts).catch(() => null)
+    const me = await glFetch<GlUserResponse>('/user', undefined, opts).catch(() => null)
     if (!me?.id) return false
-    const starrers = await glFetch<any[]>(`/projects/${projectId(repo)}/starrers`, { search: me.username }, opts).catch(() => [])
-    return (starrers ?? []).some((s: any) => s?.user?.id === me.id)
+    const starrers = await glFetch<GlStarrerResponse[]>(
+      `/projects/${projectId(repo)}/starrers`,
+      { search: me.username },
+      opts
+    ).catch(() => [])
+    return (starrers ?? []).some((s) => s?.user?.id === me.id)
   },
 
-  async setStar(repo, starred, opts): Promise<{ starred: boolean, stars?: number }> {
+  async setStar(repo, starred, opts): Promise<{ starred: boolean; stars?: number }> {
     try {
-      const proj = await $fetch<any>(`${API}/projects/${projectId(repo)}/${starred ? 'star' : 'unstar'}`, {
-        method: 'POST', headers: glHeaders(opts), signal: opts?.signal
-      })
+      const proj = await $fetch<GlProjectResponse>(
+        `${API}/projects/${projectId(repo)}/${starred ? 'star' : 'unstar'}`,
+        {
+          method: 'POST',
+          headers: glHeaders(opts),
+          signal: opts?.signal
+        }
+      )
       return { starred, stars: typeof proj?.star_count === 'number' ? proj.star_count : undefined }
     } catch (e) {
       // GitLab responds 304 Not Modified when the repo is already in the target state.
@@ -778,68 +1290,101 @@ export const gitlabProvider: ForgeProvider = {
   async listFollowedRepos(opts): Promise<ForgeRepo[]> {
     const token = opts?.token ?? getForgeToken('gitlab')
     if (!token) return []
-    const me = await glFetch<any>(`/user`, undefined, opts).catch(() => null)
+    const me = await glFetch<GlUserResponse>(`/user`, undefined, opts).catch(() => null)
     if (!me?.id) return []
-    const following = await glFetch<any[]>(`/users/${me.id}/following`, { per_page: 100 }, opts).catch(() => [])
+    const following = await glFetch<GlUserResponse[]>(
+      `/users/${me.id}/following`,
+      { per_page: 100 },
+      opts
+    ).catch(() => [])
     const perOwner = await glMapLimit((following ?? []).slice(0, 20), 6, async (u) => {
       try {
-        const data = await glFetch<any[]>(`/users/${u.id}/projects`, { per_page: 5, order_by: 'last_activity_at', sort: 'desc' }, opts)
+        const data = await glFetch<GlProjectResponse[]>(
+          `/users/${u.id}/projects`,
+          { per_page: 5, order_by: 'last_activity_at', sort: 'desc' },
+          opts
+        )
         return (data ?? []).map(mapRepo)
       } catch {
         return [] as ForgeRepo[]
       }
     })
     const seen = new Set<string>()
-    return perOwner.flat()
-      .filter(r => !r.isFork && !r.isPrivate)
-      .filter(r => (seen.has(r.fullName) ? false : (seen.add(r.fullName), true)))
+    return perOwner
+      .flat()
+      .filter((r) => !r.isFork && !r.isPrivate)
+      .filter((r) => (seen.has(r.fullName) ? false : (seen.add(r.fullName), true)))
       .sort((a, b) => String(b.updatedAt ?? '').localeCompare(String(a.updatedAt ?? '')))
   },
 
   async listFollowing(opts): Promise<ForgeUser[]> {
     const token = opts?.token ?? getForgeToken('gitlab')
     if (!token) return []
-    const me = await glFetch<any>(`/user`, undefined, opts).catch(() => null)
+    const me = await glFetch<GlUserResponse>(`/user`, undefined, opts).catch(() => null)
     if (!me?.id) return []
-    const data = await glFetch<any[]>(`/users/${me.id}/following`, { per_page: opts?.limit ?? 100 }, opts).catch(() => [])
+    const data = await glFetch<GlUserResponse[]>(
+      `/users/${me.id}/following`,
+      { per_page: opts?.limit ?? 100 },
+      opts
+    ).catch(() => [])
     return (data ?? []).map(mapUser).filter((u): u is ForgeUser => !!u)
   },
 
   async listUserEvents(login, opts): Promise<ForgeContribution[]> {
     const uid = await resolveUserId(login, opts)
     if (uid == null) return []
-    const data = await glFetch<any[]>(`/users/${uid}/events`, { per_page: Math.min(opts?.limit ?? 100, 100) }, opts).catch(() => [])
-    const projectIds = [...new Set((data ?? []).map((e: any) => e.project_id).filter(Boolean))]
-    const projects = await glMapLimit(projectIds.slice(0, 25), 6, (pid: number) =>
-      glFetch<any>(`/projects/${pid}`, undefined, opts).catch(() => null)
+    const data = await glFetch<GlEventResponse[]>(
+      `/users/${uid}/events`,
+      { per_page: Math.min(opts?.limit ?? 100, 100) },
+      opts
+    ).catch(() => [])
+    const projectIds = [...new Set((data ?? []).map((e) => e.project_id).filter(Boolean))]
+    const projects = await glMapLimit(projectIds.slice(0, 25), 6, (pid) =>
+      glFetch<GlProjectResponse>(`/projects/${pid}`, undefined, opts).catch(() => null)
     )
-    const index = new Map<number, any>()
+    const index = new Map<number, GlProjectResponse>()
     for (const p of projects) if (p?.id) index.set(p.id, p)
-    return (data ?? []).map((e: any) => mapEvent(e, index)).filter((c): c is ForgeContribution => !!c)
+    return (data ?? []).map((e) => mapEvent(e, index)).filter((c): c is ForgeContribution => !!c)
   },
 
   async listMyWork(opts): Promise<ForgeMyWork> {
     const token = opts?.token ?? getForgeToken('gitlab')
     if (!token) return { authoredPulls: [], reviewRequests: [], assignedIssues: [] }
-    const me = await glFetch<any>(`/user`, undefined, opts).catch(() => null)
+    const me = await glFetch<GlUserResponse>(`/user`, undefined, opts).catch(() => null)
     const base = { state: 'opened', order_by: 'updated_at', sort: 'desc', per_page: 8 }
     const [authored, reviews, assigned] = await Promise.all([
-      glFetch<any[]>(`/merge_requests`, { ...base, scope: 'created_by_me' }, opts).catch(() => []),
+      glFetch<GlMergeRequestResponse[]>(
+        `/merge_requests`,
+        { ...base, scope: 'created_by_me' },
+        opts
+      ).catch(() => []),
       me?.username
-        ? glFetch<any[]>(`/merge_requests`, { ...base, scope: 'all', reviewer_username: me.username }, opts).catch(() => [])
-        : Promise.resolve([] as any[]),
-      glFetch<any[]>(`/issues`, { ...base, scope: 'assigned_to_me' }, opts).catch(() => [])
+        ? glFetch<GlMergeRequestResponse[]>(
+            `/merge_requests`,
+            { ...base, scope: 'all', reviewer_username: me.username },
+            opts
+          ).catch(() => [])
+        : Promise.resolve([] as GlMergeRequestResponse[]),
+      glFetch<GlIssueResponse[]>(`/issues`, { ...base, scope: 'assigned_to_me' }, opts).catch(
+        () => []
+      )
     ])
     return {
-      authoredPulls: (authored ?? []).map((r: any) => workItem(r, true)),
-      reviewRequests: (reviews ?? []).map((r: any) => workItem(r, true)),
-      assignedIssues: (assigned ?? []).map((r: any) => workItem(r, false))
+      authoredPulls: (authored ?? []).map((r) => workItem(r, true)),
+      reviewRequests: (reviews ?? []).map((r) => workItem(r, true)),
+      assignedIssues: (assigned ?? []).map((r) => workItem(r, false))
     }
   }
 }
 
 /** Derive owner/name/fullName from a global MR/issue payload. */
-function workRepo(r: any): { provider: ForgeId, owner: string, name: string, fullName: string, url?: string } {
+function workRepo(r: GlIssueResponse | GlMergeRequestResponse): {
+  provider: ForgeId
+  owner: string
+  name: string
+  fullName: string
+  url?: string
+} {
   let path = String(r.references?.full ?? '').split(/[!#]/)[0] ?? ''
   if (!path && r.web_url) {
     const m = String(r.web_url).match(/https?:\/\/[^/]+\/(.+?)\/-\//)
@@ -855,7 +1400,7 @@ function workRepo(r: any): { provider: ForgeId, owner: string, name: string, ful
 }
 
 /** Global MR/issue payload → ForgeIssue with repo, for the home dashboard. */
-function workItem(r: any, isPull: boolean): ForgeIssue {
+function workItem(r: GlIssueResponse | GlMergeRequestResponse, isPull: boolean): ForgeIssue {
   return {
     provider: 'gitlab',
     id: String(r.iid),
@@ -872,24 +1417,33 @@ function workItem(r: any, isPull: boolean): ForgeIssue {
   }
 }
 
-function todoKind(t: any): ForgeNotification['kind'] {
+function todoKind(t: GlTodoResponse): ForgeNotification['kind'] {
   if (t.action_name === 'build_failed' || t.target_type === 'Pipeline') return 'ci'
   switch (t.target_type) {
-    case 'MergeRequest': return 'pull'
-    case 'Issue': return 'issue'
-    case 'Commit': return 'commit'
-    default: return 'other'
+    case 'MergeRequest':
+      return 'pull'
+    case 'Issue':
+      return 'issue'
+    case 'Commit':
+      return 'commit'
+    default:
+      return 'other'
   }
 }
 
-function todoRepo(t: any): { owner: string, name: string, fullName: string } {
+function todoRepo(t: GlTodoResponse): { owner: string; name: string; fullName: string } {
   const full = String(t.project?.path_with_namespace ?? '')
   const owner = t.project?.namespace?.full_path ?? full.split('/').slice(0, -1).join('/')
   const name = t.project?.path ?? full.split('/').pop() ?? ''
   return { owner, name, fullName: full }
 }
 
-function todoRoute(t: any, kind: ForgeNotification['kind'], owner: string, name: string): string | null {
+function todoRoute(
+  t: GlTodoResponse,
+  kind: ForgeNotification['kind'],
+  owner: string,
+  name: string
+): string | null {
   if (!owner || !name) return null
   const base = `/gitlab/${owner}/${name}`
   const number = t.target?.iid

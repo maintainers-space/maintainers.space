@@ -1,13 +1,18 @@
 <script setup lang="ts">
+import type { BadgeProps } from '@nuxt/ui'
 import type { ForgeFileDiff } from '~/types/forge'
 
-const props = withDefaults(defineProps<{ files: ForgeFileDiff[], commentable?: boolean }>(), {
+const props = withDefaults(defineProps<{ files: ForgeFileDiff[]; commentable?: boolean }>(), {
   commentable: false
 })
 
-const emit = defineEmits<{ comment: [{ path: string, line: number, body: string }] }>()
+const emit = defineEmits<{ comment: [{ path: string; line: number; body: string }] }>()
 
-interface DiffLine { type: 'add' | 'del' | 'ctx' | 'hunk', text: string, newLine?: number }
+interface DiffLine {
+  type: 'add' | 'del' | 'ctx' | 'hunk'
+  text: string
+  newLine?: number
+}
 
 function parsePatch(patch?: string | null): DiffLine[] {
   if (!patch) return []
@@ -32,11 +37,16 @@ function parsePatch(patch?: string | null): DiffLine[] {
   })
 }
 
-const STATUS_COLOR: Record<string, string> = {
-  added: 'success', removed: 'error', modified: 'warning', renamed: 'info', copied: 'neutral', changed: 'warning'
+const STATUS_COLOR: Record<string, BadgeProps['color']> = {
+  added: 'success',
+  removed: 'error',
+  modified: 'warning',
+  renamed: 'info',
+  copied: 'neutral',
+  changed: 'warning'
 }
 
-const parsed = computed(() => props.files.map(f => ({ file: f, lines: parsePatch(f.patch) })))
+const parsed = computed(() => props.files.map((f) => ({ file: f, lines: parsePatch(f.patch) })))
 const totals = computed(() => {
   let additions = 0
   let deletions = 0
@@ -55,7 +65,7 @@ function isOpen(path: string): boolean {
   return open[path] ?? true
 }
 
-const active = ref<{ path: string, line: number } | null>(null)
+const active = ref<{ path: string; line: number } | null>(null)
 const draft = ref('')
 const submitting = ref(false)
 
@@ -86,22 +96,33 @@ async function submit(): Promise<void> {
 
 <template>
   <div class="space-y-4">
-    <div class="flex items-center justify-between rounded-lg border border-default bg-elevated/40 px-3 py-2 text-sm">
+    <div
+      class="flex items-center justify-between rounded-lg border border-default bg-elevated/40 px-3 py-2 text-sm"
+    >
       <span class="text-muted">
-        <span class="font-medium text-default">{{ totals.files }}</span> changed file{{ totals.files === 1 ? '' : 's' }}
+        <span class="font-medium text-default">{{ totals.files }}</span> changed file{{
+          totals.files === 1 ? '' : 's'
+        }}
       </span>
       <DiffStat :additions="totals.additions" :deletions="totals.deletions" :show-files="false" />
     </div>
 
-    <div v-for="{ file, lines } in parsed" :key="file.path" class="overflow-hidden rounded-lg border border-default">
+    <div
+      v-for="{ file, lines } in parsed"
+      :key="file.path"
+      class="overflow-hidden rounded-lg border border-default"
+    >
       <button
         type="button"
         class="flex w-full items-center gap-2 border-b border-default bg-elevated/40 px-3 py-2 text-left text-sm hover:bg-elevated/70"
         @click="toggle(file.path)"
       >
-        <UIcon :name="isOpen(file.path) ? 'i-lucide-chevron-down' : 'i-lucide-chevron-right'" class="size-4 shrink-0 text-muted" />
+        <UIcon
+          :name="isOpen(file.path) ? 'i-lucide-chevron-down' : 'i-lucide-chevron-right'"
+          class="size-4 shrink-0 text-muted"
+        />
         <UBadge
-          :color="(STATUS_COLOR[file.status] as any) ?? 'neutral'"
+          :color="STATUS_COLOR[file.status] ?? 'neutral'"
           variant="subtle"
           size="xs"
           class="capitalize"
@@ -109,7 +130,9 @@ async function submit(): Promise<void> {
           {{ file.status }}
         </UBadge>
         <span class="truncate font-mono text-xs text-default">
-          <span v-if="file.oldPath && file.oldPath !== file.path" class="text-muted">{{ file.oldPath }} → </span>{{ file.path }}
+          <span v-if="file.oldPath && file.oldPath !== file.path" class="text-muted"
+            >{{ file.oldPath }} → </span
+          >{{ file.path }}
         </span>
         <span class="ml-auto flex shrink-0 items-center gap-2 font-mono text-xs">
           <span v-if="file.additions" class="text-success">+{{ file.additions }}</span>
@@ -152,15 +175,24 @@ async function submit(): Promise<void> {
                   </td>
                   <td
                     class="w-6 select-none border-r border-default/60 px-1 text-center align-top"
-                    :class="{ 'text-success': line.type === 'add', 'text-error': line.type === 'del', 'text-muted': line.type !== 'add' && line.type !== 'del' }"
+                    :class="{
+                      'text-success': line.type === 'add',
+                      'text-error': line.type === 'del',
+                      'text-muted': line.type !== 'add' && line.type !== 'del'
+                    }"
                   >
                     {{ line.type === 'add' ? '+' : line.type === 'del' ? '-' : '' }}
                   </td>
                   <td
                     class="whitespace-pre-wrap break-all px-2 py-0.5"
-                    :class="{ 'text-success': line.type === 'add', 'text-error': line.type === 'del' }"
+                    :class="{
+                      'text-success': line.type === 'add',
+                      'text-error': line.type === 'del'
+                    }"
                   >
-                    {{ line.type === 'hunk' || line.type === 'ctx' ? line.text : line.text.slice(1) }}
+                    {{
+                      line.type === 'hunk' || line.type === 'ctx' ? line.text : line.text.slice(1)
+                    }}
                   </td>
                 </tr>
 
@@ -169,7 +201,8 @@ async function submit(): Promise<void> {
                     <div class="space-y-2 font-sans">
                       <div class="flex items-center justify-between">
                         <p class="text-xs text-muted">
-                          Commenting on line {{ line.newLine }} of <span class="font-mono">{{ file.path }}</span>
+                          Commenting on line {{ line.newLine }} of
+                          <span class="font-mono">{{ file.path }}</span>
                         </p>
                         <UButton
                           icon="i-lucide-lightbulb"

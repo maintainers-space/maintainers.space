@@ -4,7 +4,9 @@ import { useRepoContext } from '~/composables/useRepoContext'
 
 const route = useRoute()
 const { provider, owner, name, forge, locator } = useRepoContext()
-const base = computed(() => repoPath({ provider: provider.value, owner: owner.value, name: name.value }))
+const base = computed(() =>
+  repoPath({ provider: provider.value, owner: owner.value, name: name.value })
+)
 const id = computed(() => String(route.params.id))
 
 const { data, pending, error, refresh } = useLiveAsyncData<ForgePullDetail | null>(
@@ -64,7 +66,11 @@ onMounted(() => {
 
 const tabItems = computed(() => [
   { label: 'Conversation', icon: 'i-lucide-message-square', value: 'conversation' },
-  { label: `Commits${data.value?.commitCount ? ' ' + data.value.commitCount : ''}`, icon: 'i-lucide-git-commit-horizontal', value: 'commits' },
+  {
+    label: `Commits${data.value?.commitCount ? ' ' + data.value.commitCount : ''}`,
+    icon: 'i-lucide-git-commit-horizontal',
+    value: 'commits'
+  },
   { label: 'Files changed', icon: 'i-lucide-file-diff', value: 'files' }
 ])
 
@@ -82,7 +88,14 @@ async function submitComment(): Promise<void> {
     toast.add({ title: 'Comment posted', color: 'success', icon: 'i-lucide-check' })
     await refresh()
   } catch (e) {
-    toast.add({ title: 'Could not post comment', description: (e as { data?: { message?: string }, message?: string })?.data?.message ?? (e as { message?: string })?.message, color: 'error', icon: 'i-lucide-circle-alert' })
+    toast.add({
+      title: 'Could not post comment',
+      description:
+        (e as { data?: { message?: string }; message?: string })?.data?.message ??
+        (e as { message?: string })?.message,
+      color: 'error',
+      icon: 'i-lucide-circle-alert'
+    })
   } finally {
     postingComment.value = false
   }
@@ -92,18 +105,28 @@ async function submitReview(event: 'APPROVE' | 'REQUEST_CHANGES' | 'COMMENT'): P
   if (!forge.value?.createReview) return
   reviewSubmitting.value = event
   try {
-    await forge.value.createReview(locator.value, id.value, { event, body: reviewDraft.value || undefined })
+    await forge.value.createReview(locator.value, id.value, {
+      event,
+      body: reviewDraft.value || undefined
+    })
     reviewDraft.value = ''
     toast.add({ title: 'Review submitted', color: 'success', icon: 'i-lucide-check' })
     await refresh()
   } catch (e) {
-    toast.add({ title: 'Could not submit review', description: (e as { data?: { message?: string }, message?: string })?.data?.message ?? (e as { message?: string })?.message, color: 'error', icon: 'i-lucide-circle-alert' })
+    toast.add({
+      title: 'Could not submit review',
+      description:
+        (e as { data?: { message?: string }; message?: string })?.data?.message ??
+        (e as { message?: string })?.message,
+      color: 'error',
+      icon: 'i-lucide-circle-alert'
+    })
   } finally {
     reviewSubmitting.value = ''
   }
 }
 
-async function onDiffComment(payload: { path: string, line: number, body: string }): Promise<void> {
+async function onDiffComment(payload: { path: string; line: number; body: string }): Promise<void> {
   if (!forge.value?.createReview) return
   try {
     await forge.value.createReview(locator.value, id.value, {
@@ -112,7 +135,14 @@ async function onDiffComment(payload: { path: string, line: number, body: string
     })
     toast.add({ title: 'Comment added to the diff', color: 'success', icon: 'i-lucide-check' })
   } catch (e) {
-    toast.add({ title: 'Could not add comment', description: (e as { data?: { message?: string }, message?: string })?.data?.message ?? (e as { message?: string })?.message, color: 'error', icon: 'i-lucide-circle-alert' })
+    toast.add({
+      title: 'Could not add comment',
+      description:
+        (e as { data?: { message?: string }; message?: string })?.data?.message ??
+        (e as { message?: string })?.message,
+      color: 'error',
+      icon: 'i-lucide-circle-alert'
+    })
   }
 }
 </script>
@@ -139,13 +169,14 @@ async function onDiffComment(payload: { path: string, line: number, body: string
       variant="subtle"
       icon="i-lucide-circle-alert"
       title="Could not load pull request"
-      :description="(error as any)?.message"
+      :description="error?.message"
     />
 
     <template v-else-if="data">
       <div class="space-y-2 border-b border-default pb-4">
         <h1 class="text-xl font-semibold text-highlighted">
-          {{ data.title }} <span v-if="data.number" class="font-normal text-muted">#{{ data.number }}</span>
+          {{ data.title }}
+          <span v-if="data.number" class="font-normal text-muted">#{{ data.number }}</span>
         </h1>
         <div class="flex flex-wrap items-center gap-2 text-sm text-muted">
           <StateBadge :state="data.state" kind="pull" />
@@ -156,18 +187,17 @@ async function onDiffComment(payload: { path: string, line: number, body: string
         </div>
       </div>
 
-      <UTabs
-        v-model="tab"
-        :items="tabItems"
-        :content="false"
-        size="sm"
-      />
+      <UTabs v-model="tab" :items="tabItems" :content="false" size="sm" />
 
       <div v-show="tab === 'conversation'" class="space-y-4">
         <article class="overflow-hidden rounded-lg border border-default">
-          <header class="flex items-center gap-2 border-b border-default bg-elevated/40 px-4 py-2 text-sm">
+          <header
+            class="flex items-center gap-2 border-b border-default bg-elevated/40 px-4 py-2 text-sm"
+          >
             <UserLink :user="data.author" />
-            <span v-if="data.createdAt" class="text-muted">opened {{ formatRelativeTime(data.createdAt) }}</span>
+            <span v-if="data.createdAt" class="text-muted"
+              >opened {{ formatRelativeTime(data.createdAt) }}</span
+            >
           </header>
           <div class="px-4 py-3">
             <MarkdownBody :content="data.body ?? ''" empty="No description provided." />
@@ -204,7 +234,10 @@ async function onDiffComment(payload: { path: string, line: number, body: string
           :owner="owner"
           :repo="name"
         />
-        <p v-else class="rounded-lg border border-dashed border-default py-8 text-center text-sm text-muted">
+        <p
+          v-else
+          class="rounded-lg border border-dashed border-default py-8 text-center text-sm text-muted"
+        >
           No commits to display.
         </p>
       </div>
@@ -217,9 +250,7 @@ async function onDiffComment(payload: { path: string, line: number, body: string
           <DiffView :files="files" :commentable="canWrite" @comment="onDiffComment" />
 
           <div v-if="canWrite" class="mt-4 space-y-2 rounded-lg border border-default p-3">
-            <p class="text-sm font-medium text-highlighted">
-              Finish your review
-            </p>
+            <p class="text-sm font-medium text-highlighted">Finish your review</p>
             <MarkdownEditor
               v-model="reviewDraft"
               :rows="3"
@@ -256,7 +287,10 @@ async function onDiffComment(payload: { path: string, line: number, body: string
             </div>
           </div>
         </template>
-        <p v-else class="rounded-lg border border-dashed border-default py-8 text-center text-sm text-muted">
+        <p
+          v-else
+          class="rounded-lg border border-dashed border-default py-8 text-center text-sm text-muted"
+        >
           No file changes to display.
         </p>
       </div>
