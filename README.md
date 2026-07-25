@@ -2,19 +2,13 @@
 
 [![Nuxt UI](https://img.shields.io/badge/Made%20with-Nuxt%20UI-00DC82?logo=nuxt&labelColor=020420)](https://ui.nuxt.com)
 
-**koinon** is a multi-forge dashboard that brings your work across Git hosts into one place. It aggregates repositories, issues, pull requests and notifications from **GitHub** and **[Tangled](https://tangled.org)**, using your **AT Protocol** (Bluesky) identity to sign in and to discover accounts across platforms.
+koinon pulls your work across Git hosts into one place. Repos, issues, pull requests and notifications from GitHub, GitLab, Codeberg and [Tangled](https://tangled.org), all in one dashboard. You sign in with your AT Protocol (Bluesky) identity, and koinon uses that same identity to find your accounts on each of them. Built with [Nuxt](https://nuxt.com) and [Nuxt UI](https://ui.nuxt.com).
 
-Built with [Nuxt](https://nuxt.com) and [Nuxt UI](https://ui.nuxt.com).
+There's no koinon password. Signing in happens through atproto, so nothing is shared with a third party. From there you link a GitHub, GitLab or Codeberg account through a real OAuth flow (never a personal access token), and koinon starts pulling in that provider's notifications, plus the repos and people you follow there, right alongside everything from the other forges you've linked. atproto records are public and anyone can edit their own, so a plain "verified" flag would prove nothing on its own; koinon signs a small server-side attestation for each linked account so the badge on a public profile actually reflects that the OAuth check happened. Sign in and you also get a personal home feed: pull requests worth jumping back into, review requests, assigned issues, your recent and favourite repos. Every user gets a shareable `/profile/<handle>` page listing their linked accounts, repos and activity, signed in or not.
 
-## Features
+## Contributing
 
-- **AT Protocol sign-in** — log in with any atproto handle or DID (Bluesky, npmx, self-hosted PDS…). No passwords are ever shared with koinon.
-- **GitHub via OAuth** — link GitHub with a verified OAuth flow (no personal access tokens).
-- **Tangled support** — browse Tangled repos, issues and pulls through a same-origin proxy.
-- **Unified notifications** — GitHub and Tangled notifications mixed into one list, each tagged with its forge logo.
-- **Following** — see repos from the people and orgs you follow, on any platform.
-- **Public profiles** — shareable `/profile/<handle>` pages listing linked accounts, repos and activity.
-- **Personalized home** — a signed-in overview of PRs to jump back into, review requests and assigned issues, plus recent/favourite repos ranked by your visit history.
+Bug reports, feature requests and pull requests are all welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for local setup, the OAuth apps you'll need to register, and the project's conventions.
 
 ## License
 
