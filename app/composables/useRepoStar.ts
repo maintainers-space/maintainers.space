@@ -29,7 +29,8 @@ export function useRepoStar(repo: Ref<ForgeRepo | null>) {
 
   const forge = computed(() => (repo.value ? getForge(repo.value.provider) : undefined))
   const locator = computed<RepoLocator | null>(() =>
-    repo.value ? { owner: repo.value.owner, name: repo.value.name, ref: repo.value.ref } : null)
+    repo.value ? { owner: repo.value.owner, name: repo.value.name, ref: repo.value.ref } : null
+  )
 
   const isTangled = computed(() => repo.value?.provider === 'tangled')
 
@@ -48,11 +49,19 @@ export function useRepoStar(repo: Ref<ForgeRepo | null>) {
   async function loadTangled(): Promise<void> {
     const subject = repoDid()
     if (!subject || !did.value) return
-    const data = await runAuthed(rpc => ok(rpc.get('com.atproto.repo.listRecords', {
-      params: { repo: did.value as Did, collection: TANGLED_STAR_COLLECTION as Nsid, limit: 100 }
-    })))
+    const data = await runAuthed((rpc) =>
+      ok(
+        rpc.get('com.atproto.repo.listRecords', {
+          params: {
+            repo: did.value as Did,
+            collection: TANGLED_STAR_COLLECTION as Nsid,
+            limit: 100
+          }
+        })
+      )
+    )
     const records = (data.records ?? []) as unknown as TangledStarRecord[]
-    const mine = records.find(r => r.value?.subject?.did === subject)
+    const mine = records.find((r) => r.value?.subject?.did === subject)
     starred.value = !!mine
     tangledRkey.value = mine ? (mine.uri.split('/').pop() ?? null) : null
   }
@@ -70,7 +79,9 @@ export function useRepoStar(repo: Ref<ForgeRepo | null>) {
       if (isTangled.value) {
         await loadTangled()
       } else if (locator.value && forge.value?.isStarred) {
-        starred.value = await forge.value.isStarred(locator.value, { token: getToken(r.provider as ForgeId) })
+        starred.value = await forge.value.isStarred(locator.value, {
+          token: getToken(r.provider as ForgeId)
+        })
       }
     } catch {
       // Best-effort: an unreadable star state just shows as not-starred.
@@ -88,21 +99,27 @@ export function useRepoStar(repo: Ref<ForgeRepo | null>) {
         subject: { $type: `${TANGLED_STAR_COLLECTION}#repo`, did: subject },
         createdAt: new Date().toISOString()
       }
-      const res = await runAuthed(rpc => ok(rpc.post('com.atproto.repo.createRecord', {
-        input: {
-          repo: did.value as Did,
-          collection: TANGLED_STAR_COLLECTION as Nsid,
-          record: record as unknown as Record<string, unknown>
-        }
-      })))
+      const res = await runAuthed((rpc) =>
+        ok(
+          rpc.post('com.atproto.repo.createRecord', {
+            input: {
+              repo: did.value as Did,
+              collection: TANGLED_STAR_COLLECTION as Nsid,
+              record: record as unknown as Record<string, unknown>
+            }
+          })
+        )
+      )
       tangledRkey.value = res.uri.split('/').pop() ?? null
     } else {
       const rkey = tangledRkey.value
       if (!rkey) return
-      await runAuthed(rpc => rpc.post('com.atproto.repo.deleteRecord', {
-        input: { repo: did.value as Did, collection: TANGLED_STAR_COLLECTION as Nsid, rkey },
-        as: null
-      }))
+      await runAuthed((rpc) =>
+        rpc.post('com.atproto.repo.deleteRecord', {
+          input: { repo: did.value as Did, collection: TANGLED_STAR_COLLECTION as Nsid, rkey },
+          as: null
+        })
+      )
       tangledRkey.value = null
     }
   }
@@ -120,7 +137,9 @@ export function useRepoStar(repo: Ref<ForgeRepo | null>) {
       if (isTangled.value) {
         await toggleTangled(next)
       } else if (locator.value && forge.value?.setStar) {
-        const res = await forge.value.setStar(locator.value, next, { token: getToken(r.provider as ForgeId) })
+        const res = await forge.value.setStar(locator.value, next, {
+          token: getToken(r.provider as ForgeId)
+        })
         starred.value = res.starred
         if (typeof res.stars === 'number') {
           stars.value = res.stars

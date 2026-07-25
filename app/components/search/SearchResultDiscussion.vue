@@ -42,13 +42,9 @@ const to = computed(() => {
           <span v-if="discussion.createdAt">{{ formatRelativeTime(discussion.createdAt) }}</span>
         </div>
       </div>
-      <UBadge
-        v-if="discussion.answered"
-        color="success"
-        variant="subtle"
-        size="xs"
-        class="shrink-0"
-      >Answered</UBadge>
+      <UBadge v-if="discussion.answered" color="success" variant="subtle" size="xs" class="shrink-0"
+        >Answered</UBadge
+      >
     </div>
   </NuxtLink>
 </template>

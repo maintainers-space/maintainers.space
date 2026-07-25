@@ -42,7 +42,11 @@ export interface CacheOptions<T> {
  * Returns fresh or stale-but-valid data immediately; refetches in the
  * background when stale. Rejections are never cached.
  */
-export function cached<T>(key: string, fetcher: () => Promise<T>, opts: CacheOptions<T> = {}): Promise<T> {
+export function cached<T>(
+  key: string,
+  fetcher: () => Promise<T>,
+  opts: CacheOptions<T> = {}
+): Promise<T> {
   const ttl = opts.ttl ?? TTL.MEDIUM
   const swr = opts.swr ?? ttl
   const now = Date.now()
@@ -73,7 +77,11 @@ export function cached<T>(key: string, fetcher: () => Promise<T>, opts: CacheOpt
     if (now < existing.fresh) return Promise.resolve(existing.value)
     if (now < existing.dead) {
       // Stale but usable: serve now, revalidate in the background.
-      runFetch().then(v => opts.onRevalidate?.(v)).catch(() => { /* keep stale value */ })
+      runFetch()
+        .then((v) => opts.onRevalidate?.(v))
+        .catch(() => {
+          /* keep stale value */
+        })
       return Promise.resolve(existing.value)
     }
   }

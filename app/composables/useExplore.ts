@@ -23,8 +23,12 @@ function sinceDate(period: ExplorePeriod): string {
 }
 
 /** Bounded-concurrency map so "following" fan-out stays responsive. */
-async function mapLimit<T, R>(items: T[], concurrency: number, fn: (item: T) => Promise<R>): Promise<R[]> {
-  const results: R[] = new Array(items.length)
+async function mapLimit<T, R>(
+  items: T[],
+  concurrency: number,
+  fn: (item: T) => Promise<R>
+): Promise<R[]> {
+  const results: R[] = Array.from({ length: items.length })
   let cursor = 0
   async function worker(): Promise<void> {
     while (cursor < items.length) {
@@ -52,8 +56,11 @@ function dedupe(list: ForgeRepo[]): ForgeRepo[] {
  */
 function sortRepos(list: ForgeRepo[], scope: ExploreScope): ForgeRepo[] {
   if (scope === 'trending') {
-    return list.sort((a, b) => (b.stars ?? 0) - (a.stars ?? 0)
-      || String(b.updatedAt ?? '').localeCompare(String(a.updatedAt ?? '')))
+    return list.sort(
+      (a, b) =>
+        (b.stars ?? 0) - (a.stars ?? 0) ||
+        String(b.updatedAt ?? '').localeCompare(String(a.updatedAt ?? ''))
+    )
   }
   return list.sort((a, b) => String(b.updatedAt ?? '').localeCompare(String(a.updatedAt ?? '')))
 }
@@ -161,21 +168,25 @@ export function useExplore() {
       return
     }
 
-    await Promise.all(forgeList.map(async (forge) => {
-      if (!forge.listFollowedRepos) return
-      const t = getToken(forge.id)
-      if (!t) {
-        if (forge.id !== 'tangled') {
-          noteSet.add(`Connect your ${forge.label} account to include the people you follow there.`)
+    await Promise.all(
+      forgeList.map(async (forge) => {
+        if (!forge.listFollowedRepos) return
+        const t = getToken(forge.id)
+        if (!t) {
+          if (forge.id !== 'tangled') {
+            noteSet.add(
+              `Connect your ${forge.label} account to include the people you follow there.`
+            )
+          }
+          return
         }
-        return
-      }
-      try {
-        collected.push(...await forge.listFollowedRepos({ token: t }))
-      } catch {
-        noteSet.add(`Could not load repositories from your ${forge.label} follows.`)
-      }
-    }))
+        try {
+          collected.push(...(await forge.listFollowedRepos({ token: t })))
+        } catch {
+          noteSet.add(`Could not load repositories from your ${forge.label} follows.`)
+        }
+      })
+    )
 
     const tangled = getForge('tangled')
     const viewer = did.value
@@ -186,7 +197,7 @@ export function useExplore() {
           try {
             const list = await tangled.listRepos!(f.did)
             const owner = f.handle && !f.handle.endsWith('.invalid') ? f.handle : f.did
-            return list.map(r => withOwner(r, owner))
+            return list.map((r) => withOwner(r, owner))
           } catch {
             return [] as ForgeRepo[]
           }
@@ -212,17 +223,21 @@ export function useExplore() {
 
     const key = `explore:${scope}:${period}:${opts.language ?? 'all'}`
     try {
-      const result = await cached(key, async () => {
-        const noteSet = new Set<string>()
-        const collected: ForgeRepo[] = []
-        if (scope === 'following') {
-          await loadFollowing(collected, noteSet)
-        } else {
-          await loadDiscovery(period, limit, opts.language, collected, noteSet)
-        }
-        // Aggregate first, then sort, so providers interleave with no sectioning.
-        return { repos: sortRepos(dedupe(collected), scope), notes: [...noteSet] }
-      }, { ttl: TTL.MEDIUM, force: opts.force })
+      const result = await cached(
+        key,
+        async () => {
+          const noteSet = new Set<string>()
+          const collected: ForgeRepo[] = []
+          if (scope === 'following') {
+            await loadFollowing(collected, noteSet)
+          } else {
+            await loadDiscovery(period, limit, opts.language, collected, noteSet)
+          }
+          // Aggregate first, then sort, so providers interleave with no sectioning.
+          return { repos: sortRepos(dedupe(collected), scope), notes: [...noteSet] }
+        },
+        { ttl: TTL.MEDIUM, force: opts.force }
+      )
 
       if (my !== token) return
       repos.value = result.repos

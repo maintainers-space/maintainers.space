@@ -1,20 +1,23 @@
 <script setup lang="ts">
 type BadgeColor = 'primary' | 'error' | 'neutral' | 'success' | 'warning'
 
-const props = withDefaults(defineProps<{
-  icon: string
-  /** Chip classes, e.g. 'bg-error/10 text-error'. */
-  iconClass?: string
-  title: string
-  subtitle?: string
-  count?: number
-  countColor?: BadgeColor
-  defaultOpen?: boolean
-}>(), {
-  iconClass: 'bg-elevated text-muted',
-  countColor: 'neutral',
-  defaultOpen: false
-})
+const props = withDefaults(
+  defineProps<{
+    icon: string
+    /** Chip classes, e.g. 'bg-error/10 text-error'. */
+    iconClass?: string
+    title: string
+    subtitle?: string
+    count?: number
+    countColor?: BadgeColor
+    defaultOpen?: boolean
+  }>(),
+  {
+    iconClass: 'bg-elevated text-muted',
+    countColor: 'neutral',
+    defaultOpen: false
+  }
+)
 
 const open = ref(props.defaultOpen)
 </script>
@@ -37,15 +40,13 @@ const open = ref(props.defaultOpen)
           {{ subtitle }}
         </p>
       </div>
-      <UBadge
-        v-if="count != null"
-        :color="countColor"
-        variant="subtle"
-        size="sm"
-      >
+      <UBadge v-if="count != null" :color="countColor" variant="subtle" size="sm">
         {{ count }}
       </UBadge>
-      <UIcon :name="open ? 'i-lucide-chevron-up' : 'i-lucide-chevron-down'" class="size-4 shrink-0 text-muted" />
+      <UIcon
+        :name="open ? 'i-lucide-chevron-up' : 'i-lucide-chevron-down'"
+        class="size-4 shrink-0 text-muted"
+      />
     </button>
     <div
       class="grid transition-[grid-template-rows] duration-200 ease-out"

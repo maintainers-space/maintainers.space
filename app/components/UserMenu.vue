@@ -16,26 +16,54 @@ async function onSignOut() {
 
 const items = computed<DropdownMenuItem[][]>(() => {
   const groups: DropdownMenuItem[][] = [
-    [{
-      type: 'label',
-      label: displayName.value,
-      avatar: profile.value?.avatar ? { src: profile.value.avatar } : { icon: 'i-lucide-user' }
-    }],
     [
-      { label: 'Profile', icon: 'i-lucide-user', to: profileHandle.value ? `/profile/${profileHandle.value}` : '/settings' },
+      {
+        type: 'label',
+        label: displayName.value,
+        avatar: profile.value?.avatar ? { src: profile.value.avatar } : { icon: 'i-lucide-user' }
+      }
+    ],
+    [
+      {
+        label: 'Profile',
+        icon: 'i-lucide-user',
+        to: profileHandle.value ? `/profile/${profileHandle.value}` : '/settings'
+      },
       { label: 'Settings', icon: 'i-lucide-settings', to: '/settings' }
     ]
   ]
-  groups.push([{
-    label: 'Appearance',
-    icon: colorMode.value === 'dark' ? 'i-lucide-moon' : 'i-lucide-sun',
-    children: [
-      { label: 'Light', icon: 'i-lucide-sun', onSelect: () => { colorMode.preference = 'light' } },
-      { label: 'Dark', icon: 'i-lucide-moon', onSelect: () => { colorMode.preference = 'dark' } },
-      { label: 'System', icon: 'i-lucide-monitor', onSelect: () => { colorMode.preference = 'system' } }
-    ]
-  }])
-  groups.push([{ label: 'Sign out', icon: 'i-lucide-log-out', color: 'error', onSelect: onSignOut }])
+  groups.push([
+    {
+      label: 'Appearance',
+      icon: colorMode.value === 'dark' ? 'i-lucide-moon' : 'i-lucide-sun',
+      children: [
+        {
+          label: 'Light',
+          icon: 'i-lucide-sun',
+          onSelect: () => {
+            colorMode.preference = 'light'
+          }
+        },
+        {
+          label: 'Dark',
+          icon: 'i-lucide-moon',
+          onSelect: () => {
+            colorMode.preference = 'dark'
+          }
+        },
+        {
+          label: 'System',
+          icon: 'i-lucide-monitor',
+          onSelect: () => {
+            colorMode.preference = 'system'
+          }
+        }
+      ]
+    }
+  ])
+  groups.push([
+    { label: 'Sign out', icon: 'i-lucide-log-out', color: 'error', onSelect: onSignOut }
+  ])
   return groups
 })
 </script>

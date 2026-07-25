@@ -4,8 +4,12 @@ import { cached, TTL } from '~/lib/cache'
 import type { ForgeContribution } from '~/types/forge'
 
 /** Bounded-concurrency map so the friends fan-out stays responsive. */
-async function mapLimit<T, R>(items: T[], concurrency: number, fn: (item: T) => Promise<R>): Promise<R[]> {
-  const results: R[] = new Array(items.length)
+async function mapLimit<T, R>(
+  items: T[],
+  concurrency: number,
+  fn: (item: T) => Promise<R>
+): Promise<R[]> {
+  const results: R[] = Array.from({ length: items.length })
   let cursor = 0
   async function worker(): Promise<void> {
     while (cursor < items.length) {
@@ -67,7 +71,7 @@ export function useTimeline() {
   const friendsNote = ref<string | null>(null)
 
   function loginsFor(provider: string): string[] {
-    return (accounts.value ?? []).filter(a => a.provider === provider).map(a => a.username)
+    return (accounts.value ?? []).filter((a) => a.provider === provider).map((a) => a.username)
   }
 
   /** The viewer's Tangled identity (handle preferred, DID fallback). */
@@ -85,13 +89,18 @@ export function useTimeline() {
       if (!forge.listUserEvents) continue
       if (forge.id === 'tangled') {
         const self = tangledSelf()
-        if (self) jobs.push(forge.listUserEvents(self, { limit: 100 }).catch(() => [] as ForgeContribution[]))
+        if (self)
+          jobs.push(
+            forge.listUserEvents(self, { limit: 100 }).catch(() => [] as ForgeContribution[])
+          )
         continue
       }
       const token = getToken(forge.id)
       if (!token) continue
       for (const login of loginsFor(forge.id)) {
-        jobs.push(forge.listUserEvents(login, { token, limit: 100 }).catch(() => [] as ForgeContribution[]))
+        jobs.push(
+          forge.listUserEvents(login, { token, limit: 100 }).catch(() => [] as ForgeContribution[])
+        )
       }
     }
     const chunks = await Promise.all(jobs)
@@ -103,27 +112,31 @@ export function useTimeline() {
   /** Pool "activity from people you follow" across every forge. */
   async function gatherFriends(): Promise<ForgeContribution[]> {
     if (!loaded.value) await refresh()
-    const buckets = await Promise.all(forgeList.map(async (forge) => {
-      if (!forge.listUserEvents) return [] as ForgeContribution[]
+    const buckets = await Promise.all(
+      forgeList.map(async (forge) => {
+        if (!forge.listUserEvents) return [] as ForgeContribution[]
 
-      if (forge.id === 'tangled') {
-        const self = did.value
-        if (!self) return [] as ForgeContribution[]
-        const follows = await fetchFollows(self, 60).catch(() => [])
-        const chunks = await mapLimit(follows.slice(0, 20), 6, f =>
-          forge.listUserEvents!(f.did, { limit: 100 }).catch(() => [] as ForgeContribution[])
+        if (forge.id === 'tangled') {
+          const self = did.value
+          if (!self) return [] as ForgeContribution[]
+          const follows = await fetchFollows(self, 60).catch(() => [])
+          const chunks = await mapLimit(follows.slice(0, 20), 6, (f) =>
+            forge.listUserEvents!(f.did, { limit: 100 }).catch(() => [] as ForgeContribution[])
+          )
+          return chunks.flat()
+        }
+
+        const token = getToken(forge.id)
+        if (!token || !forge.listFollowing) return [] as ForgeContribution[]
+        const users = await forge.listFollowing({ token, limit: 100 }).catch(() => [])
+        const chunks = await mapLimit(users.slice(0, 20), 6, (u) =>
+          forge.listUserEvents!(u.login, { token, limit: 100 }).catch(
+            () => [] as ForgeContribution[]
+          )
         )
         return chunks.flat()
-      }
-
-      const token = getToken(forge.id)
-      if (!token || !forge.listFollowing) return [] as ForgeContribution[]
-      const users = await forge.listFollowing({ token, limit: 100 }).catch(() => [])
-      const chunks = await mapLimit(users.slice(0, 20), 6, u =>
-        forge.listUserEvents!(u.login, { token, limit: 100 }).catch(() => [] as ForgeContribution[])
-      )
-      return chunks.flat()
-    }))
+      })
+    )
     return dedupe(buckets.flat()).filter(meaningful)
   }
 
@@ -147,7 +160,8 @@ export function useTimeline() {
       const all = await cached('timeline:friends', gatherFriends, { ttl: TTL.MEDIUM, force })
       friendsItems.value = selectFriends(all)
       if (!friendsItems.value.length) {
-        friendsNote.value = 'No recent activity from the people you follow — follow a few people to build your feed.'
+        friendsNote.value =
+          'No recent activity from the people you follow — follow a few people to build your feed.'
       }
     } finally {
       friendsLoading.value = false

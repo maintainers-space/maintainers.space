@@ -11,9 +11,7 @@ export default defineAppConfig({
       ]
     },
     badge: {
-      compoundVariants: [
-        { color: 'primary', variant: 'solid', class: 'text-neutral-900' }
-      ]
+      compoundVariants: [{ color: 'primary', variant: 'solid', class: 'text-neutral-900' }]
     }
   }
 })

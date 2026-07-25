@@ -49,19 +49,19 @@ const { data, pending, error, refresh } = useAsyncData(
           variant="subtle"
           icon="i-lucide-circle-alert"
           title="Could not load repositories"
-          :description="error?.statusMessage || error?.message || `No repositories found for ${owner}.`"
+          :description="
+            error?.statusMessage || error?.message || `No repositories found for ${owner}.`
+          "
         >
           <template #actions>
-            <UButton
-              color="error"
-              variant="soft"
-              label="Retry"
-              @click="refresh()"
-            />
+            <UButton color="error" variant="soft" label="Retry" @click="refresh()" />
           </template>
         </UAlert>
 
-        <div v-else-if="!data?.length" class="rounded-lg border border-dashed border-default p-8 text-center text-sm text-muted">
+        <div
+          v-else-if="!data?.length"
+          class="rounded-lg border border-dashed border-default p-8 text-center text-sm text-muted"
+        >
           No repositories found for {{ owner }}.
         </div>
 
@@ -72,11 +72,15 @@ const { data, pending, error, refresh } = useAsyncData(
             :to="`/${provider}/${owner}/${r.name}`"
             class="group rounded-lg border border-default p-4 transition hover:border-primary hover:bg-elevated/40"
           >
-            <div class="flex items-center gap-1.5 font-medium text-default group-hover:text-primary">
+            <div
+              class="flex items-center gap-1.5 font-medium text-default group-hover:text-primary"
+            >
               <UIcon name="i-lucide-book-marked" class="size-4 text-muted" />
               {{ r.name }}
             </div>
-            <p v-if="r.description" class="mt-1 line-clamp-2 text-sm text-muted">{{ r.description }}</p>
+            <p v-if="r.description" class="mt-1 line-clamp-2 text-sm text-muted">
+              {{ r.description }}
+            </p>
             <div v-if="r.topics?.length" class="mt-2 flex flex-wrap gap-1">
               <UBadge
                 v-for="t in r.topics.slice(0, 4)"

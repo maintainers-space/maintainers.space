@@ -27,7 +27,8 @@ export function useGitlabAuth() {
 
   /** Redirect to GitLab to authorize; returns to `returnTo` (an in-app path). */
   function connect(returnTo?: string): void {
-    const to = returnTo ?? (import.meta.client ? location.pathname + location.search : '/settings/accounts')
+    const to =
+      returnTo ?? (import.meta.client ? location.pathname + location.search : '/settings/accounts')
     const params = new URLSearchParams({ redirect: to })
     if (did.value) params.set('did', did.value)
     window.location.assign(`/api/auth/gitlab/login?${params.toString()}`)
@@ -55,7 +56,7 @@ export function useGitlabAuth() {
     const attestation = params.get('attestation') || undefined
     const attestedBy = params.get('attestedBy') || undefined
 
-    while (restoring.value) await new Promise(r => setTimeout(r, 50))
+    while (restoring.value) await new Promise((r) => setTimeout(r, 50))
     if (did.value) {
       await link({
         provider: 'gitlab',
@@ -80,7 +81,9 @@ export function useGitlabAuth() {
     await finishClaim('gitlab', params)
 
     const returnTo = params.get('return')
-    return returnTo && returnTo.startsWith('/') && !returnTo.startsWith('//') ? returnTo : '/settings/accounts'
+    return returnTo && returnTo.startsWith('/') && !returnTo.startsWith('//')
+      ? returnTo
+      : '/settings/accounts'
   }
 
   return { isConnected, connect, disconnect, completeCallback }

@@ -41,17 +41,17 @@ let configured = false
  *   Note: the app MUST be served from 127.0.0.1 (localhost redirect_uris are rejected).
  * - In production the hosted `client-metadata.json` document is the client_id.
  */
-export function getOAuthMetadata(): { client_id: string, redirect_uri: string } {
+export function getOAuthMetadata(): { client_id: string; redirect_uri: string } {
   const origin = window.location.origin
   const host = window.location.hostname
   const isLoopback = host === '127.0.0.1' || host === 'localhost' || host === '[::1]'
   const redirect_uri = `${origin}/oauth/callback`
 
   if (isLoopback) {
-    const client_id
-      = `http://localhost`
-        + `?redirect_uri=${encodeURIComponent(redirect_uri)}`
-        + `&scope=${encodeURIComponent(OAUTH_SCOPE)}`
+    const client_id =
+      `http://localhost` +
+      `?redirect_uri=${encodeURIComponent(redirect_uri)}` +
+      `&scope=${encodeURIComponent(OAUTH_SCOPE)}`
     return { client_id, redirect_uri }
   }
 

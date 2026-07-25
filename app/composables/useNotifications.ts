@@ -32,7 +32,7 @@ function saveDismissed(map: Record<string, number>): void {
 /** A repo whose CI is failing repeatedly, collapsed from many check notifications. */
 export interface CiFailureGroup {
   key: string
-  repo: { owner: string, name: string, fullName: string }
+  repo: { owner: string; name: string; fullName: string }
   count: number
   latestAt?: string | null
   to?: string | null
@@ -42,7 +42,7 @@ export interface CiFailureGroup {
 
 /** Extract a human message from an ofetch-style error without leaking `any`. */
 function errMessage(e: unknown): string | undefined {
-  const x = e as { data?: { message?: string }, message?: string } | null | undefined
+  const x = e as { data?: { message?: string }; message?: string } | null | undefined
   return x?.data?.message ?? x?.message
 }
 
@@ -79,16 +79,18 @@ export function useNotifications() {
   const loadedOnce = useState<boolean>('inbox-loaded', () => false)
   const merging = useState<string[]>('inbox-merging', () => [])
 
-  const resolvedItems = computed(() => items.value.filter(i => i.resolved))
-  const dependencyItems = computed(() => items.value.filter(i => i.isBot && !i.resolved))
-  const ciItems = computed(() => items.value.filter(i => i.kind === 'ci' && !i.isBot && !i.resolved))
+  const resolvedItems = computed(() => items.value.filter((i) => i.resolved))
+  const dependencyItems = computed(() => items.value.filter((i) => i.isBot && !i.resolved))
+  const ciItems = computed(() =>
+    items.value.filter((i) => i.kind === 'ci' && !i.isBot && !i.resolved)
+  )
   const inboxItems = computed(() =>
     items.value
-      .filter(i => !i.resolved && !i.isBot && i.kind !== 'ci')
+      .filter((i) => !i.resolved && !i.isBot && i.kind !== 'ci')
 
       .sort((a, b) => Number(b.unread) - Number(a.unread))
   )
-  const unreadCount = computed(() => inboxItems.value.filter(i => i.unread).length)
+  const unreadCount = computed(() => inboxItems.value.filter((i) => i.unread).length)
   const dependencyCount = computed(() => dependencyItems.value.length)
   const resolvedCount = computed(() => resolvedItems.value.length)
 
@@ -104,15 +106,26 @@ export function useNotifications() {
         g.items.push(it)
         if ((it.updatedAt ?? '') > (g.latestAt ?? '')) g.latestAt = it.updatedAt
       } else {
-        map.set(key, { key, repo: it.repo, count: 1, latestAt: it.updatedAt, to: it.to, url: it.url, items: [it] })
+        map.set(key, {
+          key,
+          repo: it.repo,
+          count: 1,
+          latestAt: it.updatedAt,
+          to: it.to,
+          url: it.url,
+          items: [it]
+        })
       }
     }
-    return [...map.values()].sort((a, b) => b.count - a.count || (b.latestAt ?? '').localeCompare(a.latestAt ?? ''))
+    return [...map.values()].sort(
+      (a, b) => b.count - a.count || (b.latestAt ?? '').localeCompare(a.latestAt ?? '')
+    )
   })
   const ciCount = computed(() => ciItems.value.length)
 
-  const hasSources = computed(() =>
-    forgeList.some(f => f.id !== 'tangled' && !!getToken(f.id)) || !!did.value)
+  const hasSources = computed(
+    () => forgeList.some((f) => f.id !== 'tangled' && !!getToken(f.id)) || !!did.value
+  )
 
   async function load(force = false): Promise<void> {
     loading.value = true
@@ -127,7 +140,10 @@ export function useNotifications() {
         // connect so their forge isn't silently absent.
         const needsToken = forge.id !== 'tangled'
         if (needsToken && !token) {
-          if (viewer) noteSet.add(`Connect your ${forge.label} account to include ${forge.label} notifications.`)
+          if (viewer)
+            noteSet.add(
+              `Connect your ${forge.label} account to include ${forge.label} notifications.`
+            )
           return
         }
         if (!forge.listInbox && !forge.listNotifications) return
@@ -149,10 +165,12 @@ export function useNotifications() {
     )
 
     const dismissed = loadDismissed()
-    const visible = collected.filter(i => !dismissed[`${i.provider}:${i.id}`])
+    const visible = collected.filter((i) => !dismissed[`${i.provider}:${i.id}`])
 
     // Providers are pooled then sorted by recency, never sectioned per-forge.
-    visible.sort((a, b) => new Date(b.updatedAt ?? 0).getTime() - new Date(a.updatedAt ?? 0).getTime())
+    visible.sort(
+      (a, b) => new Date(b.updatedAt ?? 0).getTime() - new Date(a.updatedAt ?? 0).getTime()
+    )
     items.value = visible
     notes.value = [...noteSet]
     loading.value = false
@@ -168,10 +186,11 @@ export function useNotifications() {
   }
 
   function removeItem(item: ForgeInboxItem): void {
-    items.value = items.value.filter(i => !(i.provider === item.provider && i.id === item.id))
+    items.value = items.value.filter((i) => !(i.provider === item.provider && i.id === item.id))
   }
 
-  const isMerging = (item: ForgeInboxItem): boolean => merging.value.includes(`${item.provider}:${item.id}`)
+  const isMerging = (item: ForgeInboxItem): boolean =>
+    merging.value.includes(`${item.provider}:${item.id}`)
 
   /** Mark a single notification thread as read and drop it from the inbox. */
   async function markRead(item: ForgeInboxItem): Promise<void> {
@@ -180,7 +199,8 @@ export function useNotifications() {
     removeItem(item)
     rememberDismissed([item])
     invalidate(`inbox:${item.provider}:${did.value ?? 'anon'}`)
-    if (forge?.markNotificationRead) await forge.markNotificationRead(item.id, { token }).catch(() => {})
+    if (forge?.markNotificationRead)
+      await forge.markNotificationRead(item.id, { token }).catch(() => {})
   }
 
   /** Mark many threads read at once (bounded fan-out), e.g. "mark all as read". */
@@ -188,12 +208,17 @@ export function useNotifications() {
     const targets = list.slice()
     for (const it of targets) removeItem(it)
     rememberDismissed(targets)
-    for (const p of new Set(targets.map(t => t.provider))) invalidate(`inbox:${p}:${did.value ?? 'anon'}`)
-    await Promise.all(targets.map((it) => {
-      const forge = getForge(it.provider)
-      const token = getToken(it.provider)
-      return forge?.markNotificationRead ? forge.markNotificationRead(it.id, { token }).catch(() => {}) : Promise.resolve()
-    }))
+    for (const p of new Set(targets.map((t) => t.provider)))
+      invalidate(`inbox:${p}:${did.value ?? 'anon'}`)
+    await Promise.all(
+      targets.map((it) => {
+        const forge = getForge(it.provider)
+        const token = getToken(it.provider)
+        return forge?.markNotificationRead
+          ? forge.markNotificationRead(it.id, { token }).catch(() => {})
+          : Promise.resolve()
+      })
+    )
   }
 
   /** Complete an entire failing-CI group (every collapsed check) at once. */
@@ -206,11 +231,21 @@ export function useNotifications() {
     const token = getToken(item.provider)
     if (!forge?.createComment || !item.repo || !item.number || !body.trim()) return false
     try {
-      await forge.createComment({ owner: item.repo.owner, name: item.repo.name }, String(item.number), body, { token })
+      await forge.createComment(
+        { owner: item.repo.owner, name: item.repo.name },
+        String(item.number),
+        body,
+        { token }
+      )
       toast.add({ title: 'Reply posted', color: 'success', icon: 'i-lucide-check' })
       return true
     } catch (e) {
-      toast.add({ title: 'Could not post reply', description: errMessage(e), color: 'error', icon: 'i-lucide-circle-alert' })
+      toast.add({
+        title: 'Could not post reply',
+        description: errMessage(e),
+        color: 'error',
+        icon: 'i-lucide-circle-alert'
+      })
       return false
     }
   }
@@ -226,16 +261,26 @@ export function useNotifications() {
       await forge.createReview(loc, String(item.number), { event: 'APPROVE' }, { token })
       const res = await forge.mergePull(loc, String(item.number), { token })
       if (!res.merged) throw new Error(res.message || 'Merge was not completed')
-      if (forge.markNotificationRead) await forge.markNotificationRead(item.id, { token }).catch(() => {})
+      if (forge.markNotificationRead)
+        await forge.markNotificationRead(item.id, { token }).catch(() => {})
       rememberDismissed([item])
       removeItem(item)
-      toast.add({ title: `Merged ${item.repo.fullName} #${item.number}`, color: 'success', icon: 'i-lucide-git-merge' })
+      toast.add({
+        title: `Merged ${item.repo.fullName} #${item.number}`,
+        color: 'success',
+        icon: 'i-lucide-git-merge'
+      })
       return true
     } catch (e) {
-      toast.add({ title: 'Could not approve & merge', description: errMessage(e), color: 'error', icon: 'i-lucide-circle-alert' })
+      toast.add({
+        title: 'Could not approve & merge',
+        description: errMessage(e),
+        color: 'error',
+        icon: 'i-lucide-circle-alert'
+      })
       return false
     } finally {
-      merging.value = merging.value.filter(k => k !== key)
+      merging.value = merging.value.filter((k) => k !== key)
     }
   }
 

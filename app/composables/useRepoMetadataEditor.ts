@@ -25,7 +25,9 @@ function stashLinks(subject: string, links: CommunityLink[]): void {
   if (!import.meta.client) return
   try {
     sessionStorage.setItem(stashKey(subject), JSON.stringify(links))
-  } catch { /* ignore quota / private-mode failures */ }
+  } catch {
+    /* ignore quota / private-mode failures */
+  }
 }
 
 function takeStashedLinks(subject: string): CommunityLink[] {
@@ -41,9 +43,12 @@ function takeStashedLinks(subject: string): CommunityLink[] {
 
 function claimErrorMessage(code: string): string {
   switch (code) {
-    case 'not-admin': return 'You need admin access to that repository to claim it.'
-    case 'unconfigured': return 'Repository claims are not available on this server.'
-    default: return 'Could not verify repository ownership. Please try again.'
+    case 'not-admin':
+      return 'You need admin access to that repository to claim it.'
+    case 'unconfigured':
+      return 'Repository claims are not available on this server.'
+    default:
+      return 'Could not verify repository ownership. Please try again.'
   }
 }
 
@@ -64,7 +69,7 @@ export function useRepoMetadataEditor(source?: MaybeRefOrGetter<RepoMetadataTarg
   let ownSubject = ''
 
   function target(): RepoMetadataTarget | null {
-    return source ? toValue(source) ?? null : null
+    return source ? (toValue(source) ?? null) : null
   }
 
   const canManage = computed(() => {
@@ -89,7 +94,11 @@ export function useRepoMetadataEditor(source?: MaybeRefOrGetter<RepoMetadataTarg
     // Different repo/account: clear the previous claim state so it can't leak.
     if (subject !== ownSubject) own.value = null
     const rkey = repoMetadataRkey(t.provider, t.owner, t.name, t.host)
-    const rec = await getPublicRecord<RepoMetadataRecord>(did.value, REPO_METADATA_COLLECTION, rkey).catch(() => null)
+    const rec = await getPublicRecord<RepoMetadataRecord>(
+      did.value,
+      REPO_METADATA_COLLECTION,
+      rkey
+    ).catch(() => null)
     if (gen !== ownGeneration) return
     ownSubject = subject
     own.value = rec?.value ?? null
@@ -121,15 +130,19 @@ export function useRepoMetadataEditor(source?: MaybeRefOrGetter<RepoMetadataTarg
         delete record[k]
       }
     }
-    await runAuthed(rpc => ok(rpc.post('com.atproto.repo.putRecord', {
-      input: {
-        repo: did.value as Did,
-        collection: COLLECTION,
-        rkey: repoMetadataRkey(t.provider, t.owner, t.name, t.host),
-        validate: false,
-        record: record as unknown as Record<string, unknown>
-      }
-    })))
+    await runAuthed((rpc) =>
+      ok(
+        rpc.post('com.atproto.repo.putRecord', {
+          input: {
+            repo: did.value as Did,
+            collection: COLLECTION,
+            rkey: repoMetadataRkey(t.provider, t.owner, t.name, t.host),
+            validate: false,
+            record: record as unknown as Record<string, unknown>
+          }
+        })
+      )
+    )
     own.value = record
   }
 
@@ -172,14 +185,16 @@ export function useRepoMetadataEditor(source?: MaybeRefOrGetter<RepoMetadataTarg
   async function remove(): Promise<void> {
     const t = target()
     if (!t || !did.value) return
-    await runAuthed(rpc => rpc.post('com.atproto.repo.deleteRecord', {
-      input: {
-        repo: did.value as Did,
-        collection: COLLECTION,
-        rkey: repoMetadataRkey(t.provider, t.owner, t.name, t.host)
-      },
-      as: null
-    }))
+    await runAuthed((rpc) =>
+      rpc.post('com.atproto.repo.deleteRecord', {
+        input: {
+          repo: did.value as Did,
+          collection: COLLECTION,
+          rkey: repoMetadataRkey(t.provider, t.owner, t.name, t.host)
+        },
+        as: null
+      })
+    )
     own.value = null
   }
 
@@ -209,12 +224,17 @@ export function useRepoMetadataEditor(source?: MaybeRefOrGetter<RepoMetadataTarg
       return
     }
 
-    while (restoring.value) await new Promise(r => setTimeout(r, 50))
+    while (restoring.value) await new Promise((r) => setTimeout(r, 50))
     if (!did.value) return
 
     const links = takeStashedLinks(subject)
     try {
-      await writeRecord({ provider, owner: claimOwner, name: claimName }, links, attestation, attestedBy)
+      await writeRecord(
+        { provider, owner: claimOwner, name: claimName },
+        links,
+        attestation,
+        attestedBy
+      )
       toast.add({
         title: 'Repository claimed',
         description: 'Your community links are now published.',
@@ -237,7 +257,9 @@ export function useRepoMetadataEditor(source?: MaybeRefOrGetter<RepoMetadataTarg
         const t = target()
         return t ? `${t.provider}/${t.owner}/${t.name}|${did.value ?? ''}` : ''
       },
-      () => { void loadOwn() },
+      () => {
+        void loadOwn()
+      },
       { immediate: true }
     )
   }

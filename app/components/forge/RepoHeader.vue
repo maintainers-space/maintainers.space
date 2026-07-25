@@ -77,7 +77,8 @@ const forge = computed(() => getForge(props.repo.provider))
         <UIcon name="i-lucide-link" class="size-4" />{{ repo.homepage }}
       </a>
       <span v-if="repo.updatedAt" class="inline-flex items-center gap-1">
-        <UIcon name="i-lucide-history" class="size-4" />Updated {{ formatRelativeTime(repo.updatedAt) }}
+        <UIcon name="i-lucide-history" class="size-4" />Updated
+        {{ formatRelativeTime(repo.updatedAt) }}
       </span>
     </div>
 

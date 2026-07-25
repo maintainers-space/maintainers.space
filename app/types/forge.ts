@@ -108,7 +108,7 @@ export interface ForgeBlob {
 export interface ForgeBranch {
   name: string
   isDefault?: boolean
-  commit?: { sha?: string, message?: string, when?: string }
+  commit?: { sha?: string; message?: string; when?: string }
 }
 
 export interface RepoOverview {
@@ -178,7 +178,7 @@ export interface ForgeIssue {
   closedAt?: string | null
   url?: string | null
   /** Owning repo (populated in search results). */
-  repo?: { provider: ForgeId, owner: string, name: string, fullName: string, url?: string }
+  repo?: { provider: ForgeId; owner: string; name: string; fullName: string; url?: string }
   /** True when this row is actually a pull request (GitHub search mixes them). */
   isPull?: boolean
   ref?: Record<string, unknown>
@@ -215,7 +215,7 @@ export interface ForgePull {
   mergedAt?: string | null
   closedAt?: string | null
   url?: string | null
-  repo?: { provider: ForgeId, owner: string, name: string, fullName: string, url?: string }
+  repo?: { provider: ForgeId; owner: string; name: string; fullName: string; url?: string }
   ref?: Record<string, unknown>
 }
 
@@ -284,7 +284,7 @@ export interface ForgeDiscussion {
   url?: string | null
   answered?: boolean
   /** Owning repo (populated in search results). */
-  repo?: { provider: ForgeId, owner: string, name: string, fullName: string, url?: string }
+  repo?: { provider: ForgeId; owner: string; name: string; fullName: string; url?: string }
   ref?: Record<string, unknown>
 }
 
@@ -292,16 +292,16 @@ export interface ForgeDiscussionDetail extends ForgeDiscussion {
   comments: ForgeComment[]
 }
 
-export type ForgeRunStatus
-  = | 'queued'
-    | 'running'
-    | 'success'
-    | 'failure'
-    | 'cancelled'
-    | 'skipped'
-    | 'timed_out'
-    | 'pending'
-    | 'unknown'
+export type ForgeRunStatus =
+  | 'queued'
+  | 'running'
+  | 'success'
+  | 'failure'
+  | 'cancelled'
+  | 'skipped'
+  | 'timed_out'
+  | 'pending'
+  | 'unknown'
 
 export interface ForgeActionStep {
   name: string
@@ -345,21 +345,21 @@ export interface ForgeSearchOptions extends ForgePageOptions {
 
 export interface ForgeSearchCode {
   provider: ForgeId
-  repo: { owner: string, name: string, fullName: string, url?: string }
+  repo: { owner: string; name: string; fullName: string; url?: string }
   path: string
   url?: string | null
   fragments?: string[]
 }
 
-export type ForgeNotificationKind
-  = | 'issue'
-    | 'pull'
-    | 'discussion'
-    | 'commit'
-    | 'release'
-    | 'mention'
-    | 'ci'
-    | 'other'
+export type ForgeNotificationKind =
+  | 'issue'
+  | 'pull'
+  | 'discussion'
+  | 'commit'
+  | 'release'
+  | 'mention'
+  | 'ci'
+  | 'other'
 
 export interface ForgeNotification {
   provider: ForgeId
@@ -370,7 +370,7 @@ export interface ForgeNotification {
   unread: boolean
   updatedAt?: string | null
   /** Repo the notification belongs to. */
-  repo?: { owner: string, name: string, fullName: string }
+  repo?: { owner: string; name: string; fullName: string }
   /** In-app route when we can resolve one, else external url. */
   to?: string | null
   url?: string | null
@@ -390,7 +390,7 @@ export interface ForgeInboxItem {
   reason?: string | null
   unread: boolean
   updatedAt?: string | null
-  repo?: { owner: string, name: string, fullName: string }
+  repo?: { owner: string; name: string; fullName: string }
   /** In-app route to the PR/issue. */
   to?: string | null
   /** External url. */
@@ -410,19 +410,19 @@ export interface ForgeInboxItem {
   unreadComments?: ForgeComment[]
 }
 
-export type ForgeEventKind
-  = | 'push'
-    | 'pr_opened'
-    | 'pr_merged'
-    | 'pr_review'
-    | 'issue_opened'
-    | 'issue_closed'
-    | 'comment'
-    | 'create'
-    | 'release'
-    | 'fork'
-    | 'star'
-    | 'other'
+export type ForgeEventKind =
+  | 'push'
+  | 'pr_opened'
+  | 'pr_merged'
+  | 'pr_review'
+  | 'issue_opened'
+  | 'issue_closed'
+  | 'comment'
+  | 'create'
+  | 'release'
+  | 'fork'
+  | 'star'
+  | 'other'
 
 /** A normalized activity event (GitHub events API, Tangled timeline, ...). */
 export interface ForgeContribution {
@@ -430,7 +430,7 @@ export interface ForgeContribution {
   id: string
   kind: ForgeEventKind
   actor: ForgeUser
-  repo: { owner: string, name: string, fullName: string, url?: string }
+  repo: { owner: string; name: string; fullName: string; url?: string }
   /** PR/issue title, commit summary, tag name, ... */
   title?: string | null
   /** Deep link to the PR/issue/commit/release. */
@@ -474,21 +474,6 @@ export interface ForgeCapabilities {
   mergeQueue: boolean
 }
 
-export const NO_CAPABILITIES: ForgeCapabilities = {
-  code: false,
-  issues: false,
-  pulls: false,
-  discussions: false,
-  actions: false,
-  repoSearch: false,
-  issueSearch: false,
-  codeSearch: false,
-  userSearch: false,
-  discussionSearch: false,
-  star: false,
-  mergeQueue: false
-}
-
 export interface IssueListOptions extends ForgePageOptions {
   state?: ForgeIssueState | 'all'
 }
@@ -522,10 +507,28 @@ export interface ForgeProvider {
   /** List an owner's repositories. */
   listRepos?: (owner: string, opts?: ForgeReadOptions) => Promise<ForgeRepo[]>
   listBranches?: (repo: RepoLocator, opts?: ForgeReadOptions) => Promise<ForgeBranch[]>
-  getTree?: (repo: RepoLocator, ref: string, path: string, opts?: ForgeReadOptions) => Promise<ForgeTreeEntry[]>
-  getBlob?: (repo: RepoLocator, ref: string, path: string, opts?: ForgeReadOptions) => Promise<ForgeBlob>
-  listCommits?: (repo: RepoLocator, ref: string, opts?: ForgePageOptions) => Promise<Paginated<ForgeCommit>>
-  getCommit?: (repo: RepoLocator, sha: string, opts?: ForgeReadOptions) => Promise<ForgeCommitDetail>
+  getTree?: (
+    repo: RepoLocator,
+    ref: string,
+    path: string,
+    opts?: ForgeReadOptions
+  ) => Promise<ForgeTreeEntry[]>
+  getBlob?: (
+    repo: RepoLocator,
+    ref: string,
+    path: string,
+    opts?: ForgeReadOptions
+  ) => Promise<ForgeBlob>
+  listCommits?: (
+    repo: RepoLocator,
+    ref: string,
+    opts?: ForgePageOptions
+  ) => Promise<Paginated<ForgeCommit>>
+  getCommit?: (
+    repo: RepoLocator,
+    sha: string,
+    opts?: ForgeReadOptions
+  ) => Promise<ForgeCommitDetail>
 
   // Issues ---------------------------------------------------------------
   listIssues?: (repo: RepoLocator, opts?: IssueListOptions) => Promise<Paginated<ForgeIssue>>
@@ -534,17 +537,39 @@ export interface ForgeProvider {
   // Pull requests --------------------------------------------------------
   listPulls?: (repo: RepoLocator, opts?: PullListOptions) => Promise<Paginated<ForgePull>>
   getPull?: (repo: RepoLocator, id: string, opts?: ForgeReadOptions) => Promise<ForgePullDetail>
-  getPullFiles?: (repo: RepoLocator, id: string, opts?: ForgeReadOptions) => Promise<ForgeFileDiff[]>
-  getPullCommits?: (repo: RepoLocator, id: string, opts?: ForgeReadOptions) => Promise<ForgeCommit[]>
+  getPullFiles?: (
+    repo: RepoLocator,
+    id: string,
+    opts?: ForgeReadOptions
+  ) => Promise<ForgeFileDiff[]>
+  getPullCommits?: (
+    repo: RepoLocator,
+    id: string,
+    opts?: ForgeReadOptions
+  ) => Promise<ForgeCommit[]>
   /** Merge queue (GitHub) / merge train (GitLab) state for a branch (default branch if omitted). */
-  getMergeQueue?: (repo: RepoLocator, branch?: string, opts?: ForgeReadOptions) => Promise<ForgeMergeQueueStats | null>
+  getMergeQueue?: (
+    repo: RepoLocator,
+    branch?: string,
+    opts?: ForgeReadOptions
+  ) => Promise<ForgeMergeQueueStats | null>
 
   // Discussions ----------------------------------------------------------
-  listDiscussions?: (repo: RepoLocator, opts?: ForgePageOptions) => Promise<Paginated<ForgeDiscussion>>
-  getDiscussion?: (repo: RepoLocator, id: string, opts?: ForgeReadOptions) => Promise<ForgeDiscussionDetail>
+  listDiscussions?: (
+    repo: RepoLocator,
+    opts?: ForgePageOptions
+  ) => Promise<Paginated<ForgeDiscussion>>
+  getDiscussion?: (
+    repo: RepoLocator,
+    id: string,
+    opts?: ForgeReadOptions
+  ) => Promise<ForgeDiscussionDetail>
 
   // Actions / CI ---------------------------------------------------------
-  listActionRuns?: (repo: RepoLocator, opts?: ForgePageOptions) => Promise<Paginated<ForgeActionRun>>
+  listActionRuns?: (
+    repo: RepoLocator,
+    opts?: ForgePageOptions
+  ) => Promise<Paginated<ForgeActionRun>>
   getActionRun?: (repo: RepoLocator, id: string, opts?: ForgeReadOptions) => Promise<ForgeActionRun>
 
   // Search ---------------------------------------------------------------
@@ -568,15 +593,33 @@ export interface ForgeProvider {
 
   // Write actions (require an authenticated token) -----------------------
   /** Post a top-level comment on an issue or pull request. */
-  createComment?: (repo: RepoLocator, id: string, body: string, opts?: ForgeReadOptions) => Promise<ForgeComment>
+  createComment?: (
+    repo: RepoLocator,
+    id: string,
+    body: string,
+    opts?: ForgeReadOptions
+  ) => Promise<ForgeComment>
   /** Submit a pull-request review (approve / request changes / comment), optionally with inline comments. */
-  createReview?: (repo: RepoLocator, id: string, input: ForgeReviewInput, opts?: ForgeReadOptions) => Promise<void>
+  createReview?: (
+    repo: RepoLocator,
+    id: string,
+    input: ForgeReviewInput,
+    opts?: ForgeReadOptions
+  ) => Promise<void>
   /** Merge a pull request. Falls back across merge methods the repo allows. */
-  mergePull?: (repo: RepoLocator, id: string, opts?: ForgeReadOptions & { method?: ForgeMergeMethod }) => Promise<ForgeMergeResult>
+  mergePull?: (
+    repo: RepoLocator,
+    id: string,
+    opts?: ForgeReadOptions & { method?: ForgeMergeMethod }
+  ) => Promise<ForgeMergeResult>
   /** Whether the authenticated viewer has starred this repository. */
   isStarred?: (repo: RepoLocator, opts?: ForgeReadOptions) => Promise<boolean>
   /** Star or unstar a repository; returns the resulting state and star count when known. */
-  setStar?: (repo: RepoLocator, starred: boolean, opts?: ForgeReadOptions) => Promise<{ starred: boolean, stars?: number }>
+  setStar?: (
+    repo: RepoLocator,
+    starred: boolean,
+    opts?: ForgeReadOptions
+  ) => Promise<{ starred: boolean; stars?: number }>
 
   // Social graph ---------------------------------------------------------
   /**

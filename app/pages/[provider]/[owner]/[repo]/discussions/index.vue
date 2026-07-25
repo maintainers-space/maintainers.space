@@ -4,7 +4,9 @@ import { useRepoContext } from '~/composables/useRepoContext'
 
 const { provider, owner, name, forge, locator } = useRepoContext()
 const { get: getToken } = useForgeTokens()
-const base = computed(() => repoPath({ provider: provider.value, owner: owner.value, name: name.value }))
+const base = computed(() =>
+  repoPath({ provider: provider.value, owner: owner.value, name: name.value })
+)
 
 const items = ref<ForgeDiscussion[]>([])
 const loading = ref(false)
@@ -15,14 +17,15 @@ const answerFilter = ref<'all' | 'answered' | 'unanswered'>('all')
 
 const filtered = computed(() => {
   let list = items.value
-  if (answerFilter.value === 'answered') list = list.filter(d => d.answered)
-  else if (answerFilter.value === 'unanswered') list = list.filter(d => !d.answered)
+  if (answerFilter.value === 'answered') list = list.filter((d) => d.answered)
+  else if (answerFilter.value === 'unanswered') list = list.filter((d) => !d.answered)
   const term = q.value.trim().toLowerCase()
   if (term) {
-    list = list.filter(d =>
-      d.title.toLowerCase().includes(term)
-      || (d.category ? d.category.toLowerCase().includes(term) : false)
-      || (d.author ? userLabel(d.author).toLowerCase().includes(term) : false)
+    list = list.filter(
+      (d) =>
+        d.title.toLowerCase().includes(term) ||
+        (d.category ? d.category.toLowerCase().includes(term) : false) ||
+        (d.author ? userLabel(d.author).toLowerCase().includes(term) : false)
     )
   }
   return list
@@ -117,18 +120,20 @@ onMounted(load)
       :description="error"
     />
 
-    <div v-else-if="!items.length" class="rounded-lg border border-dashed border-default py-16 text-center">
+    <div
+      v-else-if="!items.length"
+      class="rounded-lg border border-dashed border-default py-16 text-center"
+    >
       <UIcon name="i-lucide-messages-square" class="mx-auto size-8 text-muted" />
-      <p class="mt-3 text-sm text-muted">
-        No discussions yet.
-      </p>
+      <p class="mt-3 text-sm text-muted">No discussions yet.</p>
     </div>
 
-    <div v-else-if="!filtered.length" class="rounded-lg border border-dashed border-default py-16 text-center">
+    <div
+      v-else-if="!filtered.length"
+      class="rounded-lg border border-dashed border-default py-16 text-center"
+    >
       <UIcon name="i-lucide-search-x" class="mx-auto size-8 text-muted" />
-      <p class="mt-3 text-sm text-muted">
-        No discussions match your filter.
-      </p>
+      <p class="mt-3 text-sm text-muted">No discussions match your filter.</p>
     </div>
 
     <ul v-else class="divide-y divide-default overflow-hidden rounded-lg border border-default">
@@ -156,7 +161,10 @@ onMounted(load)
               <span v-if="d.createdAt">· {{ formatRelativeTime(d.createdAt) }}</span>
             </div>
           </div>
-          <span v-if="d.commentCount" class="inline-flex shrink-0 items-center gap-1 text-xs text-muted">
+          <span
+            v-if="d.commentCount"
+            class="inline-flex shrink-0 items-center gap-1 text-xs text-muted"
+          >
             <UIcon name="i-lucide-message-square" class="size-3.5" />{{ d.commentCount }}
           </span>
         </NuxtLink>

@@ -1,16 +1,19 @@
 <script setup lang="ts">
 import type { ForgeIssue } from '~/types/forge'
 
-withDefaults(defineProps<{
-  title: string
-  icon: string
-  items: ForgeIssue[]
-  loading?: boolean
-  emptyText?: string
-}>(), {
-  loading: false,
-  emptyText: 'Nothing here right now.'
-})
+withDefaults(
+  defineProps<{
+    title: string
+    icon: string
+    items: ForgeIssue[]
+    loading?: boolean
+    emptyText?: string
+  }>(),
+  {
+    loading: false,
+    emptyText: 'Nothing here right now.'
+  }
+)
 </script>
 
 <template>
@@ -19,12 +22,7 @@ withDefaults(defineProps<{
       <span class="inline-flex items-center gap-2 text-sm font-medium text-default">
         <UIcon :name="icon" class="size-4 text-muted" />{{ title }}
       </span>
-      <UBadge
-        v-if="items.length"
-        color="neutral"
-        variant="subtle"
-        size="xs"
-      >
+      <UBadge v-if="items.length" color="neutral" variant="subtle" size="xs">
         {{ items.length }}
       </UBadge>
     </div>
@@ -53,7 +51,9 @@ withDefaults(defineProps<{
               <ForgeIcon :provider="it.provider" class="size-3 shrink-0" />
               <span class="truncate">{{ it.repo?.fullName }}</span>
               <span v-if="it.number" class="shrink-0">#{{ it.number }}</span>
-              <span v-if="it.updatedAt" class="shrink-0">· {{ formatRelativeTime(it.updatedAt) }}</span>
+              <span v-if="it.updatedAt" class="shrink-0"
+                >· {{ formatRelativeTime(it.updatedAt) }}</span
+              >
             </div>
           </div>
         </NuxtLink>

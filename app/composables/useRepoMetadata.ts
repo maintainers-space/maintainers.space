@@ -36,9 +36,18 @@ export interface RepoMetadataEntry {
  * the record owner being the repo's atproto owner DID. Every field read from the
  * untrusted record is type-checked first so one malformed record can't throw.
  */
-async function verifyEntry(target: RepoMetadataTarget, did: string, record: RepoMetadataRecord): Promise<boolean> {
-  if (typeof record.subject !== 'string' || typeof record.provider !== 'string'
-    || typeof record.owner !== 'string' || typeof record.name !== 'string') return false
+async function verifyEntry(
+  target: RepoMetadataTarget,
+  did: string,
+  record: RepoMetadataRecord
+): Promise<boolean> {
+  if (
+    typeof record.subject !== 'string' ||
+    typeof record.provider !== 'string' ||
+    typeof record.owner !== 'string' ||
+    typeof record.name !== 'string'
+  )
+    return false
   if (record.subject !== repoSubject(target.provider, target.owner, target.name)) return false
   if (record.provider !== target.provider) return false
   if (record.owner.toLowerCase() !== target.owner.toLowerCase()) return false
@@ -93,18 +102,24 @@ export function useRepoMetadata(source: MaybeRefOrGetter<RepoMetadataTarget | nu
       const backlinks = await getBacklinks(subject, BACKLINK_SOURCE, { force }).catch(() => [])
       // Each candidate is fetched and verified in isolation, so a single
       // hostile/malformed record can never reject the whole batch.
-      const settled = await Promise.allSettled(backlinks.map(async (bl): Promise<RepoMetadataEntry | null> => {
-        if (bl.collection !== REPO_METADATA_COLLECTION) return null
-        const rec = await getPublicRecord<RepoMetadataRecord>(bl.did, REPO_METADATA_COLLECTION, bl.rkey)
-        if (rec && await verifyEntry(target, bl.did, rec.value)) {
-          return { did: bl.did, rkey: bl.rkey, record: rec.value }
-        }
-        return null
-      }))
+      const settled = await Promise.allSettled(
+        backlinks.map(async (bl): Promise<RepoMetadataEntry | null> => {
+          if (bl.collection !== REPO_METADATA_COLLECTION) return null
+          const rec = await getPublicRecord<RepoMetadataRecord>(
+            bl.did,
+            REPO_METADATA_COLLECTION,
+            bl.rkey
+          )
+          if (rec && (await verifyEntry(target, bl.did, rec.value))) {
+            return { did: bl.did, rkey: bl.rkey, record: rec.value }
+          }
+          return null
+        })
+      )
       // A newer load superseded this one while it was in flight: discard.
       if (gen !== generation) return
       const verified = settled
-        .flatMap(r => (r.status === 'fulfilled' && r.value ? [r.value] : []))
+        .flatMap((r) => (r.status === 'fulfilled' && r.value ? [r.value] : []))
         .sort((a, b) => (a.record.createdAt < b.record.createdAt ? 1 : -1))
       currentSubject = subject
       entries.value = verified
@@ -121,7 +136,9 @@ export function useRepoMetadata(source: MaybeRefOrGetter<RepoMetadataTarget | nu
       const t = toValue(source)
       return t ? `${t.provider}/${t.owner}/${t.name}|${t.ownerDid ?? ''}` : ''
     },
-    () => { void load() },
+    () => {
+      void load()
+    },
     { immediate: true }
   )
 

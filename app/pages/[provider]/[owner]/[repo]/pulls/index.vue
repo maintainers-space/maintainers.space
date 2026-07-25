@@ -3,7 +3,9 @@ import type { ForgeMergeQueueStats, ForgePull, ForgePullState } from '~/types/fo
 import { useRepoContext } from '~/composables/useRepoContext'
 
 const { provider, owner, name, forge, locator, meta } = useRepoContext()
-const base = computed(() => repoPath({ provider: provider.value, owner: owner.value, name: name.value }))
+const base = computed(() =>
+  repoPath({ provider: provider.value, owner: owner.value, name: name.value })
+)
 
 const state = ref<'open' | 'closed' | 'merged'>('open')
 const items = ref<ForgePull[]>([])
@@ -15,10 +17,11 @@ const mergeQueue = ref<ForgeMergeQueueStats | null>(null)
 const filtered = computed(() => {
   const term = q.value.trim().toLowerCase()
   if (!term) return items.value
-  return items.value.filter(it =>
-    it.title.toLowerCase().includes(term)
-    || String(it.number ?? '').includes(term)
-    || (it.author ? userLabel(it.author).toLowerCase().includes(term) : false)
+  return items.value.filter(
+    (it) =>
+      it.title.toLowerCase().includes(term) ||
+      String(it.number ?? '').includes(term) ||
+      (it.author ? userLabel(it.author).toLowerCase().includes(term) : false)
   )
 })
 
@@ -93,14 +96,22 @@ function color(s: ForgePullState): string {
       <div class="flex flex-wrap items-center gap-2 text-sm font-medium text-default">
         <UIcon :name="mergeQueueIcon" class="size-4 text-primary" />
         {{ mergeQueue.kind === 'train' ? 'Merge train' : 'Merge queue' }}
-        <span v-if="mergeQueue.branch" class="font-mono text-xs text-muted">→ {{ mergeQueue.branch }}</span>
+        <span v-if="mergeQueue.branch" class="font-mono text-xs text-muted"
+          >→ {{ mergeQueue.branch }}</span
+        >
         <UBadge color="neutral" variant="soft" size="sm">
           {{ mergeQueue.entries.length }}
         </UBadge>
       </div>
       <ol class="mt-3 space-y-1.5">
-        <li v-for="e in mergeQueue.entries" :key="e.position" class="flex items-center gap-2 text-sm">
-          <span class="inline-flex size-5 shrink-0 items-center justify-center rounded-full bg-elevated text-xs font-medium text-muted">
+        <li
+          v-for="e in mergeQueue.entries"
+          :key="e.position"
+          class="flex items-center gap-2 text-sm"
+        >
+          <span
+            class="inline-flex size-5 shrink-0 items-center justify-center rounded-full bg-elevated text-xs font-medium text-muted"
+          >
             {{ e.position }}
           </span>
           <NuxtLink
@@ -167,7 +178,10 @@ function color(s: ForgePullState): string {
       :description="error"
     />
 
-    <div v-else-if="!filtered.length" class="rounded-lg border border-dashed border-default py-16 text-center">
+    <div
+      v-else-if="!filtered.length"
+      class="rounded-lg border border-dashed border-default py-16 text-center"
+    >
       <UIcon name="i-lucide-git-pull-request-closed" class="mx-auto size-8 text-muted" />
       <p class="mt-3 text-sm text-muted">
         {{ q ? 'No pull requests match your filter.' : `No ${state} pull requests.` }}
@@ -176,18 +190,26 @@ function color(s: ForgePullState): string {
 
     <ul v-else class="divide-y divide-default overflow-hidden rounded-lg border border-default">
       <li v-for="it in filtered" :key="it.id">
-        <NuxtLink :to="itemLink(it)" class="flex items-start gap-3 px-4 py-3 transition hover:bg-elevated/40">
+        <NuxtLink
+          :to="itemLink(it)"
+          class="flex items-start gap-3 px-4 py-3 transition hover:bg-elevated/40"
+        >
           <UIcon :name="icon(it.state)" class="mt-0.5 size-4 shrink-0" :class="color(it.state)" />
           <div class="min-w-0 flex-1">
             <p class="truncate text-sm font-medium text-default">{{ it.title }}</p>
             <div class="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-muted">
               <span v-if="it.number">#{{ it.number }}</span>
               <span v-if="it.author">· {{ userLabel(it.author) }}</span>
-              <span v-if="it.sourceBranch && it.targetBranch" class="font-mono">· {{ it.sourceBranch }} → {{ it.targetBranch }}</span>
+              <span v-if="it.sourceBranch && it.targetBranch" class="font-mono"
+                >· {{ it.sourceBranch }} → {{ it.targetBranch }}</span
+              >
               <span v-if="it.updatedAt">· {{ formatRelativeTime(it.updatedAt) }}</span>
             </div>
           </div>
-          <span v-if="it.commentCount" class="inline-flex shrink-0 items-center gap-1 text-xs text-muted">
+          <span
+            v-if="it.commentCount"
+            class="inline-flex shrink-0 items-center gap-1 text-xs text-muted"
+          >
             <UIcon name="i-lucide-message-square" class="size-3.5" />{{ it.commentCount }}
           </span>
         </NuxtLink>

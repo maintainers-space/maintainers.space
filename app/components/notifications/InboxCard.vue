@@ -1,15 +1,21 @@
 <script setup lang="ts">
 import type { ForgeInboxItem, ForgeNotificationKind } from '~/types/forge'
 
-const props = withDefaults(defineProps<{ item: ForgeInboxItem, allowReply?: boolean, allowMarkRead?: boolean }>(), {
-  allowReply: true,
-  allowMarkRead: true
-})
+const props = withDefaults(
+  defineProps<{ item: ForgeInboxItem; allowReply?: boolean; allowMarkRead?: boolean }>(),
+  {
+    allowReply: true,
+    allowMarkRead: true
+  }
+)
 const emit = defineEmits<{ replied: [] }>()
 
 const { reply, markRead } = useNotifications()
 
-interface KindStyle { icon: string, chip: string }
+interface KindStyle {
+  icon: string
+  chip: string
+}
 
 // Base icon + accent per kind. Colors are full, static class strings so Tailwind
 // keeps them in the build. An open PR now reads green instead of the grey that
@@ -33,7 +39,15 @@ const style = computed<KindStyle>(() => {
   return KIND_STYLE[item.value.kind]
 })
 
-const repoTo = computed(() => item.value.repo ? repoPath({ provider: item.value.provider, owner: item.value.repo.owner, name: item.value.repo.name }) : undefined)
+const repoTo = computed(() =>
+  item.value.repo
+    ? repoPath({
+        provider: item.value.provider,
+        owner: item.value.repo.owner,
+        name: item.value.repo.name
+      })
+    : undefined
+)
 const commentCount = computed(() => item.value.unreadComments?.length ?? 0)
 
 // Deterministic: only surface a "reason" chip when someone actually wants YOU —
@@ -45,10 +59,16 @@ const REASON_LABELS: Record<string, string> = {
   assign: 'Assigned',
   author: 'Your thread'
 }
-const reasonLabel = computed(() => (item.value.reason ? REASON_LABELS[item.value.reason] : undefined))
+const reasonLabel = computed(() =>
+  item.value.reason ? REASON_LABELS[item.value.reason] : undefined
+)
 
-const canReply = computed(() =>
-  props.allowReply && !!item.value.repo && !!item.value.number && (item.value.kind === 'pull' || item.value.kind === 'issue')
+const canReply = computed(
+  () =>
+    props.allowReply &&
+    !!item.value.repo &&
+    !!item.value.number &&
+    (item.value.kind === 'pull' || item.value.kind === 'issue')
 )
 const expandable = computed(() => commentCount.value > 0 || canReply.value)
 
@@ -79,14 +99,17 @@ async function submitReply(): Promise<void> {
       :class="expandable ? 'cursor-pointer transition hover:bg-elevated/40' : ''"
       @click="toggle"
     >
-      <div class="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full" :class="style.chip">
+      <div
+        class="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full"
+        :class="style.chip"
+      >
         <UIcon :name="style.icon" class="size-4" />
       </div>
 
       <div class="min-w-0 flex-1">
         <NuxtLink
           :to="item.to || undefined"
-          :href="!item.to ? (item.url || undefined) : undefined"
+          :href="!item.to ? item.url || undefined : undefined"
           :target="!item.to ? '_blank' : undefined"
           class="block truncate font-medium text-highlighted hover:text-primary"
           @click.stop
@@ -107,7 +130,11 @@ async function submitReply(): Promise<void> {
           </NuxtLink>
           <span v-if="item.author" class="inline-flex items-center gap-1">
             ·
-            <UAvatar :src="item.author.avatarUrl ?? undefined" :alt="item.author.login" size="3xs" />
+            <UAvatar
+              :src="item.author.avatarUrl ?? undefined"
+              :alt="item.author.login"
+              size="3xs"
+            />
             {{ userLabel(item.author) }}
           </span>
           <span v-if="item.updatedAt">· {{ formatRelativeTime(item.updatedAt) }}</span>
@@ -120,19 +147,17 @@ async function submitReply(): Promise<void> {
               :show-files="false"
             />
           </template>
-          <UBadge
-            v-if="reasonLabel"
-            color="neutral"
-            variant="subtle"
-            size="xs"
-          >
+          <UBadge v-if="reasonLabel" color="neutral" variant="subtle" size="xs">
             {{ reasonLabel }}
           </UBadge>
         </div>
       </div>
 
       <div class="flex shrink-0 items-center gap-1.5" @click.stop>
-        <span v-if="commentCount" class="inline-flex items-center gap-1 text-xs font-medium text-muted">
+        <span
+          v-if="commentCount"
+          class="inline-flex items-center gap-1 text-xs font-medium text-muted"
+        >
           <UIcon name="i-lucide-message-square" class="size-3.5" />
           {{ commentCount }}
         </span>
@@ -164,7 +189,10 @@ async function submitReply(): Promise<void> {
       :class="open ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'"
     >
       <div class="overflow-hidden">
-        <div v-if="item.unreadComments?.length" class="divide-y divide-default border-t border-default bg-elevated/30">
+        <div
+          v-if="item.unreadComments?.length"
+          class="divide-y divide-default border-t border-default bg-elevated/30"
+        >
           <div v-for="c in item.unreadComments" :key="c.id" class="px-4 py-2.5">
             <div class="mb-1 flex items-center gap-2 text-xs text-muted">
               <UserLink :user="c.author" />
@@ -190,11 +218,7 @@ async function submitReply(): Promise<void> {
               :disabled="!draft.trim()"
               @click="submitReply"
             />
-            <NuxtLink
-              v-if="item.to"
-              :to="item.to"
-              class="text-xs text-muted hover:text-primary"
-            >
+            <NuxtLink v-if="item.to" :to="item.to" class="text-xs text-muted hover:text-primary">
               Open conversation →
             </NuxtLink>
           </div>

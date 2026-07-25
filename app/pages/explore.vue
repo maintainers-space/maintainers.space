@@ -4,9 +4,17 @@ import type { ExplorePeriod, ExploreScope } from '~/composables/useExplore'
 const { repos, loading, notes, load } = useExplore()
 const { isAuthenticated } = useAuth()
 
-const scope = useRouteTab<ExploreScope>('scope', ['trending', 'following'], isAuthenticated.value ? 'following' : 'trending')
+const scope = useRouteTab<ExploreScope>(
+  'scope',
+  ['trending', 'following'],
+  isAuthenticated.value ? 'following' : 'trending'
+)
 const period = useRouteTab<ExplorePeriod>('period', ['daily', 'weekly', 'monthly'], 'weekly')
-const language = useRouteTab('lang', ['all', 'TypeScript', 'JavaScript', 'Python', 'Rust', 'Go', 'Vue', 'C++', 'Zig'], 'all')
+const language = useRouteTab(
+  'lang',
+  ['all', 'TypeScript', 'JavaScript', 'Python', 'Rust', 'Go', 'Vue', 'C++', 'Zig'],
+  'all'
+)
 
 // Following requires sign-in; fall back to trending for anonymous visitors even
 // if a stale ?scope=following lands in the URL.
@@ -16,7 +24,9 @@ watchEffect(() => {
 
 const scopeItems = computed(() => [
   { label: 'Trending', value: 'trending', icon: 'i-lucide-flame' },
-  ...(isAuthenticated.value ? [{ label: 'Following', value: 'following', icon: 'i-lucide-users' }] : [])
+  ...(isAuthenticated.value
+    ? [{ label: 'Following', value: 'following', icon: 'i-lucide-users' }]
+    : [])
 ])
 
 const periodItems = [
@@ -60,13 +70,7 @@ onMounted(() => reload())
     <template #body>
       <div class="mx-auto w-full max-w-5xl space-y-6 py-2">
         <div class="flex flex-wrap items-center justify-between gap-3">
-          <UTabs
-            v-model="scope"
-            :items="scopeItems"
-            :content="false"
-            size="sm"
-            class="w-auto"
-          />
+          <UTabs v-model="scope" :items="scopeItems" :content="false" size="sm" class="w-auto" />
           <div class="flex items-center gap-2">
             <USelect
               v-if="scope === 'trending'"
@@ -100,14 +104,18 @@ onMounted(() => reload())
           <USkeleton v-for="i in 6" :key="i" class="h-28 w-full" />
         </div>
 
-        <div v-else-if="!repos.length" class="rounded-lg border border-dashed border-default py-16 text-center">
+        <div
+          v-else-if="!repos.length"
+          class="rounded-lg border border-dashed border-default py-16 text-center"
+        >
           <UIcon name="i-lucide-telescope" class="mx-auto size-8 text-muted" />
-          <p class="mt-3 text-sm text-muted">
-            Nothing to explore right now.
-          </p>
+          <p class="mt-3 text-sm text-muted">Nothing to explore right now.</p>
           <p class="mx-auto mt-1 max-w-md text-xs text-muted">
-            GitHub throttles anonymous discovery to a few requests per minute. Connect your GitHub account in
-            <NuxtLink to="/settings/accounts" class="text-primary hover:underline">settings</NuxtLink>
+            GitHub throttles anonymous discovery to a few requests per minute. Connect your GitHub
+            account in
+            <NuxtLink to="/settings/accounts" class="text-primary hover:underline"
+              >settings</NuxtLink
+            >
             to raise the limit, or try again in a moment.
           </p>
           <UButton

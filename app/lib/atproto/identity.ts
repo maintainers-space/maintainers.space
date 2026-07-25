@@ -135,15 +135,3 @@ export function resolveIdentity(identifier: string): Promise<ResolvedIdentity> {
   promise.catch(() => cache.delete(id))
   return promise
 }
-
-/** Resolve a handle (or pass-through DID) to just its DID string. */
-export async function resolveDid(identifier: string): Promise<string> {
-  const id = normalize(identifier)
-  if (id.startsWith('did:')) return id
-  return (await resolveIdentity(id)).did
-}
-
-/** Resolve to the PDS service endpoint that hosts the account's records. */
-export async function resolvePds(identifier: string): Promise<string> {
-  return (await resolveIdentity(identifier)).pds
-}

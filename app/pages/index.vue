@@ -41,7 +41,7 @@ watch(isAuthenticated, (v) => {
 const provider = ref('github')
 const owner = ref('')
 const repo = ref('')
-const providerItems = forgeList.map(f => ({ label: f.label, value: f.id, icon: f.icon }))
+const providerItems = forgeList.map((f) => ({ label: f.label, value: f.id, icon: f.icon }))
 const current = computed(() => getForge(provider.value))
 
 function go(): void {
@@ -103,9 +103,7 @@ const examples = [
         <section v-if="recentRepos.length" class="space-y-3">
           <div class="flex items-center gap-2">
             <UIcon name="i-lucide-history" class="size-4 text-muted" />
-            <h2 class="text-sm font-semibold uppercase tracking-wide text-muted">
-              Jump back in
-            </h2>
+            <h2 class="text-sm font-semibold uppercase tracking-wide text-muted">Jump back in</h2>
           </div>
           <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             <HomeRepoMiniCard
@@ -190,19 +188,15 @@ const examples = [
             One place for every forge.
           </h1>
           <p class="text-muted">
-            Browse repositories across GitHub and Tangled — and link your forge accounts to your atproto identity.
+            Browse repositories across GitHub and Tangled — and link your forge accounts to your
+            atproto identity.
           </p>
         </div>
 
         <UCard>
           <div class="flex flex-col gap-3 sm:flex-row sm:items-end">
             <UFormField label="Provider" class="sm:w-40">
-              <USelect
-                v-model="provider"
-                :items="providerItems"
-                value-key="value"
-                class="w-full"
-              />
+              <USelect v-model="provider" :items="providerItems" value-key="value" class="w-full" />
             </UFormField>
             <UFormField :label="current?.ownerLabel ?? 'Owner'" class="flex-1">
               <UInput
@@ -231,9 +225,7 @@ const examples = [
         </UCard>
 
         <div class="space-y-3">
-          <h2 class="text-sm font-medium text-muted">
-            Try an example
-          </h2>
+          <h2 class="text-sm font-medium text-muted">Try an example</h2>
           <div class="grid gap-3 sm:grid-cols-3">
             <NuxtLink
               v-for="ex in examples"
@@ -244,7 +236,9 @@ const examples = [
               <div class="flex items-center gap-2 text-sm text-muted">
                 <ForgeIcon :provider="ex.provider" class="size-4" />{{ ex.provider }}
               </div>
-              <div class="mt-1 font-medium text-default group-hover:text-primary">{{ ex.owner }}/{{ ex.repo }}</div>
+              <div class="mt-1 font-medium text-default group-hover:text-primary">
+                {{ ex.owner }}/{{ ex.repo }}
+              </div>
               <p class="mt-1 text-sm text-muted">{{ ex.description }}</p>
             </NuxtLink>
           </div>

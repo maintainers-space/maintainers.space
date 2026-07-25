@@ -16,13 +16,19 @@ export function useForgeAttestations() {
     return !!ownerDid && verified.value.has(keyOf(ownerDid, a))
   }
 
-  async function check(ownerDid: string | null | undefined, accounts: AttestableAccount[]): Promise<void> {
+  async function check(
+    ownerDid: string | null | undefined,
+    accounts: AttestableAccount[]
+  ): Promise<void> {
     if (!ownerDid) {
       verified.value = new Set()
       return
     }
     const results = await Promise.all(
-      accounts.map(async a => ({ key: keyOf(ownerDid, a), ok: await verifyForgeAttestation(a, ownerDid) }))
+      accounts.map(async (a) => ({
+        key: keyOf(ownerDid, a),
+        ok: await verifyForgeAttestation(a, ownerDid)
+      }))
     )
     const next = new Set<string>()
     for (const r of results) if (r.ok) next.add(r.key)

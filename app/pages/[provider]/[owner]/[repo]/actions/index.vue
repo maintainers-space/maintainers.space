@@ -3,7 +3,9 @@ import type { ForgeActionRun } from '~/types/forge'
 import { useRepoContext } from '~/composables/useRepoContext'
 
 const { provider, owner, name, forge, locator } = useRepoContext()
-const base = computed(() => repoPath({ provider: provider.value, owner: owner.value, name: name.value }))
+const base = computed(() =>
+  repoPath({ provider: provider.value, owner: owner.value, name: name.value })
+)
 
 const items = ref<ForgeActionRun[]>([])
 const loading = ref(false)
@@ -42,11 +44,12 @@ onMounted(load)
       :description="error"
     />
 
-    <div v-else-if="!items.length" class="rounded-lg border border-dashed border-default py-16 text-center">
+    <div
+      v-else-if="!items.length"
+      class="rounded-lg border border-dashed border-default py-16 text-center"
+    >
       <UIcon name="i-lucide-play" class="mx-auto size-8 text-muted" />
-      <p class="mt-3 text-sm text-muted">
-        No workflow runs found.
-      </p>
+      <p class="mt-3 text-sm text-muted">No workflow runs found.</p>
     </div>
 
     <ul v-else class="divide-y divide-default overflow-hidden rounded-lg border border-default">
@@ -55,14 +58,11 @@ onMounted(load)
           :to="`${base}/actions/${encodeURIComponent(run.id)}`"
           class="flex items-start gap-3 px-4 py-3 transition hover:bg-elevated/40"
         >
-          <StateBadge
-            :state="run.status"
-            kind="run"
-            size="sm"
-            class="mt-0.5 shrink-0"
-          />
+          <StateBadge :state="run.status" kind="run" size="sm" class="mt-0.5 shrink-0" />
           <div class="min-w-0 flex-1">
-            <p class="truncate text-sm font-medium text-default">{{ run.name || run.commitMessage || 'Workflow run' }}</p>
+            <p class="truncate text-sm font-medium text-default">
+              {{ run.name || run.commitMessage || 'Workflow run' }}
+            </p>
             <div class="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-muted">
               <span v-if="run.event" class="capitalize">{{ run.event }}</span>
               <span v-if="run.branch" class="font-mono">· {{ run.branch }}</span>

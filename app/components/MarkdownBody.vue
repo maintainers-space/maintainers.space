@@ -2,7 +2,7 @@
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
 
-const props = withDefaults(defineProps<{ content?: string | null, empty?: string }>(), {
+const props = withDefaults(defineProps<{ content?: string | null; empty?: string }>(), {
   content: '',
   empty: 'No description provided.'
 })

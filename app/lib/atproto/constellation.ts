@@ -22,22 +22,26 @@ interface BacklinksResponse {
 export function getBacklinks(
   subject: string,
   source: string,
-  opts: { cap?: number, force?: boolean } = {}
+  opts: { cap?: number; force?: boolean } = {}
 ): Promise<Backlink[]> {
   const cap = opts.cap ?? 100
-  return cached(`constellation:${source}|${subject}`, async () => {
-    const out: Backlink[] = []
-    let cursor: string | undefined
-    for (let page = 0; page < 5; page++) {
-      const body = await getJson<BacklinksResponse>(
-        `${CONSTELLATION}/xrpc/blue.microcosm.links.getBacklinks`,
-        { subject, source, limit: Math.min(100, cap - out.length), cursor }
-      ).catch(() => null)
-      if (!body) break
-      out.push(...(body.records ?? []))
-      cursor = body.cursor ?? undefined
-      if (!cursor || out.length >= cap) break
-    }
-    return out
-  }, { ttl: TTL.MEDIUM, force: opts.force })
+  return cached(
+    `constellation:${source}|${subject}`,
+    async () => {
+      const out: Backlink[] = []
+      let cursor: string | undefined
+      for (let page = 0; page < 5; page++) {
+        const body = await getJson<BacklinksResponse>(
+          `${CONSTELLATION}/xrpc/blue.microcosm.links.getBacklinks`,
+          { subject, source, limit: Math.min(100, cap - out.length), cursor }
+        ).catch(() => null)
+        if (!body) break
+        out.push(...(body.records ?? []))
+        cursor = body.cursor ?? undefined
+        if (!cursor || out.length >= cap) break
+      }
+      return out
+    },
+    { ttl: TTL.MEDIUM, force: opts.force }
+  )
 }

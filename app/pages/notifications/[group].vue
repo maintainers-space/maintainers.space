@@ -14,7 +14,9 @@ const {
 } = useNotifications()
 const { isAuthenticated } = useAuth()
 
-const title = computed(() => (group.value === 'dependencies' ? 'Dependency updates' : 'Notifications'))
+const title = computed(() =>
+  group.value === 'dependencies' ? 'Dependency updates' : 'Notifications'
+)
 const bulkMerging = ref(false)
 
 onMounted(() => {
@@ -45,12 +47,7 @@ async function onMergeAll(): Promise<void> {
           />
         </template>
         <template #trailing>
-          <UBadge
-            v-if="dependencyCount"
-            color="primary"
-            variant="subtle"
-            size="sm"
-          >
+          <UBadge v-if="dependencyCount" color="primary" variant="subtle" size="sm">
             {{ dependencyCount }}
           </UBadge>
         </template>
@@ -79,16 +76,18 @@ async function onMergeAll(): Promise<void> {
 
     <template #body>
       <div class="mx-auto w-full max-w-3xl space-y-4 py-2">
-        <div v-if="!isAuthenticated" class="rounded-lg border border-dashed border-default py-16 text-center">
+        <div
+          v-if="!isAuthenticated"
+          class="rounded-lg border border-dashed border-default py-16 text-center"
+        >
           <UIcon name="i-lucide-lock" class="mx-auto size-8 text-muted" />
-          <p class="mt-3 text-sm text-muted">
-            Sign in to review dependency updates.
-          </p>
+          <p class="mt-3 text-sm text-muted">Sign in to review dependency updates.</p>
         </div>
 
         <template v-else>
           <p class="text-xs text-muted">
-            Automated pull requests from dependabot and renovate. Approve and merge them individually, or clear the whole batch at once.
+            Automated pull requests from dependabot and renovate. Approve and merge them
+            individually, or clear the whole batch at once.
           </p>
 
           <div v-if="loading && !dependencyItems.length" class="space-y-3">
@@ -100,9 +99,7 @@ async function onMergeAll(): Promise<void> {
             class="rounded-lg border border-dashed border-default py-16 text-center"
           >
             <UIcon name="i-lucide-package-check" class="mx-auto size-8 text-success" />
-            <p class="mt-3 text-sm text-muted">
-              No dependency updates waiting.
-            </p>
+            <p class="mt-3 text-sm text-muted">No dependency updates waiting.</p>
           </div>
 
           <div v-else class="space-y-3">

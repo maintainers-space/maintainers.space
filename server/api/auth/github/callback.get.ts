@@ -30,10 +30,18 @@ export default defineEventHandler(async (event) => {
   const { clientId, clientSecret } = useRuntimeConfig(event).github
   if (!clientId || !clientSecret) return fail('GitHub OAuth is not configured on this server.')
 
-  let stored: { state?: string, returnTo?: string, did?: string, claimOwner?: string, claimName?: string } = {}
+  let stored: {
+    state?: string
+    returnTo?: string
+    did?: string
+    claimOwner?: string
+    claimName?: string
+  } = {}
   try {
     stored = cookieRaw ? JSON.parse(cookieRaw) : {}
-  } catch { /* fall through to state mismatch */ }
+  } catch {
+    /* fall through to state mismatch */
+  }
 
   if (!query.code || !query.state || query.state !== stored.state) {
     return fail('Invalid or expired sign-in request. Please try again.')
@@ -52,7 +60,8 @@ export default defineEventHandler(async (event) => {
       })
     })
 
-    if (!res.access_token) return fail(res.error_description || 'GitHub did not return an access token.')
+    if (!res.access_token)
+      return fail(res.error_description || 'GitHub did not return an access token.')
 
     const fragment = new URLSearchParams({
       token: res.access_token,
@@ -68,8 +77,8 @@ export default defineEventHandler(async (event) => {
       try {
         const ghUser = await $fetch<{ login: string }>('https://api.github.com/user', {
           headers: {
-            'Accept': 'application/vnd.github+json',
-            'Authorization': `Bearer ${res.access_token}`,
+            Accept: 'application/vnd.github+json',
+            Authorization: `Bearer ${res.access_token}`,
             'User-Agent': 'koinon'
           }
         })
@@ -83,7 +92,9 @@ export default defineEventHandler(async (event) => {
           fragment.set('attestation', signed.attestation)
           fragment.set('attestedBy', signed.attestedBy)
         }
-      } catch { /* attestation is best-effort; the link is still stored */ }
+      } catch {
+        /* attestation is best-effort; the link is still stored */
+      }
     }
 
     await applyRepoClaim({

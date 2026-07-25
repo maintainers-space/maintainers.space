@@ -2,7 +2,7 @@
 import type { ForgeAccount } from '~/composables/useForgeAccounts'
 import { getForge } from '~/lib/forges'
 
-const props = defineProps<{ account: ForgeAccount, verified?: boolean }>()
+const props = defineProps<{ account: ForgeAccount; verified?: boolean }>()
 const emit = defineEmits<{ unlink: [account: ForgeAccount] }>()
 
 const forge = computed(() => getForge(props.account.provider))
@@ -18,14 +18,10 @@ const forge = computed(() => getForge(props.account.provider))
     />
     <div class="min-w-0 flex-1">
       <div class="flex items-center gap-1.5">
-        <span class="truncate font-medium text-default">{{ account.displayName || account.username }}</span>
-        <UBadge
-          v-if="verified"
-          label="Verified"
-          color="primary"
-          variant="subtle"
-          size="sm"
-        />
+        <span class="truncate font-medium text-default">{{
+          account.displayName || account.username
+        }}</span>
+        <UBadge v-if="verified" label="Verified" color="primary" variant="subtle" size="sm" />
       </div>
       <div class="flex items-center gap-1 text-sm text-muted">
         <ForgeIcon :provider="account.provider" class="size-3.5" />
@@ -36,7 +32,8 @@ const forge = computed(() => getForge(props.account.provider))
           :href="account.profileUrl"
           target="_blank"
           class="truncate hover:text-default hover:underline"
-        >@{{ account.username }}</a>
+          >@{{ account.username }}</a
+        >
         <span v-else class="truncate">@{{ account.username }}</span>
         <span v-if="account.host" class="text-dimmed">({{ account.host }})</span>
       </div>

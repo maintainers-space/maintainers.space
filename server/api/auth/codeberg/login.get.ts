@@ -11,7 +11,10 @@ function safeReturn(raw: unknown): string {
 export default defineEventHandler((event) => {
   const { clientId } = useRuntimeConfig(event).codeberg
   if (!clientId) {
-    throw createError({ statusCode: 501, statusMessage: 'Codeberg OAuth is not configured on this server.' })
+    throw createError({
+      statusCode: 501,
+      statusMessage: 'Codeberg OAuth is not configured on this server.'
+    })
   }
 
   const origin = getRequestURL(event).origin
@@ -19,8 +22,10 @@ export default defineEventHandler((event) => {
   const returnTo = safeReturn(getQuery(event).redirect)
   const rawDid = getQuery(event).did
   const did = typeof rawDid === 'string' && rawDid.startsWith('did:') ? rawDid : ''
-  const claimOwner = typeof getQuery(event).claimOwner === 'string' ? String(getQuery(event).claimOwner) : undefined
-  const claimName = typeof getQuery(event).claimName === 'string' ? String(getQuery(event).claimName) : undefined
+  const claimOwner =
+    typeof getQuery(event).claimOwner === 'string' ? String(getQuery(event).claimOwner) : undefined
+  const claimName =
+    typeof getQuery(event).claimName === 'string' ? String(getQuery(event).claimName) : undefined
 
   setCookie(event, 'cb_oauth', JSON.stringify({ state, returnTo, did, claimOwner, claimName }), {
     httpOnly: true,

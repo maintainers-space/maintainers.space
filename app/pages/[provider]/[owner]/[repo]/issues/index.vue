@@ -3,7 +3,9 @@ import type { ForgeIssue, ForgeIssueState } from '~/types/forge'
 import { useRepoContext } from '~/composables/useRepoContext'
 
 const { provider, owner, name, forge, locator } = useRepoContext()
-const base = computed(() => repoPath({ provider: provider.value, owner: owner.value, name: name.value }))
+const base = computed(() =>
+  repoPath({ provider: provider.value, owner: owner.value, name: name.value })
+)
 
 const state = ref<ForgeIssueState>('open')
 const items = ref<ForgeIssue[]>([])
@@ -14,10 +16,11 @@ const q = ref('')
 const filtered = computed(() => {
   const term = q.value.trim().toLowerCase()
   if (!term) return items.value
-  return items.value.filter(it =>
-    it.title.toLowerCase().includes(term)
-    || String(it.number ?? '').includes(term)
-    || (it.author ? userLabel(it.author).toLowerCase().includes(term) : false)
+  return items.value.filter(
+    (it) =>
+      it.title.toLowerCase().includes(term) ||
+      String(it.number ?? '').includes(term) ||
+      (it.author ? userLabel(it.author).toLowerCase().includes(term) : false)
   )
 })
 
@@ -79,7 +82,10 @@ function itemLink(it: ForgeIssue): string {
       :description="error"
     />
 
-    <div v-else-if="!filtered.length" class="rounded-lg border border-dashed border-default py-16 text-center">
+    <div
+      v-else-if="!filtered.length"
+      class="rounded-lg border border-dashed border-default py-16 text-center"
+    >
       <UIcon name="i-lucide-circle-check" class="mx-auto size-8 text-muted" />
       <p class="mt-3 text-sm text-muted">
         {{ q ? 'No issues match your filter.' : `No ${state} issues.` }}
@@ -88,7 +94,10 @@ function itemLink(it: ForgeIssue): string {
 
     <ul v-else class="divide-y divide-default overflow-hidden rounded-lg border border-default">
       <li v-for="it in filtered" :key="it.id">
-        <NuxtLink :to="itemLink(it)" class="flex items-start gap-3 px-4 py-3 transition hover:bg-elevated/40">
+        <NuxtLink
+          :to="itemLink(it)"
+          class="flex items-start gap-3 px-4 py-3 transition hover:bg-elevated/40"
+        >
           <UIcon
             :name="it.state === 'open' ? 'i-lucide-circle-dot' : 'i-lucide-check-circle'"
             class="mt-0.5 size-4 shrink-0"
@@ -102,7 +111,10 @@ function itemLink(it: ForgeIssue): string {
               <span v-if="it.updatedAt">· {{ formatRelativeTime(it.updatedAt) }}</span>
             </div>
           </div>
-          <span v-if="it.commentCount" class="inline-flex shrink-0 items-center gap-1 text-xs text-muted">
+          <span
+            v-if="it.commentCount"
+            class="inline-flex shrink-0 items-center gap-1 text-xs text-muted"
+          >
             <UIcon name="i-lucide-message-square" class="size-3.5" />{{ it.commentCount }}
           </span>
         </NuxtLink>

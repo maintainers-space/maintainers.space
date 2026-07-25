@@ -20,7 +20,7 @@ function walk(node: QueryNode | null, plan: TangledPlan, negated: boolean): void
   if (!node) return
   switch (node.type) {
     case 'term':
-      (negated ? plan.negatedTerms : plan.terms).push(node.value.toLowerCase())
+      ;(negated ? plan.negatedTerms : plan.terms).push(node.value.toLowerCase())
       break
     case 'qualifier': {
       const key = node.key
@@ -41,7 +41,7 @@ function walk(node: QueryNode | null, plan: TangledPlan, negated: boolean): void
       break
     case 'and':
     case 'or':
-      node.nodes.forEach(c => walk(c, plan, negated))
+      node.nodes.forEach((c) => walk(c, plan, negated))
       break
   }
 }
@@ -54,7 +54,10 @@ export function astToTangledPlan(node: QueryNode | null): TangledPlan {
 }
 
 /** True when `text` satisfies the plan's positive/negative term constraints. */
-export function tangledMatches(plan: TangledPlan, ...fields: Array<string | null | undefined>): boolean {
+export function tangledMatches(
+  plan: TangledPlan,
+  ...fields: Array<string | null | undefined>
+): boolean {
   const haystack = fields.filter(Boolean).join(' \u0000 ').toLowerCase()
   for (const t of plan.terms) if (!haystack.includes(t)) return false
   for (const t of plan.negatedTerms) if (haystack.includes(t)) return false

@@ -12,7 +12,8 @@ onMounted(async () => {
     await navigateTo(to, { replace: true })
   } catch (error) {
     status.value = 'error'
-    message.value = error instanceof Error ? error.message : 'Could not connect your Codeberg account.'
+    message.value =
+      error instanceof Error ? error.message : 'Could not connect your Codeberg account.'
   }
 })
 </script>
@@ -29,9 +30,7 @@ onMounted(async () => {
     <template v-else>
       <UIcon name="i-lucide-circle-alert" class="size-8 text-error" />
       <div>
-        <h1 class="font-semibold text-highlighted">
-          Codeberg connection failed
-        </h1>
+        <h1 class="font-semibold text-highlighted">Codeberg connection failed</h1>
         <p class="mt-1 max-w-sm text-sm text-muted">
           {{ message }}
         </p>

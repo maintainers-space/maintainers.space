@@ -11,6 +11,7 @@ import {
 import type { ActorIdentifier, Did } from '@atcute/lexicons'
 import { OAUTH_SCOPE } from '~/lib/atproto/oauth'
 import { fetchPublicProfile } from '~/lib/atproto/public'
+import { clearCache } from '~/lib/cache'
 
 const CURRENT_DID_KEY = 'koinon:current-did'
 
@@ -37,8 +38,12 @@ async function activate(agent: OAuthUserAgent): Promise<void> {
     _profile.value = { did: agent.sub, handle: agent.sub }
   }
   void fetchPublicProfile(agent.sub)
-    .then((p) => { _profile.value = p })
-    .catch(() => { /* keep the did-as-handle fallback */ })
+    .then((p) => {
+      _profile.value = p
+    })
+    .catch(() => {
+      /* keep the did-as-handle fallback */
+    })
 }
 
 /** Tear down local session state and drop the stored session for `sub`. */
@@ -46,11 +51,17 @@ function clearLocalSession(sub?: Did | null): void {
   _agent.value = null
   _did.value = null
   _profile.value = null
-  const dead = sub ?? (import.meta.client ? (localStorage.getItem(CURRENT_DID_KEY) as Did | null) : null)
+  // So another account signing in on the same device never reads this
+  // account's cached repos/issues/notifications.
+  clearCache()
+  const dead =
+    sub ?? (import.meta.client ? (localStorage.getItem(CURRENT_DID_KEY) as Did | null) : null)
   if (dead) {
     try {
       deleteStoredSession(dead)
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   }
   if (import.meta.client) localStorage.removeItem(CURRENT_DID_KEY)
 }
@@ -85,7 +96,7 @@ export function useAuth() {
       scope: OAUTH_SCOPE
     })
     // Give freshly-stored PKCE/DPoP state a tick to persist before navigating away.
-    await new Promise(resolve => setTimeout(resolve, 200))
+    await new Promise((resolve) => setTimeout(resolve, 200))
     window.location.assign(url.toString())
   }
 

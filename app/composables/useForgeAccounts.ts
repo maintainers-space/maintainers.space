@@ -27,12 +27,18 @@ export interface ForgeAccount extends ForgeAccountRecord {
 }
 
 function sanitize(part: string): string {
-  return part.toLowerCase().replace(/[^a-z0-9._-]+/g, '-').replace(/(^-+)|(-+$)/g, '').slice(0, 200)
+  return part
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]+/g, '-')
+    .replace(/(^-+)|(-+$)/g, '')
+    .slice(0, 200)
 }
 
 /** Deterministic record key so linking the same account is idempotent. */
 export function makeRkey(provider: string, username: string, host?: string): string {
-  const key = [sanitize(provider), host ? sanitize(host) : '', sanitize(username)].filter(Boolean).join('_')
+  const key = [sanitize(provider), host ? sanitize(host) : '', sanitize(username)]
+    .filter(Boolean)
+    .join('_')
   return key || 'account'
 }
 
@@ -55,12 +61,19 @@ export function useForgeAccounts() {
     }
     _pending.value = true
     try {
-      const data = await runAuthed(rpc => ok(rpc.get('com.atproto.repo.listRecords', {
-        params: { repo: did.value as Did, collection: COLLECTION, limit: 100 }
-      })))
-      const records = (data.records ?? []) as unknown as Array<{ uri: string, value: ForgeAccountRecord }>
+      const data = await runAuthed((rpc) =>
+        ok(
+          rpc.get('com.atproto.repo.listRecords', {
+            params: { repo: did.value as Did, collection: COLLECTION, limit: 100 }
+          })
+        )
+      )
+      const records = (data.records ?? []) as unknown as Array<{
+        uri: string
+        value: ForgeAccountRecord
+      }>
       _accounts.value = records
-        .map(r => ({ uri: r.uri, rkey: rkeyFromUri(r.uri), ...r.value }))
+        .map((r) => ({ uri: r.uri, rkey: rkeyFromUri(r.uri), ...r.value }))
         .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))
     } finally {
       _pending.value = false
@@ -89,26 +102,32 @@ export function useForgeAccounts() {
       // eslint-disable-next-line @typescript-eslint/no-dynamic-delete
       if (record[k] === undefined) delete record[k]
     }
-    await runAuthed(rpc => ok(rpc.post('com.atproto.repo.putRecord', {
-      input: {
-        repo: did.value as Did,
-        collection: COLLECTION,
-        rkey: makeRkey(input.provider, input.username, input.host),
-        // koinon's lexicons aren't published on-network, so the PDS can't resolve
-        // them; skip validation or the write is rejected with "could not find lexicon".
-        validate: false,
-        record: record as unknown as Record<string, unknown>
-      }
-    })))
+    await runAuthed((rpc) =>
+      ok(
+        rpc.post('com.atproto.repo.putRecord', {
+          input: {
+            repo: did.value as Did,
+            collection: COLLECTION,
+            rkey: makeRkey(input.provider, input.username, input.host),
+            // koinon's lexicons aren't published on-network, so the PDS can't resolve
+            // them; skip validation or the write is rejected with "could not find lexicon".
+            validate: false,
+            record: record as unknown as Record<string, unknown>
+          }
+        })
+      )
+    )
     await refresh()
   }
 
   async function unlink(rkey: string): Promise<void> {
     if (!did.value) throw new Error('Not authenticated')
-    await runAuthed(rpc => rpc.post('com.atproto.repo.deleteRecord', {
-      input: { repo: did.value as Did, collection: COLLECTION, rkey },
-      as: null
-    }))
+    await runAuthed((rpc) =>
+      rpc.post('com.atproto.repo.deleteRecord', {
+        input: { repo: did.value as Did, collection: COLLECTION, rkey },
+        as: null
+      })
+    )
     await refresh()
   }
 

@@ -1,10 +1,13 @@
 <script setup lang="ts">
-withDefaults(defineProps<{
-  additions?: number | null
-  deletions?: number | null
-  files?: number | null
-  showFiles?: boolean
-}>(), { showFiles: true })
+withDefaults(
+  defineProps<{
+    additions?: number | null
+    deletions?: number | null
+    files?: number | null
+    showFiles?: boolean
+  }>(),
+  { showFiles: true }
+)
 </script>
 
 <template>

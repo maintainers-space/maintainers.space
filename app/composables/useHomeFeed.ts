@@ -22,7 +22,7 @@ export function useHomeFeed() {
   const loaded = ref(false)
 
   /** Forges that can produce a "my work" feed and have a token connected. */
-  const workForges = () => forgeList.filter(f => f.listMyWork && getToken(f.id))
+  const workForges = () => forgeList.filter((f) => f.listMyWork && getToken(f.id))
   const connected = computed(() => workForges().length > 0)
 
   function apply(work: ForgeMyWork): void {
@@ -38,20 +38,37 @@ export function useHomeFeed() {
       return
     }
     loading.value = true
-    const key = `home:mywork:${active.map(f => f.id).sort().join(',')}`
+    const key = `home:mywork:${active
+      .map((f) => f.id)
+      .sort()
+      .join(',')}`
     try {
-      const work = await cached(key, async () => {
-        const parts = await Promise.all(
-          active.map(f => f.listMyWork!({ token: getToken(f.id) }).catch(() => ({
-            authoredPulls: [], reviewRequests: [], assignedIssues: []
-          } as ForgeMyWork)))
-        )
-        return parts.reduce<ForgeMyWork>((acc, p) => ({
-          authoredPulls: acc.authoredPulls.concat(p.authoredPulls),
-          reviewRequests: acc.reviewRequests.concat(p.reviewRequests),
-          assignedIssues: acc.assignedIssues.concat(p.assignedIssues)
-        }), { authoredPulls: [], reviewRequests: [], assignedIssues: [] })
-      }, { ttl: TTL.SHORT, force, onRevalidate: apply })
+      const work = await cached(
+        key,
+        async () => {
+          const parts = await Promise.all(
+            active.map((f) =>
+              f.listMyWork!({ token: getToken(f.id) }).catch(
+                () =>
+                  ({
+                    authoredPulls: [],
+                    reviewRequests: [],
+                    assignedIssues: []
+                  }) as ForgeMyWork
+              )
+            )
+          )
+          return parts.reduce<ForgeMyWork>(
+            (acc, p) => ({
+              authoredPulls: acc.authoredPulls.concat(p.authoredPulls),
+              reviewRequests: acc.reviewRequests.concat(p.reviewRequests),
+              assignedIssues: acc.assignedIssues.concat(p.assignedIssues)
+            }),
+            { authoredPulls: [], reviewRequests: [], assignedIssues: [] }
+          )
+        },
+        { ttl: TTL.SHORT, force, onRevalidate: apply }
+      )
       apply(work)
     } finally {
       loading.value = false

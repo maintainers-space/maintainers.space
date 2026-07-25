@@ -34,11 +34,15 @@ function refresh() {
 }
 
 onMounted(() => ensureLoaded(tab.value))
-watch(tab, t => ensureLoaded(t))
+watch(tab, (t) => ensureLoaded(t))
 
 const activeLoading = computed(() => (tab.value === 'me' ? meLoading.value : friendsLoading.value))
 
-interface DayGroup { key: string, label: string, items: ForgeContribution[] }
+interface DayGroup {
+  key: string
+  label: string
+  items: ForgeContribution[]
+}
 
 function dayLabel(d: Date): string {
   const startOfDay = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime()
@@ -54,7 +58,9 @@ function groupByDay(items: ForgeContribution[]): DayGroup[] {
   let cur: DayGroup | null = null
   for (const it of items) {
     const d = new Date(it.createdAt)
-    const key = Number.isNaN(d.getTime()) ? 'unknown' : `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`
+    const key = Number.isNaN(d.getTime())
+      ? 'unknown'
+      : `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`
     if (!cur || cur.key !== key) {
       cur = { key, label: Number.isNaN(d.getTime()) ? 'Earlier' : dayLabel(d), items: [] }
       groups.push(cur)
@@ -90,11 +96,12 @@ const friendsGroups = computed(() => groupByDay(friendsItems.value))
 
     <template #body>
       <div class="mx-auto w-full max-w-3xl space-y-4 py-2">
-        <div v-if="!isAuthenticated" class="rounded-lg border border-dashed border-default py-16 text-center">
+        <div
+          v-if="!isAuthenticated"
+          class="rounded-lg border border-dashed border-default py-16 text-center"
+        >
           <UIcon name="i-lucide-lock" class="mx-auto size-8 text-muted" />
-          <p class="mt-3 text-sm text-muted">
-            Sign in to see your activity timeline.
-          </p>
+          <p class="mt-3 text-sm text-muted">Sign in to see your activity timeline.</p>
         </div>
 
         <template v-else>
@@ -110,9 +117,7 @@ const friendsGroups = computed(() => groupByDay(friendsItems.value))
             <template v-if="tab === 'me'">
               Your recent contributions across every connected forge, newest first.
             </template>
-            <template v-else>
-              Recent activity from the people you follow, newest first.
-            </template>
+            <template v-else> Recent activity from the people you follow, newest first. </template>
           </p>
 
           <!-- Me -->
@@ -145,17 +150,10 @@ const friendsGroups = computed(() => groupByDay(friendsItems.value))
               class="rounded-lg border border-dashed border-default py-16 text-center"
             >
               <UIcon name="i-lucide-activity" class="mx-auto size-8 text-muted" />
-              <p class="mt-3 text-sm text-muted">
-                No recent activity yet.
-              </p>
+              <p class="mt-3 text-sm text-muted">No recent activity yet.</p>
             </div>
 
-            <section
-              v-for="g in meGroups"
-              v-else
-              :key="g.key"
-              class="space-y-2"
-            >
+            <section v-for="g in meGroups" v-else :key="g.key" class="space-y-2">
               <h3 class="px-1 text-xs font-semibold uppercase tracking-wide text-muted">
                 {{ g.label }}
               </h3>
@@ -197,17 +195,10 @@ const friendsGroups = computed(() => groupByDay(friendsItems.value))
               class="rounded-lg border border-dashed border-default py-16 text-center"
             >
               <UIcon name="i-lucide-users" class="mx-auto size-8 text-muted" />
-              <p class="mt-3 text-sm text-muted">
-                No recent activity from the people you follow.
-              </p>
+              <p class="mt-3 text-sm text-muted">No recent activity from the people you follow.</p>
             </div>
 
-            <section
-              v-for="g in friendsGroups"
-              v-else
-              :key="g.key"
-              class="space-y-2"
-            >
+            <section v-for="g in friendsGroups" v-else :key="g.key" class="space-y-2">
               <h3 class="px-1 text-xs font-semibold uppercase tracking-wide text-muted">
                 {{ g.label }}
               </h3>

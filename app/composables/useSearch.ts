@@ -2,7 +2,15 @@ import { getForge, isForgeId } from '~/lib/forges'
 import { parseQuery, type ParsedQuery, type QueryNode, type ResultType } from '~/lib/search/parser'
 import { astToGitHubQuery } from '~/lib/search/adapters/github'
 import { astToTangledPlan, tangledMatches } from '~/lib/search/adapters/tangled'
-import type { ForgeId, ForgeDiscussion, ForgeIssue, ForgeRepo, ForgeSearchCode, ForgeSearchOptions, ForgeUser } from '~/types/forge'
+import type {
+  ForgeId,
+  ForgeDiscussion,
+  ForgeIssue,
+  ForgeRepo,
+  ForgeSearchCode,
+  ForgeSearchOptions,
+  ForgeUser
+} from '~/types/forge'
 
 export interface SearchResults {
   repos: ForgeRepo[]
@@ -19,28 +27,44 @@ const DEFAULT_TYPES: ResultType[] = ['repos', 'issues', 'users']
 function astToPlainText(node: QueryNode | null): string {
   if (!node) return ''
   switch (node.type) {
-    case 'term': return node.value
-    case 'qualifier': return ''
-    case 'not': return ''
+    case 'term':
+      return node.value
+    case 'qualifier':
+      return ''
+    case 'not':
+      return ''
     case 'and':
-    case 'or': return node.nodes.map(astToPlainText).filter(Boolean).join(' ')
+    case 'or':
+      return node.nodes.map(astToPlainText).filter(Boolean).join(' ')
   }
 }
 
 function sortOption(parsed: ParsedQuery): ForgeSearchOptions['sort'] {
   switch (parsed.sortKey) {
-    case 'stars': return 'stars'
-    case 'forks': return 'forks'
-    case 'updated': case 'pushed': return 'updated'
-    case 'created': return 'created'
-    default: return undefined
+    case 'stars':
+      return 'stars'
+    case 'forks':
+      return 'forks'
+    case 'updated':
+    case 'pushed':
+      return 'updated'
+    case 'created':
+      return 'created'
+    default:
+      return undefined
   }
 }
 
 export function useSearch() {
   const { get: getToken } = useForgeTokens()
 
-  const results = reactive<SearchResults>({ repos: [], issues: [], code: [], users: [], discussions: [] })
+  const results = reactive<SearchResults>({
+    repos: [],
+    issues: [],
+    code: [],
+    users: [],
+    discussions: []
+  })
   const totals = ref<Partial<Record<ResultType, number>>>({})
   const loading = ref(false)
   const error = ref<string | null>(null)
@@ -73,7 +97,9 @@ export function useSearch() {
 
     const providers = (q.providers.length ? q.providers : DEFAULT_PROVIDERS).filter(isForgeId)
     const hasGithubToken = !!getToken('github')
-    const defaultTypes: ResultType[] = hasGithubToken ? [...DEFAULT_TYPES, 'discussions'] : DEFAULT_TYPES
+    const defaultTypes: ResultType[] = hasGithubToken
+      ? [...DEFAULT_TYPES, 'discussions']
+      : DEFAULT_TYPES
     const types = q.resultTypes.length ? q.resultTypes : defaultTypes
     activeProviders.value = providers
     activeTypes.value = types
@@ -89,49 +115,103 @@ export function useSearch() {
       if (!forge) continue
 
       if (pid === 'github') {
-        if (gh.dropped.length) noteSet.add(`GitHub ignored unsupported qualifier${gh.dropped.length > 1 ? 's' : ''}: ${gh.dropped.map(d => d + ':').join(', ')}`)
+        if (gh.dropped.length)
+          noteSet.add(
+            `GitHub ignored unsupported qualifier${gh.dropped.length > 1 ? 's' : ''}: ${gh.dropped.map((d) => d + ':').join(', ')}`
+          )
         const ghQuery = gh.query.trim()
         if (!ghQuery) continue
-        const base: ForgeSearchOptions = { limit, token: getToken('github'), sort: sortOption(q), order: q.sortOrder }
+        const base: ForgeSearchOptions = {
+          limit,
+          token: getToken('github'),
+          sort: sortOption(q),
+          order: q.sortOrder
+        }
 
         if (types.includes('repos') && forge.searchRepos) {
-          tasks.push(forge.searchRepos(ghQuery, base).then((r) => {
-            if (myToken !== runToken) return
-            results.repos.push(...r.items)
-            if (r.total != null) totals.value = { ...totals.value, repos: (totals.value.repos ?? 0) + r.total }
-          }).catch(() => { noteSet.add('GitHub repository search failed or was rate-limited.') }))
+          tasks.push(
+            forge
+              .searchRepos(ghQuery, base)
+              .then((r) => {
+                if (myToken !== runToken) return
+                results.repos.push(...r.items)
+                if (r.total != null)
+                  totals.value = { ...totals.value, repos: (totals.value.repos ?? 0) + r.total }
+              })
+              .catch(() => {
+                noteSet.add('GitHub repository search failed or was rate-limited.')
+              })
+          )
         }
         if (types.includes('issues') && forge.searchIssues) {
-          tasks.push(forge.searchIssues(ghQuery, base).then((r) => {
-            if (myToken !== runToken) return
-            results.issues.push(...r.items)
-            if (r.total != null) totals.value = { ...totals.value, issues: (totals.value.issues ?? 0) + r.total }
-          }).catch(() => { noteSet.add('GitHub issue search failed or was rate-limited.') }))
+          tasks.push(
+            forge
+              .searchIssues(ghQuery, base)
+              .then((r) => {
+                if (myToken !== runToken) return
+                results.issues.push(...r.items)
+                if (r.total != null)
+                  totals.value = { ...totals.value, issues: (totals.value.issues ?? 0) + r.total }
+              })
+              .catch(() => {
+                noteSet.add('GitHub issue search failed or was rate-limited.')
+              })
+          )
         }
         if (types.includes('users') && forge.searchUsers) {
-          tasks.push(forge.searchUsers(ghQuery, base).then((r) => {
-            if (myToken !== runToken) return
-            results.users.push(...r.items)
-            if (r.total != null) totals.value = { ...totals.value, users: (totals.value.users ?? 0) + r.total }
-          }).catch(() => { /* user search is best-effort */ }))
+          tasks.push(
+            forge
+              .searchUsers(ghQuery, base)
+              .then((r) => {
+                if (myToken !== runToken) return
+                results.users.push(...r.items)
+                if (r.total != null)
+                  totals.value = { ...totals.value, users: (totals.value.users ?? 0) + r.total }
+              })
+              .catch(() => {
+                /* user search is best-effort */
+              })
+          )
         }
         if (types.includes('code') && forge.searchCode) {
-          if (!base.token) noteSet.add('Add a GitHub token in Settings → Access tokens to enable code search.')
-          else tasks.push(forge.searchCode(ghQuery, base).then((r) => {
-            if (myToken !== runToken) return
-            results.code.push(...r.items)
-            if (r.total != null) totals.value = { ...totals.value, code: (totals.value.code ?? 0) + r.total }
-          }).catch(() => { noteSet.add('GitHub code search failed.') }))
+          if (!base.token)
+            noteSet.add('Add a GitHub token in Settings → Access tokens to enable code search.')
+          else
+            tasks.push(
+              forge
+                .searchCode(ghQuery, base)
+                .then((r) => {
+                  if (myToken !== runToken) return
+                  results.code.push(...r.items)
+                  if (r.total != null)
+                    totals.value = { ...totals.value, code: (totals.value.code ?? 0) + r.total }
+                })
+                .catch(() => {
+                  noteSet.add('GitHub code search failed.')
+                })
+            )
         }
         if (types.includes('discussions') && forge.searchDiscussions) {
           if (!base.token) {
-            if (q.resultTypes.includes('discussions')) noteSet.add('Add a GitHub token in Settings → Access tokens to search Discussions.')
+            if (q.resultTypes.includes('discussions'))
+              noteSet.add('Add a GitHub token in Settings → Access tokens to search Discussions.')
           } else {
-            tasks.push(forge.searchDiscussions(ghQuery, base).then((r) => {
-              if (myToken !== runToken) return
-              results.discussions.push(...r.items)
-              if (r.total != null) totals.value = { ...totals.value, discussions: (totals.value.discussions ?? 0) + r.total }
-            }).catch(() => { noteSet.add('GitHub discussion search failed.') }))
+            tasks.push(
+              forge
+                .searchDiscussions(ghQuery, base)
+                .then((r) => {
+                  if (myToken !== runToken) return
+                  results.discussions.push(...r.items)
+                  if (r.total != null)
+                    totals.value = {
+                      ...totals.value,
+                      discussions: (totals.value.discussions ?? 0) + r.total
+                    }
+                })
+                .catch(() => {
+                  noteSet.add('GitHub discussion search failed.')
+                })
+            )
           }
         }
       }
@@ -139,83 +219,170 @@ export function useSearch() {
       if (pid === 'gitlab') {
         const text = astToPlainText(q.root).trim()
         if (!text) continue
-        const base: ForgeSearchOptions = { limit, token: getToken('gitlab'), sort: sortOption(q), order: q.sortOrder }
+        const base: ForgeSearchOptions = {
+          limit,
+          token: getToken('gitlab'),
+          sort: sortOption(q),
+          order: q.sortOrder
+        }
         if (types.includes('repos') && forge.searchRepos) {
-          tasks.push(forge.searchRepos(text, base).then((r) => {
-            if (myToken !== runToken) return
-            results.repos.push(...r.items)
-          }).catch(() => { noteSet.add('GitLab repository search failed.') }))
+          tasks.push(
+            forge
+              .searchRepos(text, base)
+              .then((r) => {
+                if (myToken !== runToken) return
+                results.repos.push(...r.items)
+              })
+              .catch(() => {
+                noteSet.add('GitLab repository search failed.')
+              })
+          )
         }
         if (types.includes('issues') && forge.searchIssues) {
           if (!base.token) noteSet.add('Connect your GitLab account to search GitLab issues.')
           else {
-            tasks.push(forge.searchIssues(text, base).then((r) => {
-              if (myToken !== runToken) return
-              results.issues.push(...r.items)
-            }).catch(() => { /* best-effort */ }))
+            tasks.push(
+              forge
+                .searchIssues(text, base)
+                .then((r) => {
+                  if (myToken !== runToken) return
+                  results.issues.push(...r.items)
+                })
+                .catch(() => {
+                  /* best-effort */
+                })
+            )
           }
         }
         if (types.includes('users') && forge.searchUsers) {
-          tasks.push(forge.searchUsers(text, base).then((r) => {
-            if (myToken !== runToken) return
-            results.users.push(...r.items)
-          }).catch(() => { /* user search is best-effort */ }))
+          tasks.push(
+            forge
+              .searchUsers(text, base)
+              .then((r) => {
+                if (myToken !== runToken) return
+                results.users.push(...r.items)
+              })
+              .catch(() => {
+                /* user search is best-effort */
+              })
+          )
         }
         if (types.includes('code') && forge.searchCode && base.token) {
-          tasks.push(forge.searchCode(text, base).then((r) => {
-            if (myToken !== runToken) return
-            results.code.push(...r.items)
-          }).catch(() => { /* best-effort */ }))
+          tasks.push(
+            forge
+              .searchCode(text, base)
+              .then((r) => {
+                if (myToken !== runToken) return
+                results.code.push(...r.items)
+              })
+              .catch(() => {
+                /* best-effort */
+              })
+          )
         }
       }
 
       if (pid === 'codeberg') {
         const text = astToPlainText(q.root).trim()
         if (!text) continue
-        const base: ForgeSearchOptions = { limit, token: getToken('codeberg'), sort: sortOption(q), order: q.sortOrder }
+        const base: ForgeSearchOptions = {
+          limit,
+          token: getToken('codeberg'),
+          sort: sortOption(q),
+          order: q.sortOrder
+        }
         if (types.includes('repos') && forge.searchRepos) {
-          tasks.push(forge.searchRepos(text, base).then((r) => {
-            if (myToken !== runToken) return
-            results.repos.push(...r.items)
-          }).catch(() => { noteSet.add('Codeberg repository search failed.') }))
+          tasks.push(
+            forge
+              .searchRepos(text, base)
+              .then((r) => {
+                if (myToken !== runToken) return
+                results.repos.push(...r.items)
+              })
+              .catch(() => {
+                noteSet.add('Codeberg repository search failed.')
+              })
+          )
         }
         if (types.includes('issues') && forge.searchIssues) {
-          tasks.push(forge.searchIssues(text, base).then((r) => {
-            if (myToken !== runToken) return
-            results.issues.push(...r.items)
-          }).catch(() => { /* best-effort */ }))
+          tasks.push(
+            forge
+              .searchIssues(text, base)
+              .then((r) => {
+                if (myToken !== runToken) return
+                results.issues.push(...r.items)
+              })
+              .catch(() => {
+                /* best-effort */
+              })
+          )
         }
         if (types.includes('users') && forge.searchUsers) {
-          tasks.push(forge.searchUsers(text, base).then((r) => {
-            if (myToken !== runToken) return
-            results.users.push(...r.items)
-          }).catch(() => { /* user search is best-effort */ }))
+          tasks.push(
+            forge
+              .searchUsers(text, base)
+              .then((r) => {
+                if (myToken !== runToken) return
+                results.users.push(...r.items)
+              })
+              .catch(() => {
+                /* user search is best-effort */
+              })
+          )
         }
       }
 
       if (pid === 'tangled') {
         if (!tangledPlan.usable) {
-          if (q.providers.includes('tangled')) noteSet.add('Tangled search needs an owner — add owner:<handle> (e.g. owner:tangled.org).')
+          if (q.providers.includes('tangled'))
+            noteSet.add(
+              'Tangled search needs an owner — add owner:<handle> (e.g. owner:tangled.org).'
+            )
           continue
         }
         const owner = tangledPlan.owner!
         if (types.includes('repos') && forge.listRepos) {
-          tasks.push(forge.listRepos(owner).then((repos) => {
-            if (myToken !== runToken) return
-            const matched = repos.filter(r => tangledMatches(tangledPlan, r.name, r.description, r.fullName))
-            results.repos.push(...matched.slice(0, limit))
-          }).catch(() => { noteSet.add(`Could not list Tangled repos for ${owner}.`) }))
+          tasks.push(
+            forge
+              .listRepos(owner)
+              .then((repos) => {
+                if (myToken !== runToken) return
+                const matched = repos.filter((r) =>
+                  tangledMatches(tangledPlan, r.name, r.description, r.fullName)
+                )
+                results.repos.push(...matched.slice(0, limit))
+              })
+              .catch(() => {
+                noteSet.add(`Could not list Tangled repos for ${owner}.`)
+              })
+          )
         }
         if (types.includes('issues') && tangledPlan.repoName && forge.listIssues) {
           const locator = { owner, name: tangledPlan.repoName }
-          tasks.push(forge.listIssues(locator, { limit: 50 }).then((r) => {
-            if (myToken !== runToken) return
-            const matched = r.items.filter(it => tangledMatches(tangledPlan, it.title, it.body))
-            results.issues.push(...matched.slice(0, limit).map(it => ({
-              ...it,
-              repo: { provider: 'tangled' as ForgeId, owner, name: tangledPlan.repoName!, fullName: `${owner}/${tangledPlan.repoName}` }
-            })))
-          }).catch(() => { /* best-effort */ }))
+          tasks.push(
+            forge
+              .listIssues(locator, { limit: 50 })
+              .then((r) => {
+                if (myToken !== runToken) return
+                const matched = r.items.filter((it) =>
+                  tangledMatches(tangledPlan, it.title, it.body)
+                )
+                results.issues.push(
+                  ...matched.slice(0, limit).map((it) => ({
+                    ...it,
+                    repo: {
+                      provider: 'tangled' as ForgeId,
+                      owner,
+                      name: tangledPlan.repoName!,
+                      fullName: `${owner}/${tangledPlan.repoName}`
+                    }
+                  }))
+                )
+              })
+              .catch(() => {
+                /* best-effort */
+              })
+          )
         }
       }
     }
@@ -230,9 +397,26 @@ export function useSearch() {
     }
   }
 
-  const isEmpty = computed(() =>
-    !loading.value && !results.repos.length && !results.issues.length && !results.code.length && !results.users.length && !results.discussions.length
+  const isEmpty = computed(
+    () =>
+      !loading.value &&
+      !results.repos.length &&
+      !results.issues.length &&
+      !results.code.length &&
+      !results.users.length &&
+      !results.discussions.length
   )
 
-  return { results, totals, loading, error, notes, parsed, activeProviders, activeTypes, isEmpty, run }
+  return {
+    results,
+    totals,
+    loading,
+    error,
+    notes,
+    parsed,
+    activeProviders,
+    activeTypes,
+    isEmpty,
+    run
+  }
 }

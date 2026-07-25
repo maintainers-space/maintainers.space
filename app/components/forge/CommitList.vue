@@ -27,7 +27,10 @@ function title(message: string): string {
     >
       <UIcon name="i-lucide-git-commit-horizontal" class="size-4 shrink-0 text-muted" />
       <div class="min-w-0 flex-1">
-        <NuxtLink :to="commitPath(c.sha)" class="block truncate text-sm font-medium text-default hover:text-primary">
+        <NuxtLink
+          :to="commitPath(c.sha)"
+          class="block truncate text-sm font-medium text-default hover:text-primary"
+        >
           {{ title(c.message) || '(no message)' }}
         </NuxtLink>
         <div class="mt-0.5 flex items-center gap-2 text-xs text-muted">

@@ -29,9 +29,7 @@ onMounted(async () => {
     <template v-else>
       <UIcon name="i-lucide-circle-alert" class="size-8 text-error" />
       <div>
-        <h1 class="font-semibold text-highlighted">
-          Sign-in failed
-        </h1>
+        <h1 class="font-semibold text-highlighted">Sign-in failed</h1>
         <p class="mt-1 max-w-sm text-sm text-muted">
           {{ message }}
         </p>

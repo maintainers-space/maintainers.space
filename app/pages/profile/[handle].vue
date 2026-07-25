@@ -8,19 +8,21 @@ const route = useRoute()
 const { get: getToken } = useForgeTokens()
 const handle = computed(() => String(route.params.handle))
 
-const { data: profile, pending: profilePending, error: profileError } = useAsyncData(
-  `profile:${handle.value}`,
-  () => fetchPublicProfile(handle.value),
-  { watch: [handle] }
-)
+const {
+  data: profile,
+  pending: profilePending,
+  error: profileError
+} = useAsyncData(`profile:${handle.value}`, () => fetchPublicProfile(handle.value), {
+  watch: [handle]
+})
 
 const { data: publicAccounts } = useAsyncData(
   `profile-accounts:${handle.value}`,
   async () => {
     const recs = await listPublicRecords<ForgeAccountRecord>(handle.value, FORGE_ACCOUNT_COLLECTION)
     return recs
-      .map(r => r.value)
-      .filter(a => a?.provider && a?.username)
+      .map((r) => r.value)
+      .filter((a) => a?.provider && a?.username)
       .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))
   },
   { watch: [handle], default: () => [] as ForgeAccountRecord[] }
@@ -32,16 +34,26 @@ const isOwn = computed(() => !!myDid.value && myDid.value === profile.value?.did
 // Public PDS reads can be CORS-blocked on self-hosted PDSes, so your own links
 // may not come back over the public endpoint. The authenticated client always
 // succeeds, so merge it in (deduped) when viewing your own profile.
-const { accounts: myAccounts, loaded: myAccountsLoaded, refresh: refreshMyAccounts } = useForgeAccounts()
-watch(isOwn, (own) => {
-  if (own && !myAccountsLoaded.value) refreshMyAccounts()
-}, { immediate: true })
+const {
+  accounts: myAccounts,
+  loaded: myAccountsLoaded,
+  refresh: refreshMyAccounts
+} = useForgeAccounts()
+watch(
+  isOwn,
+  (own) => {
+    if (own && !myAccountsLoaded.value) refreshMyAccounts()
+  },
+  { immediate: true }
+)
 
 const accounts = computed<ForgeAccountRecord[]>(() => {
   const base = publicAccounts.value ?? []
   if (!isOwn.value) return base
-  const seen = new Set(base.map(a => `${a.provider}:${a.username}`.toLowerCase()))
-  const extra = (myAccounts.value ?? []).filter(a => !seen.has(`${a.provider}:${a.username}`.toLowerCase()))
+  const seen = new Set(base.map((a) => `${a.provider}:${a.username}`.toLowerCase()))
+  const extra = (myAccounts.value ?? []).filter(
+    (a) => !seen.has(`${a.provider}:${a.username}`.toLowerCase())
+  )
   return [...base, ...extra]
 })
 
@@ -63,21 +75,33 @@ const hasLinkedForges = computed(() => Object.keys(providerLogins.value).length 
 const { isVerified, check } = useForgeAttestations()
 watch(
   [accounts, () => profile.value?.did],
-  () => { check(profile.value?.did, accounts.value ?? []) },
+  () => {
+    check(profile.value?.did, accounts.value ?? [])
+  },
   { immediate: true }
 )
 
-interface LinkedAccountView { provider: string, username: string, href: string, verified: boolean }
+interface LinkedAccountView {
+  provider: string
+  username: string
+  href: string
+  verified: boolean
+}
 
 /** Public profile URL on the provider's own site. Linked accounts point here. */
 function externalProfileUrl(provider: string, username: string, profileUrl?: string): string {
   if (profileUrl) return profileUrl
   switch (provider) {
-    case 'github': return `https://github.com/${encodeURIComponent(username)}`
-    case 'gitlab': return `https://gitlab.com/${encodeURIComponent(username)}`
-    case 'codeberg': return `https://codeberg.org/${encodeURIComponent(username)}`
-    case 'tangled': return `https://tangled.sh/@${encodeURIComponent(username)}`
-    default: return '#'
+    case 'github':
+      return `https://github.com/${encodeURIComponent(username)}`
+    case 'gitlab':
+      return `https://gitlab.com/${encodeURIComponent(username)}`
+    case 'codeberg':
+      return `https://codeberg.org/${encodeURIComponent(username)}`
+    case 'tangled':
+      return `https://tangled.sh/@${encodeURIComponent(username)}`
+    default:
+      return '#'
   }
 }
 
@@ -126,7 +150,7 @@ const { data: repos, pending: reposPending } = useAsyncData(
     }
     const out = (await Promise.all(jobs)).flat()
     return out
-      .filter(r => !r.isFork)
+      .filter((r) => !r.isFork)
       .sort((a, b) => String(b.updatedAt ?? '').localeCompare(String(a.updatedAt ?? '')))
       .slice(0, 24)
   },
@@ -136,7 +160,7 @@ const { data: repos, pending: reposPending } = useAsyncData(
 // Issues/PRs authored and commented on across every forge, pooled and mixed.
 const { data: activity, pending: activityPending } = useAsyncData(
   `profile-activity:${handle.value}`,
-  async (): Promise<{ authored: ForgeIssue[], commented: ForgeIssue[] }> => {
+  async (): Promise<{ authored: ForgeIssue[]; commented: ForgeIssue[] }> => {
     const authoredJobs: Promise<ForgeIssue[]>[] = []
     const commentedJobs: Promise<ForgeIssue[]>[] = []
     for (const [providerId, logins] of Object.entries(providerLogins.value)) {
@@ -145,10 +169,21 @@ const { data: activity, pending: activityPending } = useAsyncData(
       if (!forge?.searchIssues || !primary) continue
       const token = getToken(providerId)
       const opts = { token, sort: 'updated' as const, order: 'desc' as const, limit: 8 }
-      authoredJobs.push(forge.searchIssues(`author:${primary}`, opts).then(r => r.items).catch(() => [] as ForgeIssue[]))
-      commentedJobs.push(forge.searchIssues(`commenter:${primary} -author:${primary}`, opts).then(r => r.items).catch(() => [] as ForgeIssue[]))
+      authoredJobs.push(
+        forge
+          .searchIssues(`author:${primary}`, opts)
+          .then((r) => r.items)
+          .catch(() => [] as ForgeIssue[])
+      )
+      commentedJobs.push(
+        forge
+          .searchIssues(`commenter:${primary} -author:${primary}`, opts)
+          .then((r) => r.items)
+          .catch(() => [] as ForgeIssue[])
+      )
     }
-    const byRecency = (a: ForgeIssue, b: ForgeIssue) => String(b.updatedAt ?? '').localeCompare(String(a.updatedAt ?? ''))
+    const byRecency = (a: ForgeIssue, b: ForgeIssue) =>
+      String(b.updatedAt ?? '').localeCompare(String(a.updatedAt ?? ''))
     const authored = (await Promise.all(authoredJobs)).flat().sort(byRecency).slice(0, 8)
     const commented = (await Promise.all(commentedJobs)).flat().sort(byRecency).slice(0, 8)
     return { authored, commented }
@@ -156,8 +191,12 @@ const { data: activity, pending: activityPending } = useAsyncData(
   { watch: [handle, accounts], default: () => ({ authored: [], commented: [] }) }
 )
 
-const displayName = computed(() => profile.value?.displayName || profile.value?.handle || handle.value)
-const bskyUrl = computed(() => profile.value ? `https://bsky.app/profile/${profile.value.did}` : undefined)
+const displayName = computed(
+  () => profile.value?.displayName || profile.value?.handle || handle.value
+)
+const bskyUrl = computed(() =>
+  profile.value ? `https://bsky.app/profile/${profile.value.did}` : undefined
+)
 
 useHead(() => ({ title: `${displayName.value} · koinon` }))
 </script>
@@ -253,37 +292,26 @@ useHead(() => ({ title: `${displayName.value} · koinon` }))
               >
                 <ForgeIcon :provider="a.provider" class="size-4" />
                 <span>{{ a.username }}</span>
-                <UIcon
-                  v-if="a.verified"
-                  name="i-lucide-shield-check"
-                  class="size-4 text-primary"
-                />
+                <UIcon v-if="a.verified" name="i-lucide-shield-check" class="size-4 text-primary" />
                 <UIcon name="i-lucide-external-link" class="size-3.5 text-muted" />
               </UButton>
             </div>
-            <p v-else class="text-sm text-muted">
-              No forge accounts linked yet.
-            </p>
+            <p v-else class="text-sm text-muted">No forge accounts linked yet.</p>
           </section>
 
           <!-- Repositories -->
           <section class="space-y-3">
-            <h2 class="text-sm font-semibold uppercase tracking-wide text-muted">
-              Repositories
-            </h2>
-            <div v-if="reposPending && !repos?.length" class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <h2 class="text-sm font-semibold uppercase tracking-wide text-muted">Repositories</h2>
+            <div
+              v-if="reposPending && !repos?.length"
+              class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3"
+            >
               <USkeleton v-for="i in 3" :key="i" class="h-28 w-full" />
             </div>
             <div v-else-if="repos && repos.length" class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              <HomeRepoMiniCard
-                v-for="r in repos"
-                :key="`${r.provider}:${r.fullName}`"
-                :repo="r"
-              />
+              <HomeRepoMiniCard v-for="r in repos" :key="`${r.provider}:${r.fullName}`" :repo="r" />
             </div>
-            <p v-else class="text-sm text-muted">
-              No public repositories found.
-            </p>
+            <p v-else class="text-sm text-muted">No public repositories found.</p>
           </section>
 
           <!-- Activity -->

@@ -6,7 +6,8 @@ const props = defineProps<{ blob: ForgeBlob }>()
 const isImage = computed(() => props.blob.mimeType?.startsWith('image/') ?? false)
 const imageSrc = computed(() => {
   if (!isImage.value) return ''
-  if (props.blob.encoding === 'base64') return `data:${props.blob.mimeType};base64,${props.blob.content}`
+  if (props.blob.encoding === 'base64')
+    return `data:${props.blob.mimeType};base64,${props.blob.content}`
   return props.blob.content
 })
 
@@ -27,7 +28,7 @@ const fileName = computed(() => props.blob.path.split('/').pop() ?? props.blob.p
     </div>
 
     <div v-if="isImage" class="flex justify-center bg-elevated/20 p-6">
-      <img :src="imageSrc" :alt="fileName" class="max-h-[70vh] max-w-full object-contain">
+      <img :src="imageSrc" :alt="fileName" class="max-h-[70vh] max-w-full object-contain" />
     </div>
 
     <div v-else-if="blob.isBinary" class="p-10 text-center text-sm text-muted">
@@ -39,7 +40,9 @@ const fileName = computed(() => props.blob.path.split('/').pop() ?? props.blob.p
       <table class="w-full border-collapse font-mono text-xs">
         <tbody>
           <tr v-for="(line, i) in lines" :key="i" class="hover:bg-elevated/40">
-            <td class="select-none border-r border-default px-3 py-0.5 text-right align-top text-muted">
+            <td
+              class="select-none border-r border-default px-3 py-0.5 text-right align-top text-muted"
+            >
               {{ i + 1 }}
             </td>
             <td class="whitespace-pre px-4 py-0.5 text-default">

@@ -21,7 +21,13 @@ export async function verifyRepoAdmin(
     if (provider === 'github') {
       const repo = await $fetch<{ permissions?: { admin?: boolean } }>(
         `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(name)}`,
-        { headers: { 'Accept': 'application/vnd.github+json', 'Authorization': bearer(token), 'User-Agent': 'koinon' } }
+        {
+          headers: {
+            Accept: 'application/vnd.github+json',
+            Authorization: bearer(token),
+            'User-Agent': 'koinon'
+          }
+        }
       )
       return repo.permissions?.admin === true
     }
@@ -34,10 +40,12 @@ export async function verifyRepoAdmin(
     }
     if (provider === 'gitlab') {
       const id = encodeURIComponent(`${owner}/${name}`)
-      const repo = await $fetch<{ permissions?: {
-        project_access?: { access_level?: number } | null
-        group_access?: { access_level?: number } | null
-      } }>(`https://gitlab.com/api/v4/projects/${id}`, {
+      const repo = await $fetch<{
+        permissions?: {
+          project_access?: { access_level?: number } | null
+          group_access?: { access_level?: number } | null
+        }
+      }>(`https://gitlab.com/api/v4/projects/${id}`, {
         headers: { Authorization: bearer(token) }
       })
       const level = Math.max(
@@ -74,7 +82,13 @@ export async function applyRepoClaim(input: {
       fragment.set('claimError', 'not-admin')
       return
     }
-    const signed = await signRepoAttestation({ origin, did, provider, owner: claimOwner, name: claimName })
+    const signed = await signRepoAttestation({
+      origin,
+      did,
+      provider,
+      owner: claimOwner,
+      name: claimName
+    })
     if (signed) {
       fragment.set('repoAttestation', signed.attestation)
       fragment.set('repoAttestedBy', signed.attestedBy)

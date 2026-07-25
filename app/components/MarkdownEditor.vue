@@ -1,22 +1,25 @@
 <script setup lang="ts">
-const props = withDefaults(defineProps<{
-  modelValue: string
-  placeholder?: string
-  rows?: number
-  disabled?: boolean
-  previewEmpty?: string
-}>(), {
-  placeholder: 'Leave a comment…',
-  rows: 5,
-  disabled: false,
-  previewEmpty: 'Nothing to preview.'
-})
+const props = withDefaults(
+  defineProps<{
+    modelValue: string
+    placeholder?: string
+    rows?: number
+    disabled?: boolean
+    previewEmpty?: string
+  }>(),
+  {
+    placeholder: 'Leave a comment…',
+    rows: 5,
+    disabled: false,
+    previewEmpty: 'Nothing to preview.'
+  }
+)
 
-const emit = defineEmits<{ 'update:modelValue': [string], 'submit': [] }>()
+const emit = defineEmits<{ 'update:modelValue': [string]; submit: [] }>()
 
 const model = computed({
   get: () => props.modelValue,
-  set: v => emit('update:modelValue', v)
+  set: (v) => emit('update:modelValue', v)
 })
 
 const tab = ref<'write' | 'preview'>('write')
@@ -58,7 +61,10 @@ function prefixLines(prefix: string): void {
   const nl = val.indexOf('\n', e)
   const lineEnd = nl === -1 ? val.length : nl
   const block = val.slice(lineStart, lineEnd) || ''
-  const replaced = block.split('\n').map(l => prefix + l).join('\n')
+  const replaced = block
+    .split('\n')
+    .map((l) => prefix + l)
+    .join('\n')
   model.value = val.slice(0, lineStart) + replaced + val.slice(lineEnd)
   nextTick(() => {
     ta.focus()
@@ -70,7 +76,11 @@ const tools = [
   { icon: 'i-lucide-heading', title: 'Heading', run: () => prefixLines('### ') },
   { icon: 'i-lucide-bold', title: 'Bold', run: () => surround('**', '**', 'bold text') },
   { icon: 'i-lucide-italic', title: 'Italic', run: () => surround('_', '_', 'italic text') },
-  { icon: 'i-lucide-strikethrough', title: 'Strikethrough', run: () => surround('~~', '~~', 'strikethrough') },
+  {
+    icon: 'i-lucide-strikethrough',
+    title: 'Strikethrough',
+    run: () => surround('~~', '~~', 'strikethrough')
+  },
   { icon: 'i-lucide-code', title: 'Inline code', run: () => surround('`', '`', 'code') },
   { icon: 'i-lucide-link', title: 'Link', run: () => surround('[', '](url)', 'text') },
   { icon: 'i-lucide-quote', title: 'Quote', run: () => prefixLines('> ') },
@@ -81,15 +91,14 @@ const tools = [
 </script>
 
 <template>
-  <div ref="wrapRef" class="overflow-hidden rounded-lg border border-default bg-default focus-within:border-primary">
-    <div class="flex items-center justify-between gap-2 border-b border-default bg-elevated/40 px-2 py-1">
-      <UTabs
-        v-model="tab"
-        :items="tabItems"
-        :content="false"
-        size="xs"
-        color="neutral"
-      />
+  <div
+    ref="wrapRef"
+    class="overflow-hidden rounded-lg border border-default bg-default focus-within:border-primary"
+  >
+    <div
+      class="flex items-center justify-between gap-2 border-b border-default bg-elevated/40 px-2 py-1"
+    >
+      <UTabs v-model="tab" :items="tabItems" :content="false" size="xs" color="neutral" />
       <div v-show="tab === 'write'" class="flex items-center gap-0.5">
         <UButton
           v-for="t in tools"

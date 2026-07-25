@@ -9,20 +9,59 @@ const paletteOpen = ref(false)
 
 // The sidebar is always visible, so load linked accounts eagerly rather than
 // waiting for a page that happens to read them.
-watch(isAuthenticated, (auth) => {
-  if (auth && !accountsLoaded.value) void refreshAccounts()
-}, { immediate: true })
+watch(
+  isAuthenticated,
+  (auth) => {
+    if (auth && !accountsLoaded.value) void refreshAccounts()
+  },
+  { immediate: true }
+)
 
 const nav = computed<NavigationMenuItem[]>(() => {
   const items: NavigationMenuItem[] = [
-    { label: 'Home', icon: 'i-lucide-house', to: '/', onSelect: () => { open.value = false } },
-    { label: 'Search', icon: 'i-lucide-search', to: '/search', onSelect: () => { open.value = false } },
-    { label: 'Explore', icon: 'i-lucide-compass', to: '/explore', onSelect: () => { open.value = false } }
+    {
+      label: 'Home',
+      icon: 'i-lucide-house',
+      to: '/',
+      onSelect: () => {
+        open.value = false
+      }
+    },
+    {
+      label: 'Search',
+      icon: 'i-lucide-search',
+      to: '/search',
+      onSelect: () => {
+        open.value = false
+      }
+    },
+    {
+      label: 'Explore',
+      icon: 'i-lucide-compass',
+      to: '/explore',
+      onSelect: () => {
+        open.value = false
+      }
+    }
   ]
   if (isAuthenticated.value) {
     items.push(
-      { label: 'Timeline', icon: 'i-lucide-activity', to: '/timeline', onSelect: () => { open.value = false } },
-      { label: 'Notifications', icon: 'i-lucide-bell', to: '/notifications', onSelect: () => { open.value = false } }
+      {
+        label: 'Timeline',
+        icon: 'i-lucide-activity',
+        to: '/timeline',
+        onSelect: () => {
+          open.value = false
+        }
+      },
+      {
+        label: 'Notifications',
+        icon: 'i-lucide-bell',
+        to: '/notifications',
+        onSelect: () => {
+          open.value = false
+        }
+      }
     )
   }
   return items
@@ -31,11 +70,16 @@ const nav = computed<NavigationMenuItem[]>(() => {
 function externalProfileUrl(provider: string, username: string, profileUrl?: string): string {
   if (profileUrl) return profileUrl
   switch (provider) {
-    case 'github': return `https://github.com/${encodeURIComponent(username)}`
-    case 'gitlab': return `https://gitlab.com/${encodeURIComponent(username)}`
-    case 'codeberg': return `https://codeberg.org/${encodeURIComponent(username)}`
-    case 'tangled': return `https://tangled.sh/@${encodeURIComponent(username)}`
-    default: return '#'
+    case 'github':
+      return `https://github.com/${encodeURIComponent(username)}`
+    case 'gitlab':
+      return `https://gitlab.com/${encodeURIComponent(username)}`
+    case 'codeberg':
+      return `https://codeberg.org/${encodeURIComponent(username)}`
+    case 'tangled':
+      return `https://tangled.sh/@${encodeURIComponent(username)}`
+    default:
+      return '#'
   }
 }
 
@@ -44,7 +88,7 @@ function externalProfileUrl(provider: string, username: string, profileUrl?: str
 // intentionally leave the app for the provider's own site.
 const external = computed<NavigationMenuItem[]>(() => {
   const list = accounts.value ?? []
-  const find = (provider: string) => list.find(a => a.provider === provider)
+  const find = (provider: string) => list.find((a) => a.provider === provider)
   const out: NavigationMenuItem[] = []
   const pushForge = (provider: string, username?: string, profileUrl?: string) => {
     if (!username) return
@@ -107,12 +151,7 @@ const external = computed<NavigationMenuItem[]>(() => {
           </template>
         </UButton>
 
-        <UNavigationMenu
-          :collapsed="collapsed"
-          :items="nav"
-          orientation="vertical"
-          tooltip
-        />
+        <UNavigationMenu :collapsed="collapsed" :items="nav" orientation="vertical" tooltip />
 
         <ExploreSidebar v-if="!collapsed" />
 

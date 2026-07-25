@@ -54,12 +54,7 @@ onMounted(() => loadMore(true))
     />
 
     <template v-else>
-      <ForgeCommitList
-        :commits="commits"
-        :provider="provider"
-        :owner="owner"
-        :repo="name"
-      />
+      <ForgeCommitList :commits="commits" :provider="provider" :owner="owner" :repo="name" />
       <div class="flex justify-center">
         <UButton
           v-if="!done"

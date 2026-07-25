@@ -28,7 +28,10 @@ const to = computed(() => {
         </div>
         <div class="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted">
           <ForgeIcon :provider="issue.provider" class="size-3.5" />
-          <span v-if="issue.repo">{{ issue.repo.fullName }}<template v-if="issue.number">#{{ issue.number }}</template></span>
+          <span v-if="issue.repo"
+            >{{ issue.repo.fullName
+            }}<template v-if="issue.number">#{{ issue.number }}</template></span
+          >
           <span v-if="issue.author" class="inline-flex items-center gap-1">
             <UIcon name="i-lucide-user" class="size-3" />{{ userLabel(issue.author) }}
           </span>
@@ -43,7 +46,8 @@ const to = computed(() => {
         variant="subtle"
         size="xs"
         class="shrink-0 capitalize"
-      >{{ issue.state }}</UBadge>
+        >{{ issue.state }}</UBadge
+      >
     </div>
   </NuxtLink>
 </template>

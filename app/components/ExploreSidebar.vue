@@ -25,7 +25,9 @@ const top = computed(() => repos.value.slice(0, 5))
   <div v-if="showFavourites || showTrending" class="mt-4 space-y-4">
     <div v-if="showFavourites">
       <div class="mb-2 flex items-center justify-between px-1">
-        <span class="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted">
+        <span
+          class="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted"
+        >
           <UIcon name="i-lucide-history" class="size-3.5" />Recent
         </span>
         <NuxtLink to="/explore" class="text-xs text-primary hover:underline">More</NuxtLink>
@@ -49,7 +51,9 @@ const top = computed(() => repos.value.slice(0, 5))
 
     <div v-else-if="showTrending">
       <div class="mb-2 flex items-center justify-between px-1">
-        <span class="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted">
+        <span
+          class="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted"
+        >
           <UIcon name="i-lucide-flame" class="size-3.5" />Trending
         </span>
         <NuxtLink to="/explore" class="text-xs text-primary hover:underline">More</NuxtLink>

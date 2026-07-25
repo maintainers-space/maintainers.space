@@ -4,9 +4,11 @@ import type { HealthFile } from '~/components/forge/RepoHealthFiles.vue'
 import { useRepoContext } from '~/composables/useRepoContext'
 
 const { provider, owner, name, forge, locator, meta, defaultBranch } = useRepoContext()
-const base = computed(() => repoPath({ provider: provider.value, owner: owner.value, name: name.value }))
+const base = computed(() =>
+  repoPath({ provider: provider.value, owner: owner.value, name: name.value })
+)
 
-const HEALTH: Record<string, { order: number, label: string, icon: string }> = {
+const HEALTH: Record<string, { order: number; label: string; icon: string }> = {
   readme: { order: 0, label: 'README', icon: 'i-lucide-book-open' },
   contributing: { order: 1, label: 'Contributing', icon: 'i-lucide-git-pull-request-arrow' },
   security: { order: 2, label: 'Security', icon: 'i-lucide-shield-check' },
@@ -17,7 +19,10 @@ const HEALTH: Record<string, { order: number, label: string, icon: string }> = {
 }
 
 function healthKey(fileName: string): string | null {
-  const b = fileName.replace(/\.(md|markdown|mdown|rst|txt|adoc)$/i, '').toLowerCase().replace(/[\s-]+/g, '_')
+  const b = fileName
+    .replace(/\.(md|markdown|mdown|rst|txt|adoc)$/i, '')
+    .toLowerCase()
+    .replace(/[\s-]+/g, '_')
   if (b === 'readme') return 'readme'
   if (b === 'contributing') return 'contributing'
   if (b === 'security') return 'security'
@@ -42,11 +47,13 @@ const { data, pending, error, refresh } = useAsyncData(
     else entries = (await f.getOverview(owner.value, name.value)).entries
 
     const candidates = [...entries]
-    const dotgithub = entries.find(e => e.type === 'dir' && e.name.toLowerCase() === '.github')
+    const dotgithub = entries.find((e) => e.type === 'dir' && e.name.toLowerCase() === '.github')
     if (dotgithub && f.getTree) {
       try {
-        candidates.push(...await f.getTree(locator.value, ref, dotgithub.path))
-      } catch { /* health files in .github are best-effort */ }
+        candidates.push(...(await f.getTree(locator.value, ref, dotgithub.path)))
+      } catch {
+        /* health files in .github are best-effort */
+      }
     }
 
     const seen = new Set<string>()
@@ -56,7 +63,13 @@ const { data, pending, error, refresh } = useAsyncData(
       const key = healthKey(e.name)
       if (!key || seen.has(key)) continue
       seen.add(key)
-      health.push({ key, label: HEALTH[key]!.label, icon: HEALTH[key]!.icon, name: e.name, path: e.path })
+      health.push({
+        key,
+        label: HEALTH[key]!.label,
+        icon: HEALTH[key]!.icon,
+        name: e.name,
+        path: e.path
+      })
     }
     health.sort((a, b) => HEALTH[a.key]!.order - HEALTH[b.key]!.order)
 
@@ -86,15 +99,13 @@ async function loadDoc(path: string): Promise<string> {
       variant="subtle"
       icon="i-lucide-circle-alert"
       title="Could not load files"
-      :description="(error as { message?: string })?.message || 'GitHub may be rate-limiting anonymous requests. Connect your GitHub account in settings to raise the limit.'"
+      :description="
+        (error as { message?: string })?.message ||
+        'GitHub may be rate-limiting anonymous requests. Connect your GitHub account in settings to raise the limit.'
+      "
     >
       <template #actions>
-        <UButton
-          color="error"
-          variant="soft"
-          label="Retry"
-          @click="refresh()"
-        />
+        <UButton color="error" variant="soft" label="Retry" @click="refresh()" />
       </template>
     </UAlert>
 
@@ -109,11 +120,7 @@ async function loadDoc(path: string): Promise<string> {
           label="Commits"
         />
       </div>
-      <ForgeRepoBrowser
-        :entries="data.entries"
-        :base="base"
-        :git-ref="defaultBranch"
-      />
+      <ForgeRepoBrowser :entries="data.entries" :base="base" :git-ref="defaultBranch" />
       <ForgeRepoHealthFiles v-if="data.health.length" :files="data.health" :load="loadDoc" />
     </template>
   </div>

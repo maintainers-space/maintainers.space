@@ -51,10 +51,10 @@ function loadKey(): Promise<LoadedKey | null> {
     }
     if (!jwk.d) throw new Error('NUXT_ATTESTATION_PRIVATE_KEY must be a private JWK (missing "d")')
 
-    const privateKey = await importJWK(jwk, ALG) as CryptoKey
+    const privateKey = (await importJWK(jwk, ALG)) as CryptoKey
     // Public JWK = private minus the private component `d`.
     const { d: _d, ...pub } = jwk
-    const kid = jwk.kid ?? await calculateJwkThumbprint(pub)
+    const kid = jwk.kid ?? (await calculateJwkThumbprint(pub))
     const publicJwk: JWK = { ...pub, alg: ALG, use: 'sig', kid }
     return { kid, privateKey, publicJwk }
   })()
@@ -75,7 +75,7 @@ export async function signForgeAttestation(input: {
   did: string
   provider: string
   username: string
-}): Promise<{ attestation: string, attestedBy: string } | null> {
+}): Promise<{ attestation: string; attestedBy: string } | null> {
   const key = await loadKey()
   if (!key) return null
 
@@ -107,11 +107,15 @@ export async function signRepoAttestation(input: {
   owner: string
   name: string
   host?: string
-}): Promise<{ attestation: string, attestedBy: string } | null> {
+}): Promise<{ attestation: string; attestedBy: string } | null> {
   const key = await loadKey()
   if (!key) return null
 
-  const claims: Record<string, unknown> = { provider: input.provider, owner: input.owner, name: input.name }
+  const claims: Record<string, unknown> = {
+    provider: input.provider,
+    owner: input.owner,
+    name: input.name
+  }
   if (input.host) claims.host = input.host
 
   const attestation = await new SignJWT(claims)

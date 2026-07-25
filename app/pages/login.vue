@@ -51,7 +51,9 @@ async function onSubmit(event: FormSubmitEvent<Schema>) {
 <template>
   <div class="flex min-h-dvh flex-col items-center justify-center gap-6 p-4">
     <NuxtLink to="/" class="flex items-center gap-2">
-      <span class="inline-flex size-9 items-center justify-center rounded-lg bg-primary text-neutral-900">
+      <span
+        class="inline-flex size-9 items-center justify-center rounded-lg bg-primary text-neutral-900"
+      >
         <UIcon name="i-lucide-git-merge" class="size-5" />
       </span>
       <span class="text-2xl font-semibold tracking-tight text-highlighted">koinon</span>
@@ -60,21 +62,14 @@ async function onSubmit(event: FormSubmitEvent<Schema>) {
     <UCard class="w-full max-w-sm">
       <template #header>
         <div class="text-center">
-          <h1 class="text-lg font-semibold text-highlighted">
-            Sign in with atproto
-          </h1>
+          <h1 class="text-lg font-semibold text-highlighted">Sign in with atproto</h1>
           <p class="mt-1 text-sm text-muted">
             Enter your handle to continue. You can browse without signing in.
           </p>
         </div>
       </template>
 
-      <UForm
-        :schema="schema"
-        :state="state"
-        class="space-y-4"
-        @submit="onSubmit"
-      >
+      <UForm :schema="schema" :state="state" class="space-y-4" @submit="onSubmit">
         <UAlert
           v-if="networkHint"
           color="warning"
@@ -132,7 +127,8 @@ async function onSubmit(event: FormSubmitEvent<Schema>) {
           trailing-icon="i-lucide-external-link"
         />
         <p class="text-center text-xs text-dimmed">
-          koinon uses your AT Protocol identity — create one on any PDS (Bluesky, npmx, or self-hosted) and sign in here.
+          koinon uses your AT Protocol identity — create one on any PDS (Bluesky, npmx, or
+          self-hosted) and sign in here.
         </p>
       </div>
 
@@ -160,7 +156,8 @@ async function onSubmit(event: FormSubmitEvent<Schema>) {
     </UCard>
 
     <p class="max-w-sm text-center text-xs text-dimmed">
-      Koinon uses AT Protocol OAuth. Your credentials are entered on your own provider — never shared with koinon.
+      Koinon uses AT Protocol OAuth. Your credentials are entered on your own provider — never
+      shared with koinon.
     </p>
   </div>
 </template>

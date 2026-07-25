@@ -33,7 +33,9 @@ function trustedIssuers(): Set<string> {
   if (appUrl) {
     try {
       set.add(new URL(appUrl).origin)
-    } catch { /* ignore malformed config */ }
+    } catch {
+      /* ignore malformed config */
+    }
   }
   return set
 }
@@ -55,7 +57,10 @@ const resultCache = new Map<string, Promise<boolean>>()
  * missing/untrusted/invalid attestations (never throws). Results are cached;
  * transient failures are not cached so they can be retried.
  */
-export function verifyForgeAttestation(account: AttestableAccount, ownerDid: string): Promise<boolean> {
+export function verifyForgeAttestation(
+  account: AttestableAccount,
+  ownerDid: string
+): Promise<boolean> {
   const { attestation, attestedBy } = account
   if (!attestation || !attestedBy || !ownerDid) return Promise.resolve(false)
 
@@ -80,9 +85,9 @@ export function verifyForgeAttestation(account: AttestableAccount, ownerDid: str
       })
       const claims = payload as Record<string, unknown>
       return (
-        payload.sub === ownerDid
-        && claims.provider === account.provider
-        && claims.username === account.username
+        payload.sub === ownerDid &&
+        claims.provider === account.provider &&
+        claims.username === account.username
       )
     } catch {
       return false
@@ -91,7 +96,9 @@ export function verifyForgeAttestation(account: AttestableAccount, ownerDid: str
 
   resultCache.set(cacheKey, promise)
   promise.then(
-    (ok) => { if (!ok) resultCache.delete(cacheKey) },
+    (ok) => {
+      if (!ok) resultCache.delete(cacheKey)
+    },
     () => resultCache.delete(cacheKey)
   )
   return promise
@@ -111,7 +118,10 @@ export interface AttestableRepoRecord {
  * wrote the record) held admin over the record's forge repo when it was signed.
  * Resolves `false` for missing/untrusted/invalid attestations (never throws).
  */
-export function verifyRepoAttestation(record: AttestableRepoRecord, ownerDid: string): Promise<boolean> {
+export function verifyRepoAttestation(
+  record: AttestableRepoRecord,
+  ownerDid: string
+): Promise<boolean> {
   const { attestation, attestedBy } = record
   if (!attestation || !attestedBy || !ownerDid) return Promise.resolve(false)
 
@@ -137,11 +147,11 @@ export function verifyRepoAttestation(record: AttestableRepoRecord, ownerDid: st
       const claims = payload as Record<string, unknown>
       const sameHost = !claims.host || claims.host === record.host
       return (
-        payload.sub === ownerDid
-        && claims.provider === record.provider
-        && String(claims.owner).toLowerCase() === record.owner.toLowerCase()
-        && String(claims.name).toLowerCase() === record.name.toLowerCase()
-        && sameHost
+        payload.sub === ownerDid &&
+        claims.provider === record.provider &&
+        String(claims.owner).toLowerCase() === record.owner.toLowerCase() &&
+        String(claims.name).toLowerCase() === record.name.toLowerCase() &&
+        sameHost
       )
     } catch {
       return false
@@ -150,7 +160,9 @@ export function verifyRepoAttestation(record: AttestableRepoRecord, ownerDid: st
 
   resultCache.set(cacheKey, promise)
   promise.then(
-    (ok) => { if (!ok) resultCache.delete(cacheKey) },
+    (ok) => {
+      if (!ok) resultCache.delete(cacheKey)
+    },
     () => resultCache.delete(cacheKey)
   )
   return promise

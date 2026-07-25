@@ -66,7 +66,7 @@ export async function listPublicRecords<T = Record<string, unknown>>(
   actor: string,
   collection: string,
   limit = 100
-): Promise<Array<{ uri: string, value: T }>> {
+): Promise<Array<{ uri: string; value: T }>> {
   let ident
   try {
     ident = await resolveIdentity(actor)
@@ -74,7 +74,7 @@ export async function listPublicRecords<T = Record<string, unknown>>(
     return []
   }
   try {
-    const data = await getJson<{ records?: Array<{ uri: string, value: T }> }>(
+    const data = await getJson<{ records?: Array<{ uri: string; value: T }> }>(
       `${ident.pds}/xrpc/com.atproto.repo.listRecords`,
       { repo: ident.did, collection, limit }
     )
@@ -92,7 +92,7 @@ export async function getPublicRecord<T = Record<string, unknown>>(
   actor: string,
   collection: string,
   rkey: string
-): Promise<{ uri: string, value: T } | null> {
+): Promise<{ uri: string; value: T } | null> {
   let ident
   try {
     ident = await resolveIdentity(actor)
@@ -100,7 +100,7 @@ export async function getPublicRecord<T = Record<string, unknown>>(
     return null
   }
   try {
-    return await getJson<{ uri: string, value: T }>(
+    return await getJson<{ uri: string; value: T }>(
       `${ident.pds}/xrpc/com.atproto.repo.getRecord`,
       { repo: ident.did, collection, rkey }
     )
@@ -132,12 +132,18 @@ export async function fetchFollows(actor: string, limit = 100): Promise<Followed
   let cursor: string | undefined
   try {
     for (let page = 0; page < 5; page++) {
-      const res = await getJson<{ follows?: Array<{ did?: string, handle?: string, displayName?: string, avatar?: string }>, cursor?: string }>(
-        `${PUBLIC_APPVIEW}/xrpc/app.bsky.graph.getFollows`,
-        { actor: did, limit: 100, cursor }
-      )
+      const res = await getJson<{
+        follows?: Array<{ did?: string; handle?: string; displayName?: string; avatar?: string }>
+        cursor?: string
+      }>(`${PUBLIC_APPVIEW}/xrpc/app.bsky.graph.getFollows`, { actor: did, limit: 100, cursor })
       for (const f of res.follows ?? []) {
-        if (f?.did) out.push({ did: f.did, handle: f.handle ?? '', displayName: f.displayName, avatar: f.avatar })
+        if (f?.did)
+          out.push({
+            did: f.did,
+            handle: f.handle ?? '',
+            displayName: f.displayName,
+            avatar: f.avatar
+          })
       }
       cursor = res.cursor
       if (!cursor || out.length >= limit) break

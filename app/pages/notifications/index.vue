@@ -24,7 +24,7 @@ onMounted(() => {
 })
 
 /** Icon + tint for a resolved thread's final state. */
-function resolvedMeta(item: ForgeInboxItem): { icon: string, class: string } {
+function resolvedMeta(item: ForgeInboxItem): { icon: string; class: string } {
   if (item.kind === 'pull') {
     if (item.state === 'merged') return { icon: 'i-lucide-git-merge', class: 'text-primary' }
     return { icon: 'i-lucide-git-pull-request-closed', class: 'text-error' }
@@ -41,12 +41,7 @@ function resolvedMeta(item: ForgeInboxItem): { icon: string, class: string } {
           <UDashboardSidebarCollapse />
         </template>
         <template #trailing>
-          <UBadge
-            v-if="unreadCount"
-            color="primary"
-            variant="subtle"
-            size="sm"
-          >
+          <UBadge v-if="unreadCount" color="primary" variant="subtle" size="sm">
             {{ unreadCount }} unread
           </UBadge>
         </template>
@@ -74,11 +69,12 @@ function resolvedMeta(item: ForgeInboxItem): { icon: string, class: string } {
 
     <template #body>
       <div class="mx-auto w-full max-w-3xl space-y-4 py-2">
-        <div v-if="!isAuthenticated" class="rounded-lg border border-dashed border-default py-16 text-center">
+        <div
+          v-if="!isAuthenticated"
+          class="rounded-lg border border-dashed border-default py-16 text-center"
+        >
           <UIcon name="i-lucide-lock" class="mx-auto size-8 text-muted" />
-          <p class="mt-3 text-sm text-muted">
-            Sign in to bundle notifications across your forges.
-          </p>
+          <p class="mt-3 text-sm text-muted">Sign in to bundle notifications across your forges.</p>
         </div>
 
         <template v-else>
@@ -109,15 +105,16 @@ function resolvedMeta(item: ForgeInboxItem): { icon: string, class: string } {
             to="/notifications/dependencies"
             class="flex items-center gap-3 rounded-lg border border-default bg-elevated/30 px-4 py-3 transition hover:bg-elevated/60"
           >
-            <div class="flex size-9 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
+            <div
+              class="flex size-9 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary"
+            >
               <UIcon name="i-lucide-package" class="size-5" />
             </div>
             <div class="min-w-0 flex-1">
-              <p class="text-sm font-medium text-highlighted">
-                Dependency updates
-              </p>
+              <p class="text-sm font-medium text-highlighted">Dependency updates</p>
               <p class="text-xs text-muted">
-                {{ dependencyCount }} automated PR{{ dependencyCount === 1 ? '' : 's' }} ready to review &amp; merge
+                {{ dependencyCount }} automated PR{{ dependencyCount === 1 ? '' : 's' }} ready to
+                review &amp; merge
               </p>
             </div>
             <UBadge color="primary" variant="subtle" size="sm">
@@ -131,16 +128,14 @@ function resolvedMeta(item: ForgeInboxItem): { icon: string, class: string } {
           </div>
 
           <div
-            v-else-if="!inboxItems.length && !dependencyCount && !ciCount && !resolvedCount && !notes.length"
+            v-else-if="
+              !inboxItems.length && !dependencyCount && !ciCount && !resolvedCount && !notes.length
+            "
             class="rounded-lg border border-dashed border-default py-16 text-center"
           >
             <UIcon name="i-lucide-check-check" class="mx-auto size-8 text-success" />
-            <p class="mt-3 text-sm text-muted">
-              You're all caught up.
-            </p>
-            <p class="mt-1 text-xs text-muted">
-              Nothing needs your attention right now.
-            </p>
+            <p class="mt-3 text-sm text-muted">You're all caught up.</p>
+            <p class="mt-1 text-xs text-muted">Nothing needs your attention right now.</p>
           </div>
 
           <div v-else-if="inboxItems.length" class="space-y-2.5">
@@ -170,17 +165,25 @@ function resolvedMeta(item: ForgeInboxItem): { icon: string, class: string } {
               <ul class="divide-y divide-default">
                 <li v-for="item in resolvedItems" :key="`${item.provider}:${item.id}`">
                   <div class="flex items-center gap-3 px-4 py-2.5 text-sm">
-                    <UIcon :name="resolvedMeta(item).icon" class="size-4 shrink-0" :class="resolvedMeta(item).class" />
+                    <UIcon
+                      :name="resolvedMeta(item).icon"
+                      class="size-4 shrink-0"
+                      :class="resolvedMeta(item).class"
+                    />
                     <NuxtLink
                       :to="item.to || undefined"
-                      :href="!item.to ? (item.url || undefined) : undefined"
+                      :href="!item.to ? item.url || undefined : undefined"
                       :target="!item.to ? '_blank' : undefined"
                       class="min-w-0 flex-1 truncate text-default hover:text-primary"
                     >
                       {{ item.title }}
                       <span v-if="item.number" class="text-muted">#{{ item.number }}</span>
                     </NuxtLink>
-                    <span v-if="item.updatedAt" class="hidden shrink-0 text-xs text-muted sm:inline">{{ formatRelativeTime(item.updatedAt) }}</span>
+                    <span
+                      v-if="item.updatedAt"
+                      class="hidden shrink-0 text-xs text-muted sm:inline"
+                      >{{ formatRelativeTime(item.updatedAt) }}</span
+                    >
                     <UButton
                       icon="i-lucide-check"
                       color="neutral"
@@ -209,14 +212,18 @@ function resolvedMeta(item: ForgeInboxItem): { icon: string, class: string } {
                     <UIcon name="i-lucide-git-branch" class="size-4 shrink-0 text-muted" />
                     <NuxtLink
                       :to="g.to || undefined"
-                      :href="!g.to ? (g.url || undefined) : undefined"
+                      :href="!g.to ? g.url || undefined : undefined"
                       :target="!g.to ? '_blank' : undefined"
                       class="min-w-0 flex-1 truncate text-default transition hover:text-primary"
                     >
                       {{ g.repo.fullName }}
                     </NuxtLink>
-                    <span class="shrink-0 text-xs font-medium text-error">failed {{ g.count }}&times;</span>
-                    <span v-if="g.latestAt" class="hidden shrink-0 text-xs text-muted sm:inline">{{ formatRelativeTime(g.latestAt) }}</span>
+                    <span class="shrink-0 text-xs font-medium text-error"
+                      >failed {{ g.count }}&times;</span
+                    >
+                    <span v-if="g.latestAt" class="hidden shrink-0 text-xs text-muted sm:inline">{{
+                      formatRelativeTime(g.latestAt)
+                    }}</span>
                     <UButton
                       icon="i-lucide-check"
                       color="neutral"

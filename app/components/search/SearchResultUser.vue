@@ -11,12 +11,7 @@ const to = computed(() => `/${props.user.provider}/${encodeURIComponent(props.us
     :to="to"
     class="flex items-center gap-3 rounded-lg border border-default p-3 transition hover:border-primary hover:bg-elevated/40"
   >
-    <UAvatar
-      v-if="user.avatarUrl"
-      :src="user.avatarUrl"
-      :alt="user.login"
-      size="sm"
-    />
+    <UAvatar v-if="user.avatarUrl" :src="user.avatarUrl" :alt="user.login" size="sm" />
     <UIcon v-else name="i-lucide-user" class="size-8 rounded-full bg-elevated p-1.5 text-muted" />
     <div class="min-w-0 flex-1">
       <div class="truncate font-medium text-primary">{{ userLabel(user) }}</div>

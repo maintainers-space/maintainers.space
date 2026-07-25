@@ -37,16 +37,19 @@ export function useRouteTab<T extends string>(
     router.push({ query })
   })
 
-  watch(() => route.query[key], (v) => {
-    const next = read(v)
-    if (next !== tab.value) {
-      syncing = true
-      tab.value = next
-      nextTick(() => {
-        syncing = false
-      })
+  watch(
+    () => route.query[key],
+    (v) => {
+      const next = read(v)
+      if (next !== tab.value) {
+        syncing = true
+        tab.value = next
+        nextTick(() => {
+          syncing = false
+        })
+      }
     }
-  })
+  )
 
   return tab
 }

@@ -14,7 +14,11 @@ import { setCacheHeaders, setNoStore } from './cache'
  * browser/CDN/Netlify cache headers are emitted so the same upstream call is
  * not repeated for every viewer. Writes (POST/…) are always marked no-store.
  */
-export async function proxyJson(event: H3Event, targetUrl: string, cachePolicy?: CachePolicy): Promise<unknown> {
+export async function proxyJson(
+  event: H3Event,
+  targetUrl: string,
+  cachePolicy?: CachePolicy
+): Promise<unknown> {
   const method = event.method.toUpperCase()
   const hasBody = method !== 'GET' && method !== 'HEAD'
   const noCache = (getHeader(event, 'cache-control') || '').toLowerCase().includes('no-cache')
@@ -28,7 +32,12 @@ export async function proxyJson(event: H3Event, targetUrl: string, cachePolicy?:
       headers: { Accept: 'application/json' }
     })
   } catch (err) {
-    const e = err as { response?: { status?: number, statusText?: string }, statusCode?: number, statusMessage?: string, data?: unknown }
+    const e = err as {
+      response?: { status?: number; statusText?: string }
+      statusCode?: number
+      statusMessage?: string
+      data?: unknown
+    }
     throw createError({
       statusCode: e.response?.status ?? e.statusCode ?? 502,
       statusMessage: e.response?.statusText ?? e.statusMessage ?? 'Upstream request failed',

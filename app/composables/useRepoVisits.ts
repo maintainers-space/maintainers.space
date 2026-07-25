@@ -26,7 +26,7 @@ export interface RepoVisit {
 const _visits = ref<Record<string, RepoVisit>>({})
 let _loaded = false
 
-function keyOf(r: { provider: string, owner: string, name: string }): string {
+function keyOf(r: { provider: string; owner: string; name: string }): string {
   return `${r.provider}/${r.owner}/${r.name}`
 }
 
@@ -53,9 +53,7 @@ function score(v: RepoVisit): number {
 function prune(map: Record<string, RepoVisit>): Record<string, RepoVisit> {
   const entries = Object.entries(map)
   if (entries.length <= MAX_ENTRIES) return map
-  const kept = entries
-    .sort(([, a], [, b]) => score(b) - score(a))
-    .slice(0, MAX_ENTRIES)
+  const kept = entries.sort(([, a], [, b]) => score(b) - score(a)).slice(0, MAX_ENTRIES)
   return Object.fromEntries(kept)
 }
 
@@ -63,7 +61,12 @@ export function useRepoVisits() {
   load()
 
   /** Record a visit to a repository (called from the repo shell page). */
-  function record(r: Pick<ForgeRepo, 'provider' | 'owner' | 'name' | 'fullName' | 'description' | 'language' | 'stars'>): void {
+  function record(
+    r: Pick<
+      ForgeRepo,
+      'provider' | 'owner' | 'name' | 'fullName' | 'description' | 'language' | 'stars'
+    >
+  ): void {
     if (!import.meta.client || !r?.owner || !r?.name) return
     const k = keyOf(r)
     const prev = _visits.value[k]

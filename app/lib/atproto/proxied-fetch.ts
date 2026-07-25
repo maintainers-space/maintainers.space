@@ -28,7 +28,7 @@ const ALLOW_SUFFIX = ['.bsky.network', '.bsky.social', '.bsky.app']
 function isProxyableHost(host: string): boolean {
   const h = host.toLowerCase()
   if (ALLOW_EXACT.has(h)) return true
-  return ALLOW_SUFFIX.some(suffix => h.endsWith(suffix))
+  return ALLOW_SUFFIX.some((suffix) => h.endsWith(suffix))
 }
 
 function urlOf(input: RequestInfo | URL): string {
@@ -90,5 +90,5 @@ export async function getJson<T>(url: string, query?: Record<string, unknown>): 
   }
   const res = await proxiedFetch(u.href, { headers: { Accept: 'application/json' } })
   if (!res.ok) throw new Error(`Request to ${url} failed with ${res.status}`)
-  return await res.json() as T
+  return (await res.json()) as T
 }

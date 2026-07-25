@@ -1,6 +1,8 @@
 export function formatCompactNumber(value?: number | null): string {
   if (value === null || value === undefined) return '0'
-  return new Intl.NumberFormat('en', { notation: 'compact', maximumFractionDigits: 1 }).format(value)
+  return new Intl.NumberFormat('en', { notation: 'compact', maximumFractionDigits: 1 }).format(
+    value
+  )
 }
 
 export function formatBytes(bytes?: number): string {
@@ -55,7 +57,7 @@ export function shortDid(did?: string | null): string {
 }
 
 /** Best display label for a forge user reference. */
-export function userLabel(user?: { login?: string, displayName?: string | null } | null): string {
+export function userLabel(user?: { login?: string; displayName?: string | null } | null): string {
   if (!user) return ''
   if (user.displayName) return user.displayName
   const login = user.login ?? ''
@@ -70,13 +72,13 @@ export function encodePathSegments(path: string): string {
 }
 
 /** Canonical in-app path for a repository. */
-export function repoPath(loc: { provider: string, owner: string, name: string }, sub = ''): string {
+export function repoPath(loc: { provider: string; owner: string; name: string }, sub = ''): string {
   const base = `/${loc.provider}/${seg(loc.owner)}/${seg(loc.name)}`
   return sub ? `${base}/${sub.replace(/^\//, '')}` : base
 }
 
 /** Canonical in-app path for a user/org profile. */
-export function userPath(user: { provider: string, login: string }): string {
+export function userPath(user: { provider: string; login: string }): string {
   return `/${user.provider}/${seg(user.login)}`
 }
 
@@ -85,7 +87,7 @@ export function issuePath(issue: {
   provider: string
   id: string
   isPull?: boolean
-  repo?: { owner: string, name: string } | null
+  repo?: { owner: string; name: string } | null
 }): string {
   if (!issue.repo) return '#'
   const kind = issue.isPull ? 'pulls' : 'issues'
