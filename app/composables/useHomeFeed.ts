@@ -14,6 +14,7 @@ function byRecent(a: ForgeIssue, b: ForgeIssue): number {
  */
 export function useHomeFeed() {
   const { get: getToken } = useForgeTokens()
+  const { did, profile } = useAuth()
 
   const myPulls = ref<ForgeIssue[]>([])
   const reviewRequests = ref<ForgeIssue[]>([])
@@ -21,8 +22,18 @@ export function useHomeFeed() {
   const loading = ref(false)
   const loaded = ref(false)
 
-  /** Forges that can produce a "my work" feed and have a token connected. */
-  const workForges = () => forgeList.filter((f) => f.listMyWork && getToken(f.id))
+  /** Tangled has no OAuth token — it authenticates via the signed-in atproto identity. */
+  function tangledSelf(): string | undefined {
+    const h = profile.value?.handle
+    if (h && !h.startsWith('did:')) return h
+    return did.value ?? undefined
+  }
+
+  /** Forges that can produce a "my work" feed and have a connected identity. */
+  const workForges = () =>
+    forgeList.filter(
+      (f) => f.listMyWork && (f.id === 'tangled' ? !!tangledSelf() : !!getToken(f.id))
+    )
   const connected = computed(() => workForges().length > 0)
 
   function apply(work: ForgeMyWork): void {
@@ -48,7 +59,9 @@ export function useHomeFeed() {
         async () => {
           const parts = await Promise.all(
             active.map((f) =>
-              f.listMyWork!({ token: getToken(f.id) }).catch(
+              f.listMyWork!(
+                f.id === 'tangled' ? { viewer: tangledSelf() } : { token: getToken(f.id) }
+              ).catch(
                 () =>
                   ({
                     authoredPulls: [],

@@ -10,9 +10,11 @@ import type {
   ForgeComment,
   ForgeContribution,
   ForgeFileDiff,
+  ForgeId,
   ForgeInboxItem,
   ForgeIssue,
   ForgeIssueDetail,
+  ForgeMyWork,
   ForgeNotification,
   ForgePull,
   ForgePullDetail,
@@ -850,6 +852,107 @@ export const tangledProvider: ForgeProvider = {
         }
       })
       .filter((c): c is ForgeContribution => !!c)
+  },
+
+  /**
+   * Tangled has no "assigned to me" or "review requested" concept, and pulls can
+   * only be listed per-target-repo (no cross-network "PRs I authored" query), so
+   * this approximates a maintainer's todo list from the repos the viewer owns:
+   * open pulls they authored themselves, open pulls from others awaiting their
+   * merge/review, and open issues on their own repos.
+   */
+  async listMyWork(opts): Promise<ForgeMyWork> {
+    const empty: ForgeMyWork = { authoredPulls: [], reviewRequests: [], assignedIssues: [] }
+    const viewer = opts?.viewer
+    if (!viewer) return empty
+    let did: string
+    try {
+      did = await resolveHandleToDid(viewer)
+    } catch {
+      return empty
+    }
+    const ownerHandle = viewer.startsWith('did:') ? did : viewer.trim().replace(/^@/, '')
+
+    let records: TangledListItem[]
+    try {
+      records = await listRepoRecords(did, opts)
+    } catch {
+      return empty
+    }
+
+    const authoredPulls: ForgeIssue[] = []
+    const reviewRequests: ForgeIssue[] = []
+    const assignedIssues: ForgeIssue[] = []
+
+    await Promise.all(
+      records.slice(0, 10).map(async (rec) => {
+        const repoDid = rec.value?.repoDid
+        const name = rec.value?.name || rkeyFromUri(rec.uri)
+        if (!repoDid) return
+        const repo = {
+          provider: 'tangled' as ForgeId,
+          owner: ownerHandle,
+          name,
+          fullName: `${ownerHandle}/${name}`
+        }
+        const base = `/tangled/${ownerHandle}/${name}`
+
+        const [issues, pulls] = await Promise.all([
+          bobbin<{ items?: TangledIssueRecord[] }>(
+            'sh.tangled.repo.listIssues',
+            { subject: repoDid, state: 'open', limit: 20 },
+            opts
+          ).catch(() => ({ items: [] as TangledIssueRecord[] })),
+          bobbin<{ items?: TangledPullRecord[] }>(
+            'sh.tangled.repo.listPulls',
+            { subject: repoDid, status: 'open', limit: 20 },
+            opts
+          ).catch(() => ({ items: [] as TangledPullRecord[] }))
+        ])
+
+        for (const it of issues.items ?? []) {
+          const m = mapTangledIssue(it)
+          if (m.state !== 'open') continue
+          assignedIssues.push({
+            ...m,
+            isPull: false,
+            repo,
+            url: `https://tangled.org${base}/issues/${m.id}`
+          })
+        }
+        for (const it of pulls.items ?? []) {
+          const m = mapTangledPull(it)
+          if (m.state !== 'open') continue
+          const item = pullAsWorkItem(m, repo, `https://tangled.org${base}/pulls/${m.id}`)
+          if (m.author?.login === did) authoredPulls.push(item)
+          else reviewRequests.push(item)
+        }
+      })
+    )
+
+    return { authoredPulls, reviewRequests, assignedIssues }
+  }
+}
+
+/** A Tangled pull, reshaped into `ForgeIssue` for the home dashboard's "my work" feed. */
+function pullAsWorkItem(
+  p: ForgePull,
+  repo: { provider: ForgeId; owner: string; name: string; fullName: string },
+  url: string
+): ForgeIssue {
+  return {
+    provider: 'tangled',
+    id: p.id,
+    title: p.title,
+    state: p.state === 'open' ? 'open' : 'closed',
+    author: p.author,
+    body: p.body,
+    commentCount: p.commentCount,
+    createdAt: p.createdAt,
+    updatedAt: p.updatedAt,
+    url,
+    isPull: true,
+    repo
   }
 }
 
