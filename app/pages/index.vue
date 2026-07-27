@@ -51,9 +51,14 @@ function go(): void {
   navigateTo(`/${provider.value}/${encodeURIComponent(o)}/${encodeURIComponent(r)}`)
 }
 
+// One representative example per registered forge, so no single platform
+// dominates this list by accident.
 const examples = [
   { provider: 'github', owner: 'nuxt', repo: 'nuxt', description: 'The Nuxt web framework' },
-  { provider: 'github', owner: 'vuejs', repo: 'core', description: 'Vue.js core' },
+  { provider: 'gitlab', owner: 'gitlab-org', repo: 'gitlab', description: 'GitLab itself' },
+  { provider: 'codeberg', owner: 'forgejo', repo: 'forgejo', description: 'Forgejo, on Codeberg' },
+  { provider: 'gitea', owner: 'gitea', repo: 'docs', description: 'Gitea documentation' },
+  { provider: 'bitbucket', owner: 'atlassian', repo: 'aui', description: 'Atlassian UI library' },
   { provider: 'tangled', owner: 'tangled.org', repo: 'core', description: 'Tangled core' }
 ]
 </script>
