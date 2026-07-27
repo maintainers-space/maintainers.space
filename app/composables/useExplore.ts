@@ -1,7 +1,16 @@
 import { forgeList, getForge } from '~/lib/forges'
 import { fetchFollows } from '~/lib/atproto/public'
 import { cached, TTL } from '~/lib/cache'
-import type { ForgeRepo } from '~/types/forge'
+import type { ForgeId, ForgeRepo } from '~/types/forge'
+
+/**
+ * Owners surfaced as a small curated set for forges with no repo search API at
+ * all. Placeholders, swap for better examples as each forge gains real traction.
+ */
+const FEATURED_OWNERS: Partial<Record<ForgeId, string>> = {
+  tangled: 'tangled.org',
+  sourcehut: '~sircmpwn'
+}
 
 export type ExploreScope = 'trending' | 'following'
 export type ExplorePeriod = 'daily' | 'weekly' | 'monthly'
@@ -118,48 +127,42 @@ export function useExplore() {
       }
     }
 
-    // GitLab search has no language facet, so the language filter only narrows
-    // the GitHub slice of the trending mix.
-    const gl = getForge('gitlab')
-    if (gl?.searchRepos) {
-      try {
-        const res = await gl.searchRepos(language && language !== 'all' ? language : '', {
-          sort: 'stars',
-          order: 'desc',
-          limit: Math.min(limit, 12),
-          token: getToken('gitlab')
+    // Every other forge with a plain-text repo search contributes a smaller,
+    // stars-sorted slice — none of them support GitHub's date+stars qualifier
+    // syntax (or a language facet), so the language filter only narrows GitHub's
+    // slice of the mix.
+    const plainTextQuery = language && language !== 'all' ? language : ''
+    await Promise.all(
+      forgeList
+        .filter((f) => f.id !== 'github' && f.searchRepos)
+        .map(async (f) => {
+          try {
+            const res = await f.searchRepos!(plainTextQuery, {
+              sort: 'stars',
+              order: 'desc',
+              limit: Math.min(limit, 12),
+              token: getToken(f.id)
+            })
+            collected.push(...res.items)
+          } catch {
+            /* best-effort */
+          }
         })
-        collected.push(...res.items)
-      } catch {
-        /* best-effort */
-      }
-    }
+    )
 
-    const cb = getForge('codeberg')
-    if (cb?.searchRepos) {
-      try {
-        const res = await cb.searchRepos(language && language !== 'all' ? language : '', {
-          sort: 'stars',
-          order: 'desc',
-          limit: Math.min(limit, 12),
-          token: getToken('codeberg')
-        })
-        collected.push(...res.items)
-      } catch {
-        /* best-effort */
-      }
-    }
-
-    // Tangled has no search API — surface a small curated set instead.
-    const tangled = getForge('tangled')
-    if (tangled?.listRepos) {
-      try {
-        const featured = await tangled.listRepos('tangled.org')
-        collected.push(...featured.slice(0, 6))
-      } catch {
-        /* best-effort */
-      }
-    }
+    // Forges with no search API at all get a small curated set instead.
+    await Promise.all(
+      Object.entries(FEATURED_OWNERS).map(async ([id, owner]) => {
+        const forge = getForge(id)
+        if (!forge?.listRepos || !owner) return
+        try {
+          const featured = await forge.listRepos(owner)
+          collected.push(...featured.slice(0, 6))
+        } catch {
+          /* best-effort */
+        }
+      })
+    )
   }
 
   async function loadFollowing(collected: ForgeRepo[], noteSet: Set<string>): Promise<void> {
