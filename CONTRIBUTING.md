@@ -9,6 +9,9 @@ Thanks for your interest in contributing! This document covers getting a local e
   - [GitHub](#github)
   - [GitLab](#gitlab)
   - [Codeberg](#codeberg)
+  - [Gitea](#gitea)
+  - [Bitbucket](#bitbucket)
+  - [Sourcehut](#sourcehut)
   - [Attestation signing key](#attestation-signing-key)
 - [Project structure](#project-structure)
 - [Code style](#code-style)
@@ -33,7 +36,7 @@ pnpm dev
 
 koinon binds its dev server to `127.0.0.1` rather than `localhost`. The AT Protocol OAuth flow used for sign-in rejects `localhost` redirect URIs outright, so open `http://127.0.0.1:3000`, not `http://localhost:3000`.
 
-Signing in with atproto needs no configuration in development: it uses a loopback OAuth client scoped to `127.0.0.1`. Linking a GitHub, GitLab or Codeberg account is opt-in per provider. The app runs fine with none of them configured, it just disables linking for whichever provider you haven't set up. If you're working on something that touches one of those forges, set up that provider's OAuth app using the instructions below and export its client ID and secret before running `pnpm dev`:
+Signing in with atproto needs no configuration in development: it uses a loopback OAuth client scoped to `127.0.0.1`. Linking a GitHub, GitLab, Codeberg, Gitea, Bitbucket or Sourcehut account is opt-in per provider. The app runs fine with none of them configured, it just disables linking for whichever provider you haven't set up. If you're working on something that touches one of those forges, set up that provider's OAuth app using the instructions below and export its client ID and secret before running `pnpm dev`:
 
 ```bash
 NUXT_GITHUB_CLIENT_ID=... NUXT_GITHUB_CLIENT_SECRET=... pnpm dev
@@ -88,9 +91,54 @@ NUXT_CODEBERG_CLIENT_ID=your_client_id
 NUXT_CODEBERG_CLIENT_SECRET=your_client_secret
 ```
 
+### Gitea
+
+[gitea.com](https://gitea.com) is Gitea's own hosted community instance (same Gitea-flavored REST API as Codeberg, just a different host — `app/lib/forges/gitea-family.ts` implements both). Create an application at [gitea.com/user/settings/applications](https://gitea.com/user/settings/applications), with the redirect URI set to:
+
+```
+http://127.0.0.1:3000/api/auth/gitea/callback
+```
+
+Set:
+
+```bash
+NUXT_GITEA_CLIENT_ID=your_client_id
+NUXT_GITEA_CLIENT_SECRET=your_client_secret
+```
+
+### Bitbucket
+
+Create an OAuth consumer under a workspace's **Settings → OAuth consumers** (`https://bitbucket.org/<workspace>/workspace/settings/oauth-consumers`), with the callback URL set to:
+
+```
+http://127.0.0.1:3000/api/auth/bitbucket/callback
+```
+
+Unlike the other forges, Bitbucket's token exchange authenticates with HTTP Basic auth rather than a client id/secret in the request body — already handled generically by `tokenAuthStyle: 'basic'` in `server/utils/oauth-providers.ts`. Bitbucket's issue tracker isn't integrated (Atlassian is removing it), and there's no notifications, activity-feed, or follow-graph API to integrate at all — see the comment at the top of `app/lib/forges/bitbucket.ts` for the full list of verified platform limits. Set:
+
+```bash
+NUXT_BITBUCKET_CLIENT_ID=your_key
+NUXT_BITBUCKET_CLIENT_SECRET=your_secret
+```
+
+### Sourcehut
+
+Register an OAuth client at [meta.sr.ht/oauth2](https://meta.sr.ht/oauth2), with the redirect URI set to:
+
+```
+http://127.0.0.1:3000/api/auth/sourcehut/callback
+```
+
+Two things make Sourcehut's flow different from every other forge here: its redirect URI is fixed at registration time and must not be sent on the authorize request (`omitRedirectUriInAuthorize: true`), and its `/query` GraphQL endpoints (there's no REST API) require an authenticated token for _every_ request — including reading public repos, which is why Sourcehut has no anonymous "try an example" entry on the home page. Sourcehut also has no pull requests (contributions happen via `git send-email`), so `app/lib/forges/sourcehut.ts` only covers code browsing and issues (assuming the tracker name matches the repo name — sr.ht trackers aren't strictly tied to a repo). Set:
+
+```bash
+NUXT_SOURCEHUT_CLIENT_ID=your_client_id
+NUXT_SOURCEHUT_CLIENT_SECRET=your_client_secret
+```
+
 ### Attestation signing key
 
-This one isn't a forge OAuth app. It's a private key koinon's own server uses to sign proof that a linked GitHub, GitLab or Codeberg account really was verified through OAuth, rather than just claimed in a self-editable atproto record. It's optional: without it, linking still works, but linked accounts show no "Verified" badge.
+This one isn't a forge OAuth app. It's a private key koinon's own server uses to sign proof that a linked forge account really was verified through OAuth, rather than just claimed in a self-editable atproto record. It's optional: without it, linking still works, but linked accounts show no "Verified" badge.
 
 Generate a private ES256 key as JWK JSON:
 
@@ -121,12 +169,14 @@ app/            # Nuxt app
 server/         # Nitro server
 ├── api/        # API routes (OAuth, Tangled proxy, atproto proxy)
 ├── routes/     # Non-/api routes (.well-known/jwks.json)
-└── utils/      # Server-only utilities (cache, attestation, proxy)
+└── utils/      # Server-only utilities (cache, attestation, proxy, oauth-providers)
 
 lexicons/       # koinon's own atproto lexicon (dev.koinon.forgeAccount)
 ```
 
-Each forge (`app/lib/forges/{github,gitlab,codeberg,tangled}.ts`) implements the same `ForgeProvider` interface defined in `app/types/forge.ts`, mapping that provider's raw API responses into a common set of types (`ForgeRepo`, `ForgeIssue`, `ForgePull`, and so on) so the rest of the app never has to know which forge it's talking to.
+Each forge (`app/lib/forges/{github,gitlab,codeberg,tangled,gitea,bitbucket,sourcehut}.ts`) implements the same `ForgeProvider` interface defined in `app/types/forge.ts`, mapping that provider's raw API responses into a common set of types (`ForgeRepo`, `ForgeIssue`, `ForgePull`, and so on) so the rest of the app never has to know which forge it's talking to. Registering a new forge is one entry in `app/lib/forges/index.ts` — every cross-forge surface (search, explore, notifications, timeline, home dashboard) iterates that registry generically rather than hardcoding a provider list. Codeberg and Gitea share one implementation (`app/lib/forges/gitea-family.ts`, a factory parameterized by API/web base URL) since both are Gitea-flavored REST APIs; Forgejo could be added the same way later if a good second public instance turns up.
+
+OAuth sign-in is likewise one generic, config-driven flow shared by every forge (Tangled excepted — it signs in via the atproto identity itself, not OAuth): `server/utils/oauth-providers.ts` holds each forge's endpoints/scope/auth-style, `server/api/auth/[provider]/{login,callback}.get.ts` are the only server routes, and `app/composables/useForgeAuth.ts` is the client-side counterpart. Adding a forge's OAuth support means one entry in each of those two files plus a `fetchUser`/`fetchUsername` function — nothing else needs touching, including `settings/accounts.vue`, which builds its list from the forge registry.
 
 ## Code style
 
