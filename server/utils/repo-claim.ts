@@ -31,9 +31,13 @@ export async function verifyRepoAdmin(
       )
       return repo.permissions?.admin === true
     }
-    if (provider === 'codeberg') {
+    // Codeberg and Gitea are both Gitea-flavored REST APIs with an identical
+    // per-repo `permissions.admin` shape — just a different host.
+    if (provider === 'codeberg' || provider === 'gitea') {
+      const apiBase =
+        provider === 'codeberg' ? 'https://codeberg.org/api/v1' : 'https://gitea.com/api/v1'
       const repo = await $fetch<{ permissions?: { admin?: boolean } }>(
-        `https://codeberg.org/api/v1/repos/${encodeURIComponent(owner)}/${encodeURIComponent(name)}`,
+        `${apiBase}/repos/${encodeURIComponent(owner)}/${encodeURIComponent(name)}`,
         { headers: { Authorization: bearer(token) } }
       )
       return repo.permissions?.admin === true
@@ -53,6 +57,16 @@ export async function verifyRepoAdmin(
         repo.permissions?.group_access?.access_level ?? 0
       )
       return level >= GITLAB_MIN_ACCESS_LEVEL
+    }
+    if (provider === 'bitbucket') {
+      const data = await $fetch<{ values?: { permission?: string }[] }>(
+        `https://api.bitbucket.org/2.0/user/permissions/repositories`,
+        {
+          headers: { Authorization: bearer(token) },
+          query: { q: `repository.full_name="${owner}/${name}"` }
+        }
+      )
+      return data.values?.[0]?.permission === 'admin'
     }
   } catch {
     return false
