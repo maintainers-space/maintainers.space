@@ -1,3 +1,5 @@
+import { getForge } from '~/lib/forges'
+
 export const REPO_METADATA_COLLECTION = 'dev.koinon.repoMetadata'
 
 export interface CommunityLink {
@@ -139,18 +141,9 @@ export function sanitizeLinks(links: unknown): CommunityLink[] {
 }
 
 function defaultRepoUrl(provider: string, owner: string, name: string): string {
-  switch (provider) {
-    case 'github':
-      return `https://github.com/${owner}/${name}`
-    case 'gitlab':
-      return `https://gitlab.com/${owner}/${name}`
-    case 'codeberg':
-      return `https://codeberg.org/${owner}/${name}`
-    case 'tangled':
-      return `https://tangled.sh/@${owner.replace(/^@/, '')}/${name}`
-    default:
-      return `https://${provider}/${owner}/${name}`
-  }
+  const forge = getForge(provider)
+  if (forge) return forge.webUrl(owner, name)
+  return `https://${provider}/${owner}/${name}`
 }
 
 /**

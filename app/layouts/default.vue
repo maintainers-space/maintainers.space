@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { NavigationMenuItem } from '@nuxt/ui'
-import { getForge } from '~/lib/forges'
+import { forgeList, getForge } from '~/lib/forges'
 
 const { isAuthenticated, profile, did } = useAuth()
 const { accounts, loaded: accountsLoaded, refresh: refreshAccounts } = useForgeAccounts()
@@ -67,45 +67,33 @@ const nav = computed<NavigationMenuItem[]>(() => {
   return items
 })
 
-function externalProfileUrl(provider: string, username: string, profileUrl?: string): string {
-  if (profileUrl) return profileUrl
-  switch (provider) {
-    case 'github':
-      return `https://github.com/${encodeURIComponent(username)}`
-    case 'gitlab':
-      return `https://gitlab.com/${encodeURIComponent(username)}`
-    case 'codeberg':
-      return `https://codeberg.org/${encodeURIComponent(username)}`
-    case 'tangled':
-      return `https://tangled.sh/@${encodeURIComponent(username)}`
-    default:
-      return '#'
-  }
-}
-
-// Links to the viewer's profile on each connected provider, in a fixed order
-// (GitHub, GitLab, Codeberg, Tangled, AT Protocol). The rare case where we
-// intentionally leave the app for the provider's own site.
+// Links to the viewer's profile on each connected provider, in registry order
+// (OAuth-connected forges, then Tangled via its atproto handle, then AT
+// Protocol itself). The rare case where we intentionally leave the app for the
+// provider's own site.
 const external = computed<NavigationMenuItem[]>(() => {
   const list = accounts.value ?? []
-  const find = (provider: string) => list.find((a) => a.provider === provider)
   const out: NavigationMenuItem[] = []
-  const pushForge = (provider: string, username?: string, profileUrl?: string) => {
-    if (!username) return
+  for (const forge of forgeList) {
+    if (forge.id === 'tangled') continue // uses the atproto handle below, not a linked account
+    const account = list.find((a) => a.provider === forge.id)
+    if (!account?.username) continue
     out.push({
-      label: getForge(provider)?.label ?? provider,
-      icon: getForge(provider)?.icon ?? 'i-lucide-git-fork',
-      to: externalProfileUrl(provider, username, profileUrl),
+      label: forge.label,
+      icon: forge.icon,
+      to: account.profileUrl || forge.ownerWebUrl?.(account.username) || '#',
       target: '_blank'
     })
   }
-  const gh = find('github')
-  pushForge('github', gh?.username, gh?.profileUrl)
-  const gl = find('gitlab')
-  pushForge('gitlab', gl?.username, gl?.profileUrl)
-  const cb = find('codeberg')
-  pushForge('codeberg', cb?.username, cb?.profileUrl)
-  if (profile.value?.handle) pushForge('tangled', profile.value.handle)
+  if (profile.value?.handle) {
+    const tangled = getForge('tangled')
+    out.push({
+      label: tangled?.label ?? 'Tangled',
+      icon: tangled?.icon ?? 'i-lucide-git-fork',
+      to: tangled?.ownerWebUrl?.(profile.value.handle) ?? '#',
+      target: '_blank'
+    })
+  }
   if (did.value) {
     out.push({
       label: 'AT Protocol',

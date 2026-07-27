@@ -90,19 +90,7 @@ interface LinkedAccountView {
 
 /** Public profile URL on the provider's own site. Linked accounts point here. */
 function externalProfileUrl(provider: string, username: string, profileUrl?: string): string {
-  if (profileUrl) return profileUrl
-  switch (provider) {
-    case 'github':
-      return `https://github.com/${encodeURIComponent(username)}`
-    case 'gitlab':
-      return `https://gitlab.com/${encodeURIComponent(username)}`
-    case 'codeberg':
-      return `https://codeberg.org/${encodeURIComponent(username)}`
-    case 'tangled':
-      return `https://tangled.sh/@${encodeURIComponent(username)}`
-    default:
-      return '#'
-  }
+  return profileUrl || getForge(provider)?.ownerWebUrl?.(username) || '#'
 }
 
 // The atproto identity leads the list and is inherently verified; other forges
