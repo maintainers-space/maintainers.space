@@ -46,6 +46,48 @@ function errMessage(e: unknown): string | undefined {
   return x?.data?.message ?? x?.message
 }
 
+/** Per-kind/reason base weight for the importance score — higher sorts first. */
+const KIND_WEIGHT: Record<ForgeInboxItem['kind'], number> = {
+  mention: 100,
+  pull: 70,
+  issue: 55,
+  ci: 45,
+  discussion: 50,
+  commit: 30,
+  release: 25,
+  other: 20
+}
+
+/** Reasons that signal the viewer is directly on the hook, boosted above the kind's base weight. */
+const HOT_REASONS = new Set([
+  'review_requested',
+  'review-requested',
+  'mention',
+  'assign',
+  'assigned',
+  'author'
+])
+
+/**
+ * A single cross-forge priority score so the inbox reads as one ranked list
+ * instead of "whichever provider's unread flag happened to be true": kind/reason
+ * weight, a strong unread boost, a bot penalty, and exponential recency decay
+ * (halving roughly every ~5 days) so a week-old unread review request still
+ * outranks a stale, already-read ping.
+ */
+function computeImportance(item: ForgeInboxItem, now = Date.now()): number {
+  let score = KIND_WEIGHT[item.kind] ?? KIND_WEIGHT.other
+  if (item.reason && HOT_REASONS.has(item.reason.toLowerCase())) score += 40
+  if (item.unread) score += 60
+  if (item.isBot) score -= 35
+  if (item.unreadComments?.length) score += 10 * Math.min(item.unreadComments.length, 3)
+
+  const updated = item.updatedAt ? new Date(item.updatedAt).getTime() : NaN
+  const ageDays = Number.isFinite(updated) ? Math.max(0, (now - updated) / 86_400_000) : NaN
+  const decay = Number.isFinite(ageDays) ? Math.exp(-ageDays / 7) : 0.5
+  return score * (0.4 + 0.6 * decay)
+}
+
 /** Wrap a plain notification (forges without an enriched inbox) as an inbox item. */
 function toInbox(n: ForgeNotification): ForgeInboxItem {
   return {
@@ -84,12 +126,18 @@ export function useNotifications() {
   const ciItems = computed(() =>
     items.value.filter((i) => i.kind === 'ci' && !i.isBot && !i.resolved)
   )
-  const inboxItems = computed(() =>
-    items.value
+  const inboxItems = computed(() => {
+    const now = Date.now()
+    return items.value
       .filter((i) => !i.resolved && !i.isBot && i.kind !== 'ci')
-
-      .sort((a, b) => Number(b.unread) - Number(a.unread))
-  )
+      .map((i) => ({ item: i, score: computeImportance(i, now) }))
+      .sort(
+        (a, b) =>
+          b.score - a.score ||
+          new Date(b.item.updatedAt ?? 0).getTime() - new Date(a.item.updatedAt ?? 0).getTime()
+      )
+      .map((x) => x.item)
+  })
   const unreadCount = computed(() => inboxItems.value.filter((i) => i.unread).length)
   const dependencyCount = computed(() => dependencyItems.value.length)
   const resolvedCount = computed(() => resolvedItems.value.length)
