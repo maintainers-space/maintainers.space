@@ -1,19 +1,36 @@
 <script setup lang="ts">
+import { getForge, isForgeId } from '~/lib/forges'
+
 definePageMeta({ layout: false })
 
-const { completeCallback } = useGitlabAuth()
+const route = useRoute()
+const providerId = String(route.params.provider ?? '')
+const forge = isForgeId(providerId) ? getForge(providerId) : undefined
+const label = forge?.label ?? providerId
+
+let auth: ReturnType<typeof useForgeAuth> | null = null
+try {
+  if (forge) auth = useForgeAuth(forge.id)
+} catch {
+  auth = null
+}
 
 const status = ref<'working' | 'error'>('working')
-const message = ref('Connecting your GitLab account…')
+const message = ref(`Connecting your ${label} account…`)
 
 onMounted(async () => {
+  if (!auth) {
+    status.value = 'error'
+    message.value = `koinon doesn't support signing in with "${providerId}" this way.`
+    return
+  }
   try {
-    const to = await completeCallback()
+    const to = await auth.completeCallback()
     await navigateTo(to, { replace: true })
   } catch (error) {
     status.value = 'error'
     message.value =
-      error instanceof Error ? error.message : 'Could not connect your GitLab account.'
+      error instanceof Error ? error.message : `Could not connect your ${label} account.`
   }
 })
 </script>
@@ -30,7 +47,7 @@ onMounted(async () => {
     <template v-else>
       <UIcon name="i-lucide-circle-alert" class="size-8 text-error" />
       <div>
-        <h1 class="font-semibold text-highlighted">GitLab connection failed</h1>
+        <h1 class="font-semibold text-highlighted">{{ label }} connection failed</h1>
         <p class="mt-1 max-w-sm text-sm text-muted">
           {{ message }}
         </p>

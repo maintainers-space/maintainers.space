@@ -35,6 +35,21 @@ export default defineNuxtConfig({
       clientId: '',
       clientSecret: ''
     },
+    // Gitea (gitea.com) OAuth (server-only). Set NUXT_GITEA_CLIENT_ID / NUXT_GITEA_CLIENT_SECRET.
+    gitea: {
+      clientId: '',
+      clientSecret: ''
+    },
+    // Bitbucket Cloud OAuth (server-only). Set NUXT_BITBUCKET_CLIENT_ID / NUXT_BITBUCKET_CLIENT_SECRET.
+    bitbucket: {
+      clientId: '',
+      clientSecret: ''
+    },
+    // Sourcehut (meta.sr.ht) OAuth (server-only). Set NUXT_SOURCEHUT_CLIENT_ID / NUXT_SOURCEHUT_CLIENT_SECRET.
+    sourcehut: {
+      clientId: '',
+      clientSecret: ''
+    },
     // Server-signed forge-account attestations (server-only). A private ES256 key
     // in JWK JSON form; set NUXT_ATTESTATION_PRIVATE_KEY. When empty, linking still
     // works but records carry no verifiable attestation (badge stays unverified).

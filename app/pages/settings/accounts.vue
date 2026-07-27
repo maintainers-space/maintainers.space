@@ -1,13 +1,15 @@
 <script setup lang="ts">
+import { forgeList } from '~/lib/forges'
 import type { ForgeAccount } from '~/composables/useForgeAccounts'
 
 const { accounts, pending, loaded, refresh, unlink } = useForgeAccounts()
-const github = useGithubAuth()
-const gitlab = useGitlabAuth()
-const codeberg = useCodebergAuth()
 const { did } = useAuth()
 const { isVerified, check } = useForgeAttestations()
 const toast = useToast()
+
+// Tangled signs in via the atproto identity itself, not this OAuth flow.
+const oauthForges = forgeList.filter((f) => f.id !== 'tangled')
+const authByProvider = new Map(oauthForges.map((f) => [f.id, useForgeAuth(f.id)]))
 
 onMounted(() => {
   if (!loaded.value) refresh()
@@ -82,48 +84,27 @@ function buttonFor(state: ConnState, icon: string, label: string): ProviderView[
   }
 }
 
-const providers = computed<ProviderView[]>(() => {
-  const gh = connState('github', github.isConnected.value)
-  const gl = connState('gitlab', gitlab.isConnected.value)
-  const cb = connState('codeberg', codeberg.isConnected.value)
-  return [
-    {
-      id: 'github',
-      label: 'GitHub',
-      icon: 'i-simple-icons-github',
-      copy: connCopy(gh, 'GitHub'),
-      state: gh,
-      button: buttonFor(gh, 'i-simple-icons-github', 'GitHub'),
-      connect: () => github.connect('/settings/accounts')
-    },
-    {
-      id: 'gitlab',
-      label: 'GitLab',
-      icon: 'i-simple-icons-gitlab',
-      copy: connCopy(gl, 'GitLab'),
-      state: gl,
-      button: buttonFor(gl, 'i-simple-icons-gitlab', 'GitLab'),
-      connect: () => gitlab.connect('/settings/accounts')
-    },
-    {
-      id: 'codeberg',
-      label: 'Codeberg',
-      icon: 'i-simple-icons-codeberg',
-      copy: connCopy(cb, 'Codeberg'),
-      state: cb,
-      button: buttonFor(cb, 'i-simple-icons-codeberg', 'Codeberg'),
-      connect: () => codeberg.connect('/settings/accounts')
+const providers = computed<ProviderView[]>(() =>
+  oauthForges.map((forge) => {
+    const auth = authByProvider.get(forge.id)!
+    const state = connState(forge.id, auth.isConnected.value)
+    return {
+      id: forge.id,
+      label: forge.label,
+      icon: forge.icon,
+      copy: connCopy(state, forge.label),
+      state,
+      button: buttonFor(state, forge.icon, forge.label),
+      connect: () => auth.connect('/settings/accounts')
     }
-  ]
-})
+  })
+)
 
 async function onUnlink(account: ForgeAccount) {
   try {
     await unlink(account.rkey)
     // An account link and its OAuth token are one connection — drop both.
-    if (account.provider === 'github') github.disconnect()
-    if (account.provider === 'gitlab') gitlab.disconnect()
-    if (account.provider === 'codeberg') codeberg.disconnect()
+    authByProvider.get(account.provider)?.disconnect()
     toast.add({ title: 'Account unlinked', color: 'success' })
   } catch (error) {
     toast.add({
