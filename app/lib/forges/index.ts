@@ -3,12 +3,18 @@ import { githubProvider } from './github'
 import { gitlabProvider } from './gitlab'
 import { tangledProvider } from './tangled'
 import { codebergProvider } from './codeberg'
+import { giteaProvider } from './gitea'
+import { bitbucketProvider } from './bitbucket'
+import { sourcehutProvider } from './sourcehut'
 
 export const forges = {
   github: githubProvider,
   gitlab: gitlabProvider,
   tangled: tangledProvider,
-  codeberg: codebergProvider
+  codeberg: codebergProvider,
+  gitea: giteaProvider,
+  bitbucket: bitbucketProvider,
+  sourcehut: sourcehutProvider
 } satisfies Record<string, ForgeProvider>
 
 export type KnownForgeId = keyof typeof forges

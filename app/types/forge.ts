@@ -1,7 +1,15 @@
 // Shared types for the multi-forge abstraction layer.
 // A "forge" is any code host (GitHub, Tangled, GitLab, Gitea, Forgejo, ...).
 
-export type ForgeId = 'github' | 'gitlab' | 'tangled' | 'codeberg' | (string & {})
+export type ForgeId =
+  | 'github'
+  | 'gitlab'
+  | 'tangled'
+  | 'codeberg'
+  | 'gitea'
+  | 'bitbucket'
+  | 'sourcehut'
+  | (string & {})
 
 export interface ForgeReadOptions {
   /** Optional bearer token for authenticated forge APIs (e.g. GitHub PAT). */
