@@ -24,6 +24,9 @@ import type {
   ForgePullDetail,
   ForgePullState,
   ForgeProvider,
+  ForgeReactionKind,
+  ForgeReactionSummary,
+  ForgeReactionTarget,
   ForgeReadOptions,
   ForgeRepo,
   ForgeRunStatus,
@@ -139,6 +142,12 @@ interface GlNoteResponse {
   body?: string
   created_at?: string | null
   system?: boolean
+}
+
+interface GlAwardEmojiResponse {
+  id: number
+  name: string
+  user?: { username?: string }
 }
 
 interface GlCommitResponse {
@@ -297,6 +306,65 @@ function projectId(repo: RepoLocator): string {
 
 function enc(v: string): string {
   return encodeURIComponent(v)
+}
+
+/** GitLab's Award Emoji names — a superset that includes the classic 8-emoji set under gemoji names. */
+const GL_REACTION_NAME: Record<ForgeReactionKind, string> = {
+  thumbsup: 'thumbsup',
+  thumbsdown: 'thumbsdown',
+  laugh: 'laughing',
+  hooray: 'tada',
+  confused: 'confused',
+  heart: 'heart',
+  rocket: 'rocket',
+  eyes: 'eyes'
+}
+
+const GL_REACTION_FROM_NAME: Record<string, ForgeReactionKind> = Object.fromEntries(
+  (Object.entries(GL_REACTION_NAME) as [ForgeReactionKind, string][]).map(([kind, name]) => [
+    name,
+    kind
+  ])
+)
+
+const glUsernameCache = new Map<string, string>()
+
+/** Award emoji deletion needs the viewer's own award id; GitLab has no "is this mine" field otherwise. */
+async function glCurrentUsername(opts?: ForgeReadOptions): Promise<string | null> {
+  const token = opts?.token ?? getForgeToken('gitlab')
+  if (!token) return null
+  const cached = glUsernameCache.get(token)
+  if (cached) return cached
+  const user = await glFetch<GlUserResponse>('/user', undefined, opts).catch(() => null)
+  if (user?.username) glUsernameCache.set(token, user.username)
+  return user?.username ?? null
+}
+
+function glAwardPath(repo: RepoLocator, target: ForgeReactionTarget): string {
+  const thread = target.kind === 'pull' ? 'merge_requests' : 'issues'
+  const root = `/projects/${projectId(repo)}/${thread}/${target.threadId}`
+  return target.commentId ? `${root}/notes/${target.commentId}/award_emoji` : `${root}/award_emoji`
+}
+
+function mapAwards(
+  awards: GlAwardEmojiResponse[],
+  myUsername: string | null
+): ForgeReactionSummary[] | undefined {
+  const byKind = new Map<ForgeReactionKind, { count: number; mine: boolean }>()
+  for (const a of awards) {
+    const kind = GL_REACTION_FROM_NAME[a.name]
+    if (!kind) continue
+    const entry = byKind.get(kind) ?? { count: 0, mine: false }
+    entry.count++
+    if (myUsername && a.user?.username === myUsername) entry.mine = true
+    byKind.set(kind, entry)
+  }
+  if (!byKind.size) return undefined
+  return Array.from(byKind.entries()).map(([kind, v]) => ({
+    kind,
+    count: v.count,
+    viewerReacted: v.mine
+  }))
 }
 
 /** Bounded-concurrency map, mirroring the GitHub provider's fan-out helper. */
@@ -726,7 +794,7 @@ export const gitlabProvider: ForgeProvider = {
     discussionSearch: false,
     star: true,
     mergeQueue: true,
-    reactions: false
+    reactions: true
   },
   webUrl: (owner, repo) => `${WEB}/${owner}/${repo}`,
   ownerWebUrl: (owner) => `${WEB}/${owner}`,
@@ -896,19 +964,26 @@ export const gitlabProvider: ForgeProvider = {
 
   async getIssue(repo, id, opts): Promise<ForgeIssueDetail> {
     const pid = projectId(repo)
-    const [issue, notes] = await Promise.all([
+    const [issue, notes, awards, myUsername] = await Promise.all([
       glFetch<GlIssueResponse>(`/projects/${pid}/issues/${id}`, undefined, opts),
       glFetch<GlNoteResponse[]>(
         `/projects/${pid}/issues/${id}/notes`,
         { per_page: 100, sort: 'asc', order_by: 'created_at' },
         opts
-      ).catch(() => [])
+      ).catch(() => []),
+      glFetch<GlAwardEmojiResponse[]>(
+        `/projects/${pid}/issues/${id}/award_emoji`,
+        undefined,
+        opts
+      ).catch(() => []),
+      glCurrentUsername(opts)
     ])
     return {
       ...mapIssue(issue),
       comments: (notes ?? [])
         .filter((n) => !n.system)
-        .map((n) => mapNote(n, projectBaseOf(issue.web_url)))
+        .map((n) => mapNote(n, projectBaseOf(issue.web_url))),
+      reactions: mapAwards(awards ?? [], myUsername)
     }
   },
 
@@ -944,13 +1019,19 @@ export const gitlabProvider: ForgeProvider = {
 
   async getPull(repo, id, opts): Promise<ForgePullDetail> {
     const pid = projectId(repo)
-    const [mr, notes] = await Promise.all([
+    const [mr, notes, awards, myUsername] = await Promise.all([
       glFetch<GlMergeRequestResponse>(`/projects/${pid}/merge_requests/${id}`, undefined, opts),
       glFetch<GlNoteResponse[]>(
         `/projects/${pid}/merge_requests/${id}/notes`,
         { per_page: 100, sort: 'asc', order_by: 'created_at' },
         opts
-      ).catch(() => [])
+      ).catch(() => []),
+      glFetch<GlAwardEmojiResponse[]>(
+        `/projects/${pid}/merge_requests/${id}/award_emoji`,
+        undefined,
+        opts
+      ).catch(() => []),
+      glCurrentUsername(opts)
     ])
     let stat: ForgePullDetail['stat']
     if (mr.changes_count != null) {
@@ -961,7 +1042,8 @@ export const gitlabProvider: ForgeProvider = {
       stat,
       comments: (notes ?? [])
         .filter((n) => !n.system)
-        .map((n) => mapNote(n, projectBaseOf(mr.web_url)))
+        .map((n) => mapNote(n, projectBaseOf(mr.web_url))),
+      reactions: mapAwards(awards ?? [], myUsername)
     }
   },
 
@@ -1258,6 +1340,33 @@ export const gitlabProvider: ForgeProvider = {
         signal: opts?.signal
       }).catch(() => {})
     }
+  },
+
+  async addReaction(repo, target, kind, opts): Promise<void> {
+    await $fetch(`${API}${glAwardPath(repo, target)}`, {
+      method: 'POST',
+      headers: glHeaders(opts),
+      body: { name: GL_REACTION_NAME[kind] },
+      signal: opts?.signal
+    })
+  },
+
+  async removeReaction(repo, target, kind, opts): Promise<void> {
+    const username = await glCurrentUsername(opts)
+    const path = glAwardPath(repo, target)
+    const list = await $fetch<GlAwardEmojiResponse[]>(`${API}${path}`, {
+      headers: glHeaders(opts),
+      signal: opts?.signal
+    })
+    const mine = list.find(
+      (a) => a.name === GL_REACTION_NAME[kind] && a.user?.username === username
+    )
+    if (!mine) return
+    await $fetch(`${API}${path}/${mine.id}`, {
+      method: 'DELETE',
+      headers: glHeaders(opts),
+      signal: opts?.signal
+    })
   },
 
   async mergePull(repo, id, opts): Promise<ForgeMergeResult> {
