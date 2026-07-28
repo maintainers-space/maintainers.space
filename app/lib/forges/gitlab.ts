@@ -14,6 +14,7 @@ import type {
   ForgeInboxItem,
   ForgeIssue,
   ForgeIssueDetail,
+  ForgeJobLog,
   ForgeMergeQueueEntry,
   ForgeMergeQueueStats,
   ForgeMergeResult,
@@ -34,6 +35,7 @@ import type {
 } from '~/types/forge'
 
 import { getForgeToken } from '~/lib/forges/token-store'
+import { parseGitlabJobTrace } from '~/lib/forges/actions-log'
 
 // Raw GitLab REST API v4 response shapes — only the fields this file actually
 // reads. These are intentionally loose (most fields optional) since GitLab's
@@ -1044,6 +1046,19 @@ export const gitlabProvider: ForgeProvider = {
       ).catch(() => [])
     ])
     return { ...mapPipeline(run), jobs: (jobs ?? []).map(mapJob) }
+  },
+
+  async getActionJobLog(repo, jobId, opts): Promise<ForgeJobLog | null> {
+    try {
+      const text = await $fetch<string>(`${API}/projects/${projectId(repo)}/jobs/${jobId}/trace`, {
+        headers: glHeaders(opts),
+        responseType: 'text',
+        signal: opts?.signal
+      })
+      return parseGitlabJobTrace(text)
+    } catch {
+      return null
+    }
   },
 
   async searchRepos(q, opts): Promise<Paginated<ForgeRepo>> {
