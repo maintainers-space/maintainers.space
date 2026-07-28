@@ -110,17 +110,12 @@ async function loadDoc(path: string): Promise<string> {
     </UAlert>
 
     <template v-else-if="data">
-      <div class="flex items-center justify-end">
-        <UButton
-          :to="`${base}/commits`"
-          icon="i-lucide-history"
-          size="xs"
-          color="neutral"
-          variant="subtle"
-          label="Commits"
-        />
-      </div>
-      <ForgeRepoBrowser :entries="data.entries" :base="base" :git-ref="defaultBranch" />
+      <ForgeRepoBrowser
+        :entries="data.entries"
+        :base="base"
+        :git-ref="defaultBranch"
+        :commits-href="`${base}/commits`"
+      />
       <ForgeRepoHealthFiles v-if="data.health.length" :files="data.health" :load="loadDoc" />
     </template>
   </div>

@@ -6,6 +6,8 @@ const props = defineProps<{
   base: string
   gitRef: string
   path?: string
+  /** Link to the commit history, shown next to the entry count. Omit to hide it. */
+  commitsHref?: string
 }>()
 
 const sorted = computed(() =>
@@ -55,6 +57,15 @@ const crumbs = computed(() => {
       <span class="ms-auto text-xs text-muted"
         >{{ entries.length }} {{ entries.length === 1 ? 'entry' : 'entries' }}</span
       >
+      <UButton
+        v-if="commitsHref"
+        :to="commitsHref"
+        icon="i-lucide-history"
+        size="xs"
+        color="neutral"
+        variant="subtle"
+        label="Commits"
+      />
     </div>
 
     <ul role="list" class="divide-y divide-default">
