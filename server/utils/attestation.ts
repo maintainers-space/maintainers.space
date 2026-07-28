@@ -13,8 +13,6 @@ import { SignJWT, importJWK, calculateJwkThumbprint, type JWK } from 'jose'
 
 /** JWS audience — identifies the purpose so a token can't be replayed elsewhere. */
 export const ATTESTATION_AUDIENCE = 'dev.koinon.forgeAccount'
-/** JWS audience for repo-ownership attestations (community metadata). */
-export const REPO_ATTESTATION_AUDIENCE = 'dev.koinon.repoMetadata'
 const ALG = 'ES256'
 
 interface LoadedKey {
@@ -94,37 +92,4 @@ export async function signForgeAttestation(input: {
 export async function getAttestationJwks(): Promise<{ keys: JWK[] }> {
   const key = await loadKey()
   return { keys: key ? [key.publicJwk] : [] }
-}
-
-/**
- * Sign an attestation proving an atproto DID had admin over a specific repo at
- * signing time. Returns `null` when no signing key is configured.
- */
-export async function signRepoAttestation(input: {
-  origin: string
-  did: string
-  provider: string
-  owner: string
-  name: string
-  host?: string
-}): Promise<{ attestation: string; attestedBy: string } | null> {
-  const key = await loadKey()
-  if (!key) return null
-
-  const claims: Record<string, unknown> = {
-    provider: input.provider,
-    owner: input.owner,
-    name: input.name
-  }
-  if (input.host) claims.host = input.host
-
-  const attestation = await new SignJWT(claims)
-    .setProtectedHeader({ alg: ALG, kid: key.kid, typ: 'JWT' })
-    .setIssuer(input.origin)
-    .setSubject(input.did)
-    .setAudience(REPO_ATTESTATION_AUDIENCE)
-    .setIssuedAt()
-    .sign(key.privateKey)
-
-  return { attestation, attestedBy: input.origin }
 }

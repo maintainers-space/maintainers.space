@@ -40,8 +40,6 @@ export default defineEventHandler(async (event) => {
     state?: string
     returnTo?: string
     did?: string
-    claimOwner?: string
-    claimName?: string
   } = {}
   try {
     stored = cookieRaw ? JSON.parse(cookieRaw) : {}
@@ -109,16 +107,6 @@ export default defineEventHandler(async (event) => {
         /* attestation is best-effort; the link is still stored */
       }
     }
-
-    await applyRepoClaim({
-      fragment,
-      origin,
-      provider: providerId,
-      token: res.access_token,
-      did: stored.did,
-      claimOwner: stored.claimOwner,
-      claimName: stored.claimName
-    })
 
     return sendRedirect(event, `/oauth/${providerId}#${fragment.toString()}`)
   } catch {

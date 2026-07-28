@@ -3,12 +3,10 @@ import { identityResolver } from './identity'
 
 // Granular atproto OAuth scope — request only the collections koinon writes.
 //
-// koinon's authenticated PDS writes are limited to three record collections:
+// koinon's authenticated PDS writes are limited to two record collections:
 //
 //   atproto                        → identity only (required base scope)
 //   repo:dev.koinon.forgeAccount   → linked forge accounts (useForgeAccounts.ts)
-//   repo:dev.koinon.repoMetadata   → repo community links / metadata
-//                                    (useRepoMetadataEditor.ts)
 //   repo:sh.tangled.feed.star      → starring Tangled repos (useRepoStar.ts)
 //
 // A bare `repo:<nsid>` (no `action=`) grants create/update/delete for that one
@@ -21,13 +19,11 @@ import { identityResolver } from './identity'
 //
 // NOTE: this string MUST stay in sync with the `scope` in
 // public/client-metadata.json (the production client_id document) and with the
-// collection constants FORGE_ACCOUNT_COLLECTION (useForgeAccounts.ts),
-// REPO_METADATA_COLLECTION (lib/repo-metadata.ts) and TANGLED_STAR_COLLECTION
-// (useRepoStar.ts).
+// collection constants FORGE_ACCOUNT_COLLECTION (useForgeAccounts.ts) and
+// TANGLED_STAR_COLLECTION (useRepoStar.ts).
 export const OAUTH_SCOPE = [
   'atproto',
   'repo:dev.koinon.forgeAccount',
-  'repo:dev.koinon.repoMetadata',
   'repo:sh.tangled.feed.star'
 ].join(' ')
 

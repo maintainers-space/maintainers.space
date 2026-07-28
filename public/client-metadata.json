@@ -3,7 +3,7 @@
   "client_name": "Koinon",
   "client_uri": "https://koinon.felixs.dev",
   "redirect_uris": ["https://koinon.felixs.dev/oauth/callback"],
-  "scope": "atproto repo:dev.koinon.forgeAccount repo:dev.koinon.repoMetadata repo:sh.tangled.feed.star",
+  "scope": "atproto repo:dev.koinon.forgeAccount repo:sh.tangled.feed.star",
   "grant_types": ["authorization_code", "refresh_token"],
   "response_types": ["code"],
   "token_endpoint_auth_method": "none",

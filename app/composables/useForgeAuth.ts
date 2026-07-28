@@ -143,7 +143,6 @@ export function useForgeAuth(providerId: ForgeId) {
   const { get, set, remove } = useForgeTokens()
   const { did, restoring } = useAuth()
   const { link } = useForgeAccounts()
-  const { finishClaim } = useRepoMetadataEditor()
   const toast = useToast()
 
   const isConnected = computed(() => !!get(providerId))
@@ -205,8 +204,6 @@ export function useForgeAuth(providerId: ForgeId) {
         })
       })
     }
-
-    await finishClaim(providerId, params)
 
     const returnTo = params.get('return')
     return returnTo && returnTo.startsWith('/') && !returnTo.startsWith('//')

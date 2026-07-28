@@ -32,23 +32,14 @@ export default defineEventHandler((event) => {
   // and a user can only write the resulting record to their own repo.
   const rawDid = getQuery(event).did
   const did = typeof rawDid === 'string' && rawDid.startsWith('did:') ? rawDid : ''
-  const claimOwner =
-    typeof getQuery(event).claimOwner === 'string' ? String(getQuery(event).claimOwner) : undefined
-  const claimName =
-    typeof getQuery(event).claimName === 'string' ? String(getQuery(event).claimName) : undefined
 
-  setCookie(
-    event,
-    `oauth_${providerId}`,
-    JSON.stringify({ state, returnTo, did, claimOwner, claimName }),
-    {
-      httpOnly: true,
-      sameSite: 'lax',
-      secure: origin.startsWith('https:'),
-      path: '/',
-      maxAge: 600
-    }
-  )
+  setCookie(event, `oauth_${providerId}`, JSON.stringify({ state, returnTo, did }), {
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: origin.startsWith('https:'),
+    path: '/',
+    maxAge: 600
+  })
 
   const authorize = new URL(provider.authorizeUrl)
   authorize.searchParams.set('client_id', credentials.clientId)
