@@ -15,6 +15,7 @@ import type {
   ForgeInboxItem,
   ForgeIssue,
   ForgeIssueDetail,
+  ForgeJobLog,
   ForgeMergeResult,
   ForgeMyWork,
   ForgeNotification,
@@ -32,6 +33,7 @@ import type {
 } from '~/types/forge'
 
 import { getForgeToken } from '~/lib/forges/token-store'
+import { parseActionsRunnerLog } from '~/lib/forges/actions-log'
 
 /** Config for one Gitea-flavored instance (Gitea itself, or a fork like Forgejo). */
 export interface GiteaFamilyConfig {
@@ -1155,6 +1157,18 @@ export function createGiteaFamilyProvider(config: GiteaFamilyConfig): ForgeProvi
         ).catch(() => [])
       ])
       return { ...mapActionRun(run), jobs: (jobs ?? []).map(mapActionJob) }
+    },
+
+    async getActionJobLog(repo, jobId, opts): Promise<ForgeJobLog | null> {
+      try {
+        const text = await $fetch<string>(
+          `${API}/repos/${repo.owner}/${repo.name}/actions/jobs/${jobId}/logs`,
+          { headers: headers(opts), responseType: 'text', signal: opts?.signal }
+        )
+        return parseActionsRunnerLog(text)
+      } catch {
+        return null
+      }
     },
 
     async searchRepos(q, opts): Promise<Paginated<ForgeRepo>> {
