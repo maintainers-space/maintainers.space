@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import type { DropdownMenuItem } from '@nuxt/ui'
+import AppearanceModal from '~/components/AppearanceModal.vue'
 
 withDefaults(defineProps<{ collapsed?: boolean }>(), { collapsed: false })
 
 const { profile, did, isAuthenticated, logout } = useAuth()
-const colorMode = useColorMode()
+const overlay = useOverlay()
+const appearanceModal = overlay.create(AppearanceModal)
 
 const displayName = computed(() => profile.value?.displayName || profile.value?.handle || 'Account')
 const profileHandle = computed(() => profile.value?.handle || did.value || '')
@@ -35,30 +37,10 @@ const items = computed<DropdownMenuItem[][]>(() => {
   groups.push([
     {
       label: 'Appearance',
-      icon: colorMode.value === 'dark' ? 'i-lucide-moon' : 'i-lucide-sun',
-      children: [
-        {
-          label: 'Light',
-          icon: 'i-lucide-sun',
-          onSelect: () => {
-            colorMode.preference = 'light'
-          }
-        },
-        {
-          label: 'Dark',
-          icon: 'i-lucide-moon',
-          onSelect: () => {
-            colorMode.preference = 'dark'
-          }
-        },
-        {
-          label: 'System',
-          icon: 'i-lucide-monitor',
-          onSelect: () => {
-            colorMode.preference = 'system'
-          }
-        }
-      ]
+      icon: 'i-lucide-palette',
+      onSelect: () => {
+        appearanceModal.open()
+      }
     }
   ])
   groups.push([
