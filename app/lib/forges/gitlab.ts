@@ -725,7 +725,8 @@ export const gitlabProvider: ForgeProvider = {
     userSearch: true,
     discussionSearch: false,
     star: true,
-    mergeQueue: true
+    mergeQueue: true,
+    reactions: false
   },
   webUrl: (owner, repo) => `${WEB}/${owner}/${repo}`,
   ownerWebUrl: (owner) => `${WEB}/${owner}`,

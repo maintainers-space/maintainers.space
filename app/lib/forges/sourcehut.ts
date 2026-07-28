@@ -280,7 +280,8 @@ export const sourcehutProvider: ForgeProvider = {
     userSearch: false,
     discussionSearch: false,
     star: false,
-    mergeQueue: false
+    mergeQueue: false,
+    reactions: false
   },
   webUrl: (owner, repo) => `${WEB}/~${stripTilde(owner)}/${repo}`,
   ownerWebUrl: (owner) => `${WEB}/~${stripTilde(owner)}`,

@@ -192,6 +192,33 @@ export interface ForgeIssue {
   ref?: Record<string, unknown>
 }
 
+/** The classic 8-emoji reaction set — a subset every reacting forge (GitHub/GitLab/Gitea) accepts. */
+export type ForgeReactionKind =
+  | 'thumbsup'
+  | 'thumbsdown'
+  | 'laugh'
+  | 'hooray'
+  | 'confused'
+  | 'heart'
+  | 'rocket'
+  | 'eyes'
+
+export interface ForgeReactionSummary {
+  kind: ForgeReactionKind
+  count: number
+  viewerReacted: boolean
+}
+
+export type ForgeReactionTargetKind = 'issue' | 'pull' | 'discussion' | 'comment'
+
+export interface ForgeReactionTarget {
+  kind: ForgeReactionTargetKind
+  /** The issue/PR/discussion id; for a comment target, its parent thread's id. */
+  threadId: string
+  /** Set when reacting to a specific comment/reply rather than the thread's root body. */
+  commentId?: string
+}
+
 export interface ForgeComment {
   id: string
   author?: ForgeUser
@@ -200,10 +227,12 @@ export interface ForgeComment {
   url?: string | null
   /** Replies to this comment (GitHub Discussions only — 2 levels, no reply-to-reply). */
   replies?: ForgeComment[]
+  reactions?: ForgeReactionSummary[]
 }
 
 export interface ForgeIssueDetail extends ForgeIssue {
   comments: ForgeComment[]
+  reactions?: ForgeReactionSummary[]
 }
 
 export type ForgePullState = 'open' | 'closed' | 'merged' | 'draft'
@@ -233,6 +262,7 @@ export interface ForgePullDetail extends ForgePull {
   stat?: ForgeDiffStat
   commitCount?: number
   comments: ForgeComment[]
+  reactions?: ForgeReactionSummary[]
 }
 
 /** A single pull/merge request waiting in a merge queue (GitHub) or merge train (GitLab). */
@@ -300,6 +330,7 @@ export interface ForgeDiscussion {
 
 export interface ForgeDiscussionDetail extends ForgeDiscussion {
   comments: ForgeComment[]
+  reactions?: ForgeReactionSummary[]
 }
 
 export type ForgeRunStatus =
@@ -497,6 +528,8 @@ export interface ForgeCapabilities {
   star: boolean
   /** Repository supports a merge queue (GitHub) or merge train (GitLab). */
   mergeQueue: boolean
+  /** The signed-in viewer can react to issues/PRs/discussions and their comments. */
+  reactions: boolean
 }
 
 export interface IssueListOptions extends ForgePageOptions {
@@ -635,6 +668,18 @@ export interface ForgeProvider {
     repo: RepoLocator,
     id: string,
     input: ForgeReviewInput,
+    opts?: ForgeReadOptions
+  ) => Promise<void>
+  addReaction?: (
+    repo: RepoLocator,
+    target: ForgeReactionTarget,
+    kind: ForgeReactionKind,
+    opts?: ForgeReadOptions
+  ) => Promise<void>
+  removeReaction?: (
+    repo: RepoLocator,
+    target: ForgeReactionTarget,
+    kind: ForgeReactionKind,
     opts?: ForgeReadOptions
   ) => Promise<void>
   /** Merge a pull request. Falls back across merge methods the repo allows. */

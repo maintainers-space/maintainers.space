@@ -894,7 +894,8 @@ export function createGiteaFamilyProvider(config: GiteaFamilyConfig): ForgeProvi
       userSearch: true,
       discussionSearch: false,
       star: true,
-      mergeQueue: false
+      mergeQueue: false,
+      reactions: false
     },
     webUrl: (owner, repo) => `${WEB}/${owner}/${repo}`,
     ownerWebUrl: (owner) => `${WEB}/${owner}`,

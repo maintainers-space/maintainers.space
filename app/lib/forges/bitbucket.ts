@@ -426,7 +426,8 @@ export const bitbucketProvider: ForgeProvider = {
     userSearch: false,
     discussionSearch: false,
     star: false,
-    mergeQueue: false
+    mergeQueue: false,
+    reactions: false
   },
   webUrl: (owner, repo) => `${WEB}/${owner}/${repo}`,
   ownerWebUrl: (owner) => `${WEB}/${owner}`,

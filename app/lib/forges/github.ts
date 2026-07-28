@@ -935,7 +935,8 @@ export const githubProvider: ForgeProvider = {
     userSearch: true,
     discussionSearch: true,
     star: true,
-    mergeQueue: true
+    mergeQueue: true,
+    reactions: false
   },
   webUrl: (owner, repo) => `https://github.com/${owner}/${repo}`,
   ownerWebUrl: (owner) => `https://github.com/${owner}`,
