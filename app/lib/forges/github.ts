@@ -15,6 +15,7 @@ import type {
   ForgeInboxItem,
   ForgeIssue,
   ForgeIssueDetail,
+  ForgeJobLog,
   ForgeMergeQueueEntry,
   ForgeMergeQueueStats,
   ForgeMergeResult,
@@ -35,6 +36,7 @@ import type {
 } from '~/types/forge'
 
 import { getForgeToken } from '~/lib/forges/token-store'
+import { parseActionsRunnerLog } from '~/lib/forges/actions-log'
 
 const API = 'https://api.github.com'
 
@@ -1216,6 +1218,20 @@ export const githubProvider: ForgeProvider = {
       ).catch(() => ({ jobs: [] }))
     ])
     return { ...mapRun(run), jobs: (jobs.jobs ?? []).map(mapJob) }
+  },
+
+  async getActionJobLog(repo, jobId, opts): Promise<ForgeJobLog | null> {
+    // Redirects to a blob-storage URL whose CORS behavior isn't guaranteed for
+    // a browser-side fetch; fall back to null (UI links out to job.url) on any failure.
+    try {
+      const text = await $fetch<string>(
+        `${API}/repos/${repo.owner}/${repo.name}/actions/jobs/${jobId}/logs`,
+        { headers: ghHeaders(opts), responseType: 'text', signal: opts?.signal }
+      )
+      return parseActionsRunnerLog(text)
+    } catch {
+      return null
+    }
   },
 
   async listDiscussions(repo, opts): Promise<Paginated<ForgeDiscussion>> {
