@@ -198,6 +198,8 @@ export interface ForgeComment {
   body: string
   createdAt?: string | null
   url?: string | null
+  /** Replies to this comment (GitHub Discussions only — 2 levels, no reply-to-reply). */
+  replies?: ForgeComment[]
 }
 
 export interface ForgeIssueDetail extends ForgeIssue {

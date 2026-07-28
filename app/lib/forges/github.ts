@@ -335,6 +335,8 @@ interface GhGraphqlDiscussionCommentNode {
   createdAt: string
   url: string
   author?: GhGraphqlActor | null
+  /** Present on the single-discussion detail query (GitHub Discussions are exactly 2 levels deep). */
+  replies?: { nodes?: GhGraphqlDiscussionCommentNode[] }
 }
 
 /**
@@ -491,6 +493,24 @@ function mapDiscussion(d: GhGraphqlDiscussionNode): ForgeDiscussion {
     createdAt: d.createdAt,
     url: d.url,
     answered: !!d.answerChosenAt
+  }
+}
+
+function mapDiscussionComment(c: GhGraphqlDiscussionCommentNode): ForgeComment {
+  return {
+    id: String(c.id),
+    author: c.author
+      ? {
+          provider: 'github',
+          login: c.author.login ?? '',
+          avatarUrl: c.author.avatarUrl,
+          url: c.author.url
+        }
+      : undefined,
+    body: c.body ?? '',
+    createdAt: c.createdAt,
+    url: c.url,
+    replies: c.replies?.nodes?.map(mapDiscussionComment)
   }
 }
 
@@ -1270,7 +1290,8 @@ export const githubProvider: ForgeProvider = {
       repository(owner:$owner,name:$name){
         discussion(number:$number){ number title body createdAt updatedAt url answerChosenAt
           category{name} author{login avatarUrl url}
-          comments(first:50){ nodes{ id body createdAt url author{login avatarUrl url} } } }
+          comments(first:50){ nodes{ id body createdAt url author{login avatarUrl url}
+            replies(first:50){ nodes{ id body createdAt url author{login avatarUrl url} } } } } }
       }
     }`
     const res = await ghGraphql<GhGraphqlDiscussionDetailResponse>(
@@ -1283,22 +1304,7 @@ export const githubProvider: ForgeProvider = {
     return {
       ...mapDiscussion(d),
       body: d.body,
-      comments: (d.comments?.nodes ?? []).map(
-        (c): ForgeComment => ({
-          id: String(c.id),
-          author: c.author
-            ? {
-                provider: 'github',
-                login: c.author.login ?? '',
-                avatarUrl: c.author.avatarUrl,
-                url: c.author.url
-              }
-            : undefined,
-          body: c.body ?? '',
-          createdAt: c.createdAt,
-          url: c.url
-        })
-      )
+      comments: (d.comments?.nodes ?? []).map(mapDiscussionComment)
     }
   },
 
