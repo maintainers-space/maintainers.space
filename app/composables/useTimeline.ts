@@ -38,17 +38,24 @@ function dedupe(items: ForgeContribution[]): ForgeContribution[] {
 
 /**
  * Turn a pooled friends feed into a real chronological timeline: newest first,
- * but capped per author so one prolific person can't flood the feed, and bounded
- * to a sane maximum. Low-signal noise (stars) is already filtered upstream.
+ * capped per author so one prolific person can't flood the feed, and capped per
+ * provider so a single forge (GitHub's events API is simply chattier than the
+ * others) can't crowd out the rest — each is capped to at most half the feed.
+ * Bounded to a sane maximum. Low-signal noise (stars) is already filtered upstream.
  */
 function selectFriends(items: ForgeContribution[], cap = 6, max = 80): ForgeContribution[] {
   const sorted = [...items].sort((a, b) => b.createdAt.localeCompare(a.createdAt))
   const perAuthor = new Map<string, number>()
+  const perProvider = new Map<string, number>()
+  const providerCap = Math.max(1, Math.ceil(max / 2))
   const out: ForgeContribution[] = []
   for (const it of sorted) {
-    const n = perAuthor.get(it.actor.login) ?? 0
-    if (n >= cap) continue
-    perAuthor.set(it.actor.login, n + 1)
+    const authorCount = perAuthor.get(it.actor.login) ?? 0
+    if (authorCount >= cap) continue
+    const providerCount = perProvider.get(it.provider) ?? 0
+    if (providerCount >= providerCap) continue
+    perAuthor.set(it.actor.login, authorCount + 1)
+    perProvider.set(it.provider, providerCount + 1)
     out.push(it)
     if (out.length >= max) break
   }
