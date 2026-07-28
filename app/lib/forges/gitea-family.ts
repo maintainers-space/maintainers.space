@@ -23,13 +23,17 @@ import type {
   ForgePullDetail,
   ForgePullState,
   ForgeProvider,
+  ForgeReactionKind,
+  ForgeReactionSummary,
+  ForgeReactionTarget,
   ForgeReadOptions,
   ForgeRepo,
   ForgeRunStatus,
   ForgeSearchOptions,
   ForgeTreeEntry,
   ForgeUser,
-  Paginated
+  Paginated,
+  RepoLocator
 } from '~/types/forge'
 
 import { getForgeToken } from '~/lib/forges/token-store'
@@ -175,6 +179,11 @@ interface GfCommentResponse {
   body?: string | null
   created_at?: string | null
   html_url?: string | null
+}
+
+interface GfReactionResponse {
+  content: string
+  user?: GfUserResponse | null
 }
 
 interface GfCommitResponse {
@@ -323,6 +332,46 @@ function errStatus(e: unknown): number | undefined {
 
 function loginOf(u: GfUserResponse | null | undefined): string {
   return String(u?.login ?? u?.username ?? '')
+}
+
+/** Gitea's default reaction content set mirrors GitHub's — same strings, no per-instance mapping needed. */
+const GF_REACTION_CONTENT: Record<ForgeReactionKind, string> = {
+  thumbsup: '+1',
+  thumbsdown: '-1',
+  laugh: 'laugh',
+  hooray: 'hooray',
+  confused: 'confused',
+  heart: 'heart',
+  rocket: 'rocket',
+  eyes: 'eyes'
+}
+
+const GF_REACTION_FROM_CONTENT: Record<string, ForgeReactionKind> = Object.fromEntries(
+  (Object.entries(GF_REACTION_CONTENT) as [ForgeReactionKind, string][]).map(([kind, content]) => [
+    content,
+    kind
+  ])
+)
+
+function mapGfReactions(
+  list: GfReactionResponse[],
+  myLogin: string | null
+): ForgeReactionSummary[] | undefined {
+  const byKind = new Map<ForgeReactionKind, { count: number; mine: boolean }>()
+  for (const r of list) {
+    const kind = GF_REACTION_FROM_CONTENT[r.content]
+    if (!kind) continue
+    const entry = byKind.get(kind) ?? { count: 0, mine: false }
+    entry.count++
+    if (myLogin && loginOf(r.user).toLowerCase() === myLogin.toLowerCase()) entry.mine = true
+    byKind.set(kind, entry)
+  }
+  if (!byKind.size) return undefined
+  return Array.from(byKind.entries()).map(([kind, v]) => ({
+    kind,
+    count: v.count,
+    viewerReacted: v.mine
+  }))
 }
 
 function decodeBase64Utf8(b64: string): string {
@@ -874,6 +923,27 @@ export function createGiteaFamilyProvider(config: GiteaFamilyConfig): ForgeProvi
     })) as T
   }
 
+  const reactionLoginCache = new Map<string, string>()
+
+  /** Only used to compute `viewerReacted` for display — Gitea's own delete-reaction call needs no id. */
+  async function gfCurrentLogin(opts?: ForgeReadOptions): Promise<string | null> {
+    const token = opts?.token ?? getForgeToken(providerId)
+    if (!token) return null
+    const cached = reactionLoginCache.get(token)
+    if (cached) return cached
+    const me = await gfFetch<GfUserResponse | null>('/user', undefined, opts).catch(() => null)
+    const login = loginOf(me)
+    if (login) reactionLoginCache.set(token, login)
+    return login || null
+  }
+
+  function gfReactionsPath(repo: RepoLocator, target: ForgeReactionTarget): string {
+    const base = `/repos/${repo.owner}/${repo.name}`
+    return target.commentId
+      ? `${base}/issues/comments/${target.commentId}/reactions`
+      : `${base}/issues/${target.threadId}/reactions`
+  }
+
   const provider: ForgeProvider = {
     id: providerId,
     label: config.label,
@@ -895,7 +965,7 @@ export function createGiteaFamilyProvider(config: GiteaFamilyConfig): ForgeProvi
       discussionSearch: false,
       star: true,
       mergeQueue: false,
-      reactions: false
+      reactions: true
     },
     webUrl: (owner, repo) => `${WEB}/${owner}/${repo}`,
     ownerWebUrl: (owner) => `${WEB}/${owner}`,
@@ -1048,15 +1118,25 @@ export function createGiteaFamilyProvider(config: GiteaFamilyConfig): ForgeProvi
     },
 
     async getIssue(repo, id, opts): Promise<ForgeIssueDetail> {
-      const [issue, comments] = await Promise.all([
+      const [issue, comments, reactions, myLogin] = await Promise.all([
         gfFetch<GfIssueResponse>(`/repos/${repo.owner}/${repo.name}/issues/${id}`, undefined, opts),
         gfFetch<GfCommentResponse[]>(
           `/repos/${repo.owner}/${repo.name}/issues/${id}/comments`,
           { limit: 100 },
           opts
-        ).catch(() => [])
+        ).catch(() => []),
+        gfFetch<GfReactionResponse[]>(
+          `/repos/${repo.owner}/${repo.name}/issues/${id}/reactions`,
+          undefined,
+          opts
+        ).catch(() => []),
+        gfCurrentLogin(opts)
       ])
-      return { ...mapIssue(issue), comments: (comments ?? []).map(mapComment) }
+      return {
+        ...mapIssue(issue),
+        comments: (comments ?? []).map(mapComment),
+        reactions: mapGfReactions(reactions ?? [], myLogin)
+      }
     },
 
     async listPulls(repo, opts) {
@@ -1083,7 +1163,7 @@ export function createGiteaFamilyProvider(config: GiteaFamilyConfig): ForgeProvi
     },
 
     async getPull(repo, id, opts): Promise<ForgePullDetail> {
-      const [pr, comments, commits] = await Promise.all([
+      const [pr, comments, commits, reactions, myLogin] = await Promise.all([
         gfFetch<GfPullResponse>(`/repos/${repo.owner}/${repo.name}/pulls/${id}`, undefined, opts),
         gfFetch<GfCommentResponse[]>(
           `/repos/${repo.owner}/${repo.name}/issues/${id}/comments`,
@@ -1094,13 +1174,20 @@ export function createGiteaFamilyProvider(config: GiteaFamilyConfig): ForgeProvi
           `/repos/${repo.owner}/${repo.name}/pulls/${id}/commits`,
           { limit: 100 },
           opts
-        ).catch(() => [])
+        ).catch(() => []),
+        gfFetch<GfReactionResponse[]>(
+          `/repos/${repo.owner}/${repo.name}/issues/${id}/reactions`,
+          undefined,
+          opts
+        ).catch(() => []),
+        gfCurrentLogin(opts)
       ])
       return {
         ...mapPull(pr),
         stat: { additions: pr.additions, deletions: pr.deletions, filesChanged: pr.changed_files },
         commitCount: pr.commits ?? commits.length,
-        comments: (comments ?? []).map(mapComment)
+        comments: (comments ?? []).map(mapComment),
+        reactions: mapGfReactions(reactions ?? [], myLogin)
       }
     },
 
@@ -1361,6 +1448,25 @@ export function createGiteaFamilyProvider(config: GiteaFamilyConfig): ForgeProvi
         method: 'POST',
         headers: headers(opts),
         body,
+        signal: opts?.signal
+      })
+    },
+
+    async addReaction(repo, target, kind, opts): Promise<void> {
+      await $fetch(`${API}${gfReactionsPath(repo, target)}`, {
+        method: 'POST',
+        headers: headers(opts),
+        body: { content: GF_REACTION_CONTENT[kind] },
+        signal: opts?.signal
+      })
+    },
+
+    async removeReaction(repo, target, kind, opts): Promise<void> {
+      // Gitea deletes the caller's own reaction by content — no reaction id needed.
+      await $fetch(`${API}${gfReactionsPath(repo, target)}`, {
+        method: 'DELETE',
+        headers: headers(opts),
+        body: { content: GF_REACTION_CONTENT[kind] },
         signal: opts?.signal
       })
     },
