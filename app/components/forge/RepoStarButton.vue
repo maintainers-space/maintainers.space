@@ -1,12 +1,24 @@
 <script setup lang="ts">
 import type { ForgeRepo } from '~/types/forge'
+import ConfirmModal from '~/components/ConfirmModal.vue'
 
 const props = defineProps<{ repo: ForgeRepo }>()
 
 const { starred, stars, pending, loaded, canStar, toggle } = useRepoStar(toRef(props, 'repo'))
 const toast = useToast()
+const overlay = useOverlay()
+const confirmUnstar = overlay.create(ConfirmModal)
 
 async function onClick(): Promise<void> {
+  if (starred.value) {
+    const ok = await confirmUnstar.open({
+      title: 'Unstar this repository?',
+      description: `You won't see ${props.repo.name} in your starred repos anymore.`,
+      confirmLabel: 'Unstar',
+      color: 'error'
+    }).result
+    if (!ok) return
+  }
   try {
     await toggle()
   } catch (e) {
