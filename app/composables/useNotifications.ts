@@ -40,12 +40,6 @@ export interface CiFailureGroup {
   items: ForgeInboxItem[]
 }
 
-/** Extract a human message from an ofetch-style error without leaking `any`. */
-function errMessage(e: unknown): string | undefined {
-  const x = e as { data?: { message?: string }; message?: string } | null | undefined
-  return x?.data?.message ?? x?.message
-}
-
 /** Per-kind/reason base weight for the importance score — higher sorts first. */
 const KIND_WEIGHT: Record<ForgeInboxItem['kind'], number> = {
   mention: 100,
@@ -288,11 +282,13 @@ export function useNotifications() {
       toast.add({ title: 'Reply posted', color: 'success', icon: 'i-lucide-check' })
       return true
     } catch (e) {
+      const hint = describeForgeError(e)
       toast.add({
         title: 'Could not post reply',
-        description: errMessage(e),
+        description: hint.description,
         color: 'error',
-        icon: 'i-lucide-circle-alert'
+        icon: 'i-lucide-circle-alert',
+        actions: hint.to ? [{ label: hint.linkLabel, to: hint.to, target: '_blank' }] : undefined
       })
       return false
     }
@@ -320,11 +316,13 @@ export function useNotifications() {
       })
       return true
     } catch (e) {
+      const hint = describeForgeError(e)
       toast.add({
         title: 'Could not approve & merge',
-        description: errMessage(e),
+        description: hint.description,
         color: 'error',
-        icon: 'i-lucide-circle-alert'
+        icon: 'i-lucide-circle-alert',
+        actions: hint.to ? [{ label: hint.linkLabel, to: hint.to, target: '_blank' }] : undefined
       })
       return false
     } finally {

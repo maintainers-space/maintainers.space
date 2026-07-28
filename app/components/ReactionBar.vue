@@ -56,13 +56,13 @@ async function toggle(kind: ForgeReactionKind): Promise<void> {
       }
     }
   } catch (e) {
+    const hint = describeForgeError(e)
     toast.add({
       title: 'Could not update reaction',
-      description:
-        (e as { data?: { message?: string }; message?: string })?.data?.message ??
-        (e as { message?: string })?.message,
+      description: hint.description,
       color: 'error',
-      icon: 'i-lucide-circle-alert'
+      icon: 'i-lucide-circle-alert',
+      actions: hint.to ? [{ label: hint.linkLabel, to: hint.to, target: '_blank' }] : undefined
     })
   } finally {
     pending.value[kind] = false

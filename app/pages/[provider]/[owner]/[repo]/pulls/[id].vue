@@ -101,13 +101,13 @@ async function submitComment(): Promise<void> {
     toast.add({ title: 'Comment posted', color: 'success', icon: 'i-lucide-check' })
     await refresh()
   } catch (e) {
+    const hint = describeForgeError(e)
     toast.add({
       title: 'Could not post comment',
-      description:
-        (e as { data?: { message?: string }; message?: string })?.data?.message ??
-        (e as { message?: string })?.message,
+      description: hint.description,
       color: 'error',
-      icon: 'i-lucide-circle-alert'
+      icon: 'i-lucide-circle-alert',
+      actions: hint.to ? [{ label: hint.linkLabel, to: hint.to, target: '_blank' }] : undefined
     })
   } finally {
     postingComment.value = false
@@ -126,13 +126,13 @@ async function submitReview(event: 'APPROVE' | 'REQUEST_CHANGES' | 'COMMENT'): P
     toast.add({ title: 'Review submitted', color: 'success', icon: 'i-lucide-check' })
     await refresh()
   } catch (e) {
+    const hint = describeForgeError(e)
     toast.add({
       title: 'Could not submit review',
-      description:
-        (e as { data?: { message?: string }; message?: string })?.data?.message ??
-        (e as { message?: string })?.message,
+      description: hint.description,
       color: 'error',
-      icon: 'i-lucide-circle-alert'
+      icon: 'i-lucide-circle-alert',
+      actions: hint.to ? [{ label: hint.linkLabel, to: hint.to, target: '_blank' }] : undefined
     })
   } finally {
     reviewSubmitting.value = ''
@@ -148,13 +148,13 @@ async function onDiffComment(payload: { path: string; line: number; body: string
     })
     toast.add({ title: 'Comment added to the diff', color: 'success', icon: 'i-lucide-check' })
   } catch (e) {
+    const hint = describeForgeError(e)
     toast.add({
       title: 'Could not add comment',
-      description:
-        (e as { data?: { message?: string }; message?: string })?.data?.message ??
-        (e as { message?: string })?.message,
+      description: hint.description,
       color: 'error',
-      icon: 'i-lucide-circle-alert'
+      icon: 'i-lucide-circle-alert',
+      actions: hint.to ? [{ label: hint.linkLabel, to: hint.to, target: '_blank' }] : undefined
     })
   }
 }
