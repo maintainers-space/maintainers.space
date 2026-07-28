@@ -64,6 +64,26 @@ function applyAccent(id: string): void {
   ) as typeof appConfig.ui.badge.compoundVariants
 }
 
+/**
+ * A small rounded-square "branch merge" glyph tinted to the given accent —
+ * mirrors AppLogo.vue's icon so the browser tab matches the sidebar mark.
+ * Swap the inner `<path>`/`<circle>`s here once the real koinon logo lands.
+ */
+export function accentFaviconDataUri(accentId: string): string {
+  const option = ACCENT_COLORS.find((c) => c.id === accentId)
+  const bg = option?.swatch ?? '#eab308'
+  const ink = option?.needsDarkText ? '#171717' : '#ffffff'
+  const svg =
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">` +
+    `<rect width="32" height="32" rx="8" fill="${bg}"/>` +
+    `<circle cx="11" cy="8" r="2.2" fill="${ink}"/>` +
+    `<circle cx="11" cy="24" r="2.2" fill="${ink}"/>` +
+    `<circle cx="22" cy="24" r="2.2" fill="${ink}"/>` +
+    `<path d="M11 10.5V22M11 15c3 0 5 2 5 5v1" stroke="${ink}" stroke-width="2.2" fill="none" stroke-linecap="round"/>` +
+    `</svg>`
+  return `data:image/svg+xml,${encodeURIComponent(svg)}`
+}
+
 /** Accent color, shared across every component: pick once, applies everywhere. */
 export function useAccentColor() {
   function load(): void {
