@@ -35,12 +35,8 @@ function reactionTarget(commentId: string) {
       <div v-if="reactionTarget(c.id)" class="border-t border-default px-4 py-2">
         <ReactionBar :reactions="c.reactions" :target="reactionTarget(c.id)!" />
       </div>
-      <div v-if="c.replies?.length" class="space-y-3 border-t border-default bg-elevated/20 p-3">
-        <div
-          v-for="reply in c.replies"
-          :key="reply.id"
-          class="ml-4 rounded-lg border-l-2 border-default pl-4"
-        >
+      <div v-if="c.replies?.length" class="divide-y divide-default border-t border-default">
+        <div v-for="reply in c.replies" :key="reply.id" class="py-3 pr-4 pl-10">
           <header class="flex items-center gap-2 text-sm">
             <UserLink :user="reply.author" />
             <span v-if="reply.createdAt" class="text-muted"
@@ -50,9 +46,11 @@ function reactionTarget(commentId: string) {
           <div class="py-2">
             <MarkdownBody :content="reply.body" empty="No content." />
           </div>
-          <div v-if="reactionTarget(reply.id)" class="pb-2">
-            <ReactionBar :reactions="reply.reactions" :target="reactionTarget(reply.id)!" />
-          </div>
+          <ReactionBar
+            v-if="reactionTarget(reply.id)"
+            :reactions="reply.reactions"
+            :target="reactionTarget(reply.id)!"
+          />
         </div>
       </div>
     </article>
