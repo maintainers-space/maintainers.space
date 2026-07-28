@@ -74,6 +74,19 @@ const tabItems = computed(() => [
   { label: 'Files changed', icon: 'i-lucide-file-diff', value: 'files' }
 ])
 
+const filesStat = computed(() => {
+  const stat = data.value?.stat
+  if (stat && (stat.additions != null || stat.deletions != null)) return stat
+  if (!files.value) return null
+  let additions = 0
+  let deletions = 0
+  for (const f of files.value) {
+    additions += f.additions ?? 0
+    deletions += f.deletions ?? 0
+  }
+  return { additions, deletions }
+})
+
 const commentDraft = ref('')
 const postingComment = ref(false)
 const reviewDraft = ref('')
@@ -187,7 +200,17 @@ async function onDiffComment(payload: { path: string; line: number; body: string
         </div>
       </div>
 
-      <UTabs v-model="tab" :items="tabItems" :content="false" size="sm" />
+      <UTabs v-model="tab" :items="tabItems" :content="false" size="sm">
+        <template #trailing="{ item }">
+          <DiffStat
+            v-if="item.value === 'files' && filesStat"
+            :additions="filesStat.additions"
+            :deletions="filesStat.deletions"
+            :show-files="false"
+            class="ml-1"
+          />
+        </template>
+      </UTabs>
 
       <div v-show="tab === 'conversation'" class="space-y-4">
         <article class="overflow-hidden rounded-lg border border-default">
