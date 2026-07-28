@@ -4,6 +4,7 @@ import { useRepoContext } from '~/composables/useRepoContext'
 
 const { provider, owner, name, forge, locator } = useRepoContext()
 const { get: getToken } = useForgeTokens()
+const connectBanner = useDismissible('discussions-connect-github')
 const base = computed(() =>
   repoPath({ provider: provider.value, owner: owner.value, name: name.value })
 )
@@ -93,12 +94,14 @@ onMounted(load)
     </div>
 
     <UAlert
-      v-else-if="needsToken && !items.length"
+      v-else-if="needsToken && !items.length && !connectBanner.dismissed.value"
       color="neutral"
       variant="subtle"
       icon="i-lucide-key-round"
       title="Discussions need a connected GitHub account"
       description="GitHub discussions are only available through the authenticated GraphQL API."
+      close
+      @update:open="connectBanner.dismiss()"
     >
       <template #actions>
         <UButton

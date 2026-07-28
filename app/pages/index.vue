@@ -5,6 +5,7 @@ const { isAuthenticated, profile } = useAuth()
 const { recent } = useRepoVisits()
 const home = useHomeFeed()
 const following = useExplore()
+const connectBanner = useDismissible('home-connect-account')
 
 const greetingName = computed(() => {
   const p = profile.value
@@ -121,12 +122,14 @@ const examples = [
 
         <!-- Connect account prompt -->
         <UAlert
-          v-if="!home.connected.value"
+          v-if="!home.connected.value && !connectBanner.dismissed.value"
           color="primary"
           variant="subtle"
           icon="i-lucide-plug"
           title="Connect a forge account"
           description="Link GitHub or GitLab to see your open pull requests, review requests and assigned issues in one place."
+          close
+          @update:open="connectBanner.dismiss()"
         >
           <template #actions>
             <UButton
