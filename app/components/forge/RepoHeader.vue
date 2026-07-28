@@ -1,21 +1,14 @@
 <script setup lang="ts">
 import type { ForgeRepo } from '~/types/forge'
-import { getForge } from '~/lib/forges'
 
-const props = defineProps<{ repo: ForgeRepo }>()
-
-const forge = computed(() => getForge(props.repo.provider))
+defineProps<{ repo: ForgeRepo }>()
 </script>
 
 <template>
   <div class="space-y-4">
     <div class="flex flex-wrap items-start justify-between gap-3">
       <div class="min-w-0 space-y-1.5">
-        <div class="flex items-center gap-2">
-          <UBadge color="neutral" variant="subtle" size="sm">
-            <ForgeIcon :provider="repo.provider" class="size-3.5" />
-            {{ forge?.label ?? repo.provider }}
-          </UBadge>
+        <div v-if="repo.isPrivate || repo.isFork" class="flex items-center gap-2">
           <UBadge
             v-if="repo.isPrivate"
             color="neutral"
@@ -34,7 +27,8 @@ const forge = computed(() => getForge(props.repo.provider))
           />
         </div>
 
-        <h1 class="flex items-center gap-1.5 text-xl font-semibold text-highlighted">
+        <h1 class="flex items-center gap-2 text-xl font-semibold text-highlighted">
+          <ForgeIcon :provider="repo.provider" class="size-5 shrink-0 text-muted" />
           <NuxtLink :to="`/${repo.provider}/${repo.owner}`" class="text-primary hover:underline">
             {{ repo.owner }}
           </NuxtLink>

@@ -92,9 +92,6 @@ const tabs = computed(() => {
         <template #leading>
           <UDashboardSidebarCollapse />
         </template>
-        <template #trailing>
-          <ForgeIcon :provider="provider" class="size-4 text-muted" />
-        </template>
       </UDashboardNavbar>
     </template>
 
