@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { ForgeActionRun } from '~/types/forge'
+import type { ForgeActionJob, ForgeActionRun, ForgeActionStep, ForgeJobLog } from '~/types/forge'
 import { useRepoContext } from '~/composables/useRepoContext'
 
 const route = useRoute()
@@ -17,6 +17,36 @@ const { data, pending, error } = useLiveAsyncData<ForgeActionRun | null>(
   },
   { lazy: true, watch: [() => route.fullPath] }
 )
+
+const jobLogs = ref<Record<string, ForgeJobLog | null | undefined>>({})
+const jobLogLoading = ref<Record<string, boolean>>({})
+const expandedSteps = ref<Record<string, boolean>>({})
+
+function stepKey(job: ForgeActionJob, index: number): string {
+  return `${job.id}:${index}`
+}
+
+function stepLog(job: ForgeActionJob, step: ForgeActionStep): string[] | null {
+  const log = jobLogs.value[job.id]
+  if (!log) return null
+  if (log.sections) return log.sections.find((s) => s.name === step.name)?.lines ?? null
+  return log.raw ? log.raw.split(/\r?\n/) : null
+}
+
+async function toggleStep(job: ForgeActionJob, index: number): Promise<void> {
+  const key = stepKey(job, index)
+  if (expandedSteps.value[key]) {
+    delete expandedSteps.value[key]
+    return
+  }
+  expandedSteps.value[key] = true
+  if (!(job.id in jobLogs.value) && !jobLogLoading.value[job.id]) {
+    jobLogLoading.value[job.id] = true
+    jobLogs.value[job.id] =
+      (await forge.value?.getActionJobLog?.(locator.value, job.id).catch(() => null)) ?? null
+    jobLogLoading.value[job.id] = false
+  }
+}
 </script>
 
 <template>
@@ -78,19 +108,48 @@ const { data, pending, error } = useLiveAsyncData<ForgeActionRun | null>(
             }}</span>
           </div>
           <ul v-if="job.steps?.length" class="divide-y divide-default/60">
-            <li
-              v-for="(step, i) in job.steps"
-              :key="i"
-              class="flex items-center gap-2 px-4 py-2 text-sm"
-            >
-              <StateBadge :state="step.status" kind="run" size="xs" />
-              <span class="text-default">{{ step.name }}</span>
-              <span
-                v-if="formatDuration(step.startedAt, step.completedAt)"
-                class="ml-auto font-mono text-xs text-muted"
+            <li v-for="(step, i) in job.steps" :key="i" class="text-sm">
+              <button
+                type="button"
+                class="flex w-full items-center gap-2 px-4 py-2 text-left hover:bg-elevated/40"
+                @click="toggleStep(job, i)"
               >
-                {{ formatDuration(step.startedAt, step.completedAt) }}
-              </span>
+                <StateBadge :state="step.status" kind="run" size="xs" />
+                <span class="text-default">{{ step.name }}</span>
+                <span
+                  v-if="formatDuration(step.startedAt, step.completedAt)"
+                  class="ml-auto font-mono text-xs text-muted"
+                >
+                  {{ formatDuration(step.startedAt, step.completedAt) }}
+                </span>
+                <UIcon
+                  name="i-lucide-chevron-down"
+                  class="size-4 shrink-0 text-muted transition-transform"
+                  :class="{ 'rotate-180': expandedSteps[stepKey(job, i)] }"
+                />
+              </button>
+              <div
+                v-if="expandedSteps[stepKey(job, i)]"
+                class="border-t border-default bg-elevated/20 px-4 py-2"
+              >
+                <USkeleton v-if="jobLogLoading[job.id]" class="h-16 w-full" />
+                <pre
+                  v-else-if="stepLog(job, step)"
+                  class="max-h-96 overflow-auto whitespace-pre-wrap font-mono text-xs text-default"
+                  >{{ stepLog(job, step)?.join('\n') }}</pre>
+                <p v-else class="text-xs text-muted">
+                  Logs aren't available here.
+                  <a
+                    v-if="job.url"
+                    :href="job.url"
+                    target="_blank"
+                    rel="noopener"
+                    class="text-primary hover:underline"
+                  >
+                    View full log on {{ forge?.label }}
+                  </a>
+                </p>
+              </div>
             </li>
           </ul>
           <p
