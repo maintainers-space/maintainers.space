@@ -1380,13 +1380,17 @@ export const githubProvider: ForgeProvider = {
   },
 
   async getActionJobLog(repo, jobId, opts): Promise<ForgeJobLog | null> {
-    // Redirects to a blob-storage URL whose CORS behavior isn't guaranteed for
-    // a browser-side fetch; fall back to null (UI links out to job.url) on any failure.
+    // GitHub's logs endpoint redirects to blob storage whose CORS is locked to
+    // GitHub's own origin — fetch it via koinon's own server instead, where
+    // redirects are just followed server-to-server with no CORS involved.
+    const token = opts?.token ?? getForgeToken('github')
+    if (!token) return null
     try {
-      const text = await $fetch<string>(
-        `${API}/repos/${repo.owner}/${repo.name}/actions/jobs/${jobId}/logs`,
-        { headers: ghHeaders(opts), responseType: 'text', signal: opts?.signal }
-      )
+      const text = await $fetch<string>('/api/github/actions-log', {
+        query: { owner: repo.owner, repo: repo.name, jobId },
+        headers: { Authorization: `Bearer ${token}` },
+        signal: opts?.signal
+      })
       return parseActionsRunnerLog(text)
     } catch {
       return null
