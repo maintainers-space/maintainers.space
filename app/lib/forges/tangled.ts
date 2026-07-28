@@ -182,16 +182,41 @@ function tangledUser(did: string): ForgeUser {
   return { provider: 'tangled', login: did, ref: { did } }
 }
 
+function retryDelayMs(e: unknown): number | null {
+  const status = (e as { response?: { status?: number; headers?: Headers } })?.response?.status
+  if (status !== 429) return null
+  const header = (e as { response?: { headers?: Headers } })?.response?.headers?.get('retry-after')
+  const seconds = header ? Number(header) : NaN
+  return Number.isFinite(seconds) && seconds > 0 ? seconds * 1000 : 1500
+}
+
+/**
+ * Every Tangled read goes through this one call site — routing rate-limit
+ * handling through it covers the whole provider. Bobbin's rate limit is
+ * per-source-IP on koinon's own proxy, shared across every koinon user, so a
+ * single 429 is retried once (honoring `Retry-After`) rather than surfaced.
+ */
 async function bobbin<T>(
   nsid: string,
   query: Record<string, unknown>,
   opts?: ForgeReadOptions
 ): Promise<T> {
-  return (await $fetch(`${BOBBIN}/${nsid}`, {
-    query,
-    signal: opts?.signal,
-    headers: noCacheHeaders()
-  })) as T
+  try {
+    return (await $fetch(`${BOBBIN}/${nsid}`, {
+      query,
+      signal: opts?.signal,
+      headers: noCacheHeaders()
+    })) as T
+  } catch (e) {
+    const delay = retryDelayMs(e)
+    if (delay == null) throw e
+    await new Promise((resolve) => setTimeout(resolve, delay))
+    return (await $fetch(`${BOBBIN}/${nsid}`, {
+      query,
+      signal: opts?.signal,
+      headers: noCacheHeaders()
+    })) as T
+  }
 }
 
 async function listRepoRecords(did: string, opts?: ForgeReadOptions): Promise<TangledListItem[]> {

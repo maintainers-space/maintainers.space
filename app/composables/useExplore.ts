@@ -196,7 +196,9 @@ export function useExplore() {
     if (tangled?.listRepos && viewer) {
       try {
         const follows = await fetchFollows(viewer, 60)
-        const chunks = await mapLimit(follows, 6, async (f) => {
+        // Bobbin's rate limit is shared across every koinon user on the same
+        // proxy, so keep this fan-out modest rather than bursting requests.
+        const chunks = await mapLimit(follows.slice(0, 12), 3, async (f) => {
           try {
             const list = await tangled.listRepos!(f.did)
             const owner = f.handle && !f.handle.endsWith('.invalid') ? f.handle : f.did
