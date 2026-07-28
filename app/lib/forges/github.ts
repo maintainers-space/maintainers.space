@@ -1829,16 +1829,21 @@ export const githubProvider: ForgeProvider = {
     const path = ghReactionsPath(repo, target)
     const list = await $fetch<{ id: number; user?: { login?: string } }[]>(`${API}${path}`, {
       headers: ghHeaders(opts),
-      query: { content: GH_REACTION_CONTENT[kind] },
+      query: { content: GH_REACTION_CONTENT[kind], per_page: 100 },
       signal: opts?.signal
     })
     const mine = list.find((r) => r.user?.login === login)
     if (!mine) return
-    await $fetch(`${API}${path}/${mine.id}`, {
-      method: 'DELETE',
-      headers: ghHeaders(opts),
-      signal: opts?.signal
-    })
+    try {
+      await $fetch(`${API}${path}/${mine.id}`, {
+        method: 'DELETE',
+        headers: ghHeaders(opts),
+        signal: opts?.signal
+      })
+    } catch (e) {
+      // Already gone (e.g. removed elsewhere since the list above was fetched) — not an error.
+      if (errStatus(e) !== 404) throw e
+    }
   },
 
   async mergePull(repo, id, opts): Promise<ForgeMergeResult> {

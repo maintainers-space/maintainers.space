@@ -1356,17 +1356,23 @@ export const gitlabProvider: ForgeProvider = {
     const path = glAwardPath(repo, target)
     const list = await $fetch<GlAwardEmojiResponse[]>(`${API}${path}`, {
       headers: glHeaders(opts),
+      query: { per_page: 100 },
       signal: opts?.signal
     })
     const mine = list.find(
       (a) => a.name === GL_REACTION_NAME[kind] && a.user?.username === username
     )
     if (!mine) return
-    await $fetch(`${API}${path}/${mine.id}`, {
-      method: 'DELETE',
-      headers: glHeaders(opts),
-      signal: opts?.signal
-    })
+    try {
+      await $fetch(`${API}${path}/${mine.id}`, {
+        method: 'DELETE',
+        headers: glHeaders(opts),
+        signal: opts?.signal
+      })
+    } catch (e) {
+      // Already gone (e.g. removed elsewhere since the list above was fetched) — not an error.
+      if (errStatus(e) !== 404) throw e
+    }
   },
 
   async mergePull(repo, id, opts): Promise<ForgeMergeResult> {
