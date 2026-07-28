@@ -209,11 +209,12 @@ export interface ForgeReactionSummary {
   viewerReacted: boolean
 }
 
-export type ForgeReactionTargetKind = 'issue' | 'pull' | 'discussion' | 'comment'
+/** The thread type a reaction belongs to — not the specific comment (see `ForgeReactionTarget.commentId`). */
+export type ForgeReactionTargetKind = 'issue' | 'pull' | 'discussion'
 
 export interface ForgeReactionTarget {
   kind: ForgeReactionTargetKind
-  /** The issue/PR/discussion id; for a comment target, its parent thread's id. */
+  /** The issue/PR/discussion id; for a comment/reply target, its parent thread's id. */
   threadId: string
   /** Set when reacting to a specific comment/reply rather than the thread's root body. */
   commentId?: string

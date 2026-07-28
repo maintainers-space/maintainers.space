@@ -25,6 +25,9 @@ import type {
   ForgePullDetail,
   ForgePullState,
   ForgeProvider,
+  ForgeReactionKind,
+  ForgeReactionSummary,
+  ForgeReactionTarget,
   ForgeReadOptions,
   ForgeRepo,
   ForgeRunStatus,
@@ -32,7 +35,8 @@ import type {
   ForgeSearchOptions,
   ForgeTreeEntry,
   ForgeUser,
-  Paginated
+  Paginated,
+  RepoLocator
 } from '~/types/forge'
 
 import { getForgeToken } from '~/lib/forges/token-store'
@@ -95,6 +99,7 @@ interface GhIssueResponse {
   pull_request?: unknown
   /** Present on /search/issues results. */
   repository_url?: string
+  reactions?: GhReactionsResponse
 }
 
 interface GhPullResponse {
@@ -118,6 +123,18 @@ interface GhPullResponse {
   deletions?: number
   changed_files?: number
   commits?: number
+  reactions?: GhReactionsResponse
+}
+
+interface GhReactionsResponse {
+  '+1'?: number
+  '-1'?: number
+  laugh?: number
+  hooray?: number
+  confused?: number
+  heart?: number
+  rocket?: number
+  eyes?: number
 }
 
 interface GhCommentResponse {
@@ -126,6 +143,7 @@ interface GhCommentResponse {
   body?: string | null
   created_at?: string | null
   html_url?: string
+  reactions?: GhReactionsResponse
 }
 
 interface GhCommitGitActor {
@@ -329,6 +347,12 @@ interface GhGraphqlActor {
   url?: string
 }
 
+interface GhGraphqlReactionGroup {
+  content: string
+  viewerHasReacted?: boolean
+  users?: { totalCount?: number }
+}
+
 interface GhGraphqlDiscussionCommentNode {
   id: string
   body: string
@@ -337,6 +361,7 @@ interface GhGraphqlDiscussionCommentNode {
   author?: GhGraphqlActor | null
   /** Present on the single-discussion detail query (GitHub Discussions are exactly 2 levels deep). */
   replies?: { nodes?: GhGraphqlDiscussionCommentNode[] }
+  reactionGroups?: GhGraphqlReactionGroup[]
 }
 
 /**
@@ -344,6 +369,8 @@ interface GhGraphqlDiscussionCommentNode {
  * queries, which each select a slightly different subset of these fields.
  */
 interface GhGraphqlDiscussionNode {
+  /** GraphQL node id — present on the single-discussion detail query, needed to react to the root post. */
+  id?: string
   number: number
   title: string
   createdAt: string
@@ -355,6 +382,7 @@ interface GhGraphqlDiscussionNode {
   author?: GhGraphqlActor | null
   /** Present on the single-discussion detail query. */
   body?: string
+  reactionGroups?: GhGraphqlReactionGroup[]
   /** Present on the cross-repo discussion search query. */
   repository?: {
     name: string
@@ -440,6 +468,49 @@ async function ghGraphql<T>(
   return res.data as T
 }
 
+const ghLoginCache = new Map<string, string>()
+
+/** Needed to find "my" reaction id for removal — the REST reactions API has no per-viewer field. */
+async function ghCurrentLogin(opts?: ForgeReadOptions): Promise<string | null> {
+  const token = opts?.token ?? getForgeToken('github')
+  if (!token) return null
+  const cached = ghLoginCache.get(token)
+  if (cached) return cached
+  try {
+    const user = await $fetch<{ login?: string }>(`${API}/user`, {
+      headers: ghHeaders(opts),
+      signal: opts?.signal
+    })
+    if (user.login) ghLoginCache.set(token, user.login)
+    return user.login ?? null
+  } catch {
+    return null
+  }
+}
+
+/** Discussions have no REST reactions API; resolve the root post's GraphQL node id to react to it. */
+async function ghDiscussionNodeId(
+  repo: RepoLocator,
+  number: number,
+  opts?: ForgeReadOptions
+): Promise<string | null> {
+  const res = await ghGraphql<{ repository?: { discussion?: { id?: string } } }>(
+    `query($owner:String!,$name:String!,$number:Int!){
+      repository(owner:$owner,name:$name){ discussion(number:$number){ id } }
+    }`,
+    { owner: repo.owner, name: repo.name, number },
+    opts
+  )
+  return res?.repository?.discussion?.id ?? null
+}
+
+function ghReactionsPath(repo: RepoLocator, target: ForgeReactionTarget): string {
+  const base = `/repos/${repo.owner}/${repo.name}`
+  return target.commentId
+    ? `${base}/issues/comments/${target.commentId}/reactions`
+    : `${base}/issues/${target.threadId}/reactions`
+}
+
 /** Bounded-concurrency map, so notification fan-out stays responsive. */
 async function ghMapLimit<T, R>(
   items: T[],
@@ -510,7 +581,8 @@ function mapDiscussionComment(c: GhGraphqlDiscussionCommentNode): ForgeComment {
     body: c.body ?? '',
     createdAt: c.createdAt,
     url: c.url,
-    replies: c.replies?.nodes?.map(mapDiscussionComment)
+    replies: c.replies?.nodes?.map(mapDiscussionComment),
+    reactions: mapReactionGroups(c.reactionGroups)
   }
 }
 
@@ -639,13 +711,74 @@ function mapPull(r: GhPullResponse): ForgePull {
   }
 }
 
+/** REST reaction `content` values. Every reacting forge (GitHub/GitLab/Gitea) accepts this same set. */
+const GH_REACTION_CONTENT: Record<ForgeReactionKind, keyof GhReactionsResponse> = {
+  thumbsup: '+1',
+  thumbsdown: '-1',
+  laugh: 'laugh',
+  hooray: 'hooray',
+  confused: 'confused',
+  heart: 'heart',
+  rocket: 'rocket',
+  eyes: 'eyes'
+}
+
+/** GraphQL `ReactionContent` enum values, used for Discussions (Discussions have no REST reactions API). */
+const GH_REACTION_GRAPHQL: Record<ForgeReactionKind, string> = {
+  thumbsup: 'THUMBS_UP',
+  thumbsdown: 'THUMBS_DOWN',
+  laugh: 'LAUGH',
+  hooray: 'HOORAY',
+  confused: 'CONFUSED',
+  heart: 'HEART',
+  rocket: 'ROCKET',
+  eyes: 'EYES'
+}
+
+function mapReactions(r?: GhReactionsResponse): ForgeReactionSummary[] | undefined {
+  if (!r) return undefined
+  const summaries = (Object.keys(GH_REACTION_CONTENT) as ForgeReactionKind[])
+    .map(
+      (kind): ForgeReactionSummary => ({
+        kind,
+        count: r[GH_REACTION_CONTENT[kind]] ?? 0,
+        // GitHub's REST reaction summary has no per-viewer info; the reaction bar
+        // tracks "mine" optimistically from the viewer's own clicks this session.
+        viewerReacted: false
+      })
+    )
+    .filter((s) => s.count > 0)
+  return summaries.length ? summaries : undefined
+}
+
+const GH_REACTION_FROM_GRAPHQL: Record<string, ForgeReactionKind> = Object.fromEntries(
+  (Object.entries(GH_REACTION_GRAPHQL) as [ForgeReactionKind, string][]).map(([kind, content]) => [
+    content,
+    kind
+  ])
+)
+
+/** Discussions/discussion comments carry real viewer-reacted info via GraphQL, unlike the REST summary. */
+function mapReactionGroups(groups?: GhGraphqlReactionGroup[]): ForgeReactionSummary[] | undefined {
+  if (!groups?.length) return undefined
+  const summaries = groups
+    .map((g): ForgeReactionSummary | null => {
+      const kind = GH_REACTION_FROM_GRAPHQL[g.content]
+      if (!kind) return null
+      return { kind, count: g.users?.totalCount ?? 0, viewerReacted: !!g.viewerHasReacted }
+    })
+    .filter((s): s is ForgeReactionSummary => !!s && s.count > 0)
+  return summaries.length ? summaries : undefined
+}
+
 function mapComment(r: GhCommentResponse): ForgeComment {
   return {
     id: String(r.id),
     author: mapUser(r.user),
     body: r.body ?? '',
     createdAt: r.created_at ?? null,
-    url: r.html_url
+    url: r.html_url,
+    reactions: mapReactions(r.reactions)
   }
 }
 
@@ -936,7 +1069,7 @@ export const githubProvider: ForgeProvider = {
     discussionSearch: true,
     star: true,
     mergeQueue: true,
-    reactions: false
+    reactions: true
   },
   webUrl: (owner, repo) => `https://github.com/${owner}/${repo}`,
   ownerWebUrl: (owner) => `https://github.com/${owner}`,
@@ -1088,7 +1221,11 @@ export const githubProvider: ForgeProvider = {
         signal: opts?.signal
       }).catch(() => [])
     ])
-    return { ...mapIssue(issue), comments: comments.map(mapComment) }
+    return {
+      ...mapIssue(issue),
+      comments: comments.map(mapComment),
+      reactions: mapReactions(issue.reactions)
+    }
   },
 
   async listPulls(repo, opts) {
@@ -1125,7 +1262,8 @@ export const githubProvider: ForgeProvider = {
       ...mapPull(pr),
       stat: { additions: pr.additions, deletions: pr.deletions, filesChanged: pr.changed_files },
       commitCount: pr.commits,
-      comments: comments.map(mapComment)
+      comments: comments.map(mapComment),
+      reactions: mapReactions(pr.reactions)
     }
   },
 
@@ -1287,12 +1425,13 @@ export const githubProvider: ForgeProvider = {
         statusCode: 401,
         statusMessage: 'A GitHub token is required to view discussions.'
       })
+    const reactionFields = 'reactionGroups{ content viewerHasReacted users{totalCount} }'
     const query = `query($owner:String!,$name:String!,$number:Int!){
       repository(owner:$owner,name:$name){
-        discussion(number:$number){ number title body createdAt updatedAt url answerChosenAt
-          category{name} author{login avatarUrl url}
-          comments(first:50){ nodes{ id body createdAt url author{login avatarUrl url}
-            replies(first:50){ nodes{ id body createdAt url author{login avatarUrl url} } } } } }
+        discussion(number:$number){ id number title body createdAt updatedAt url answerChosenAt
+          category{name} author{login avatarUrl url} ${reactionFields}
+          comments(first:50){ nodes{ id body createdAt url author{login avatarUrl url} ${reactionFields}
+            replies(first:50){ nodes{ id body createdAt url author{login avatarUrl url} ${reactionFields} } } } } }
       }
     }`
     const res = await ghGraphql<GhGraphqlDiscussionDetailResponse>(
@@ -1305,7 +1444,8 @@ export const githubProvider: ForgeProvider = {
     return {
       ...mapDiscussion(d),
       body: d.body,
-      comments: (d.comments?.nodes ?? []).map(mapDiscussionComment)
+      comments: (d.comments?.nodes ?? []).map(mapDiscussionComment),
+      reactions: mapReactionGroups(d.reactionGroups)
     }
   },
 
@@ -1649,6 +1789,54 @@ export const githubProvider: ForgeProvider = {
       method: 'POST',
       headers: ghHeaders(opts),
       body,
+      signal: opts?.signal
+    })
+  },
+
+  async addReaction(repo, target, kind, opts): Promise<void> {
+    if (target.kind === 'discussion') {
+      const subjectId =
+        target.commentId ?? (await ghDiscussionNodeId(repo, Number(target.threadId), opts))
+      if (!subjectId) return
+      await ghGraphql(
+        `mutation($id:ID!,$content:ReactionContent!){ addReaction(input:{subjectId:$id,content:$content}){ clientMutationId } }`,
+        { id: subjectId, content: GH_REACTION_GRAPHQL[kind] },
+        opts
+      )
+      return
+    }
+    await $fetch(`${API}${ghReactionsPath(repo, target)}`, {
+      method: 'POST',
+      headers: ghHeaders(opts),
+      body: { content: GH_REACTION_CONTENT[kind] },
+      signal: opts?.signal
+    })
+  },
+
+  async removeReaction(repo, target, kind, opts): Promise<void> {
+    if (target.kind === 'discussion') {
+      const subjectId =
+        target.commentId ?? (await ghDiscussionNodeId(repo, Number(target.threadId), opts))
+      if (!subjectId) return
+      await ghGraphql(
+        `mutation($id:ID!,$content:ReactionContent!){ removeReaction(input:{subjectId:$id,content:$content}){ clientMutationId } }`,
+        { id: subjectId, content: GH_REACTION_GRAPHQL[kind] },
+        opts
+      )
+      return
+    }
+    const login = await ghCurrentLogin(opts)
+    const path = ghReactionsPath(repo, target)
+    const list = await $fetch<{ id: number; user?: { login?: string } }[]>(`${API}${path}`, {
+      headers: ghHeaders(opts),
+      query: { content: GH_REACTION_CONTENT[kind] },
+      signal: opts?.signal
+    })
+    const mine = list.find((r) => r.user?.login === login)
+    if (!mine) return
+    await $fetch(`${API}${path}/${mine.id}`, {
+      method: 'DELETE',
+      headers: ghHeaders(opts),
       signal: opts?.signal
     })
   },
