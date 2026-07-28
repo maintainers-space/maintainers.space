@@ -315,6 +315,8 @@ export interface ForgeActionStep {
   name: string
   status: ForgeRunStatus
   number?: number
+  startedAt?: string | null
+  completedAt?: string | null
 }
 
 export interface ForgeActionJob {

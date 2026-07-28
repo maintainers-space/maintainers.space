@@ -39,6 +39,19 @@ export function formatRelativeTime(input?: string | number | Date | null): strin
   return ''
 }
 
+export function formatDuration(startedAt?: string | null, completedAt?: string | null): string {
+  if (!startedAt || !completedAt) return ''
+  const ms = new Date(completedAt).getTime() - new Date(startedAt).getTime()
+  if (!Number.isFinite(ms) || ms < 0) return ''
+  const seconds = Math.round(ms / 1000)
+  if (seconds < 60) return `${seconds}s`
+  const minutes = Math.floor(seconds / 60)
+  const rem = seconds % 60
+  if (minutes < 60) return rem ? `${minutes}m ${rem}s` : `${minutes}m`
+  const hours = Math.floor(minutes / 60)
+  return `${hours}h ${minutes % 60}m`
+}
+
 export function formatDate(input?: string | number | Date | null): string {
   if (!input) return ''
   const date = new Date(input)

@@ -85,6 +85,12 @@ const { data, pending, error } = useLiveAsyncData<ForgeActionRun | null>(
             >
               <StateBadge :state="step.status" kind="run" size="xs" />
               <span class="text-default">{{ step.name }}</span>
+              <span
+                v-if="formatDuration(step.startedAt, step.completedAt)"
+                class="ml-auto font-mono text-xs text-muted"
+              >
+                {{ formatDuration(step.startedAt, step.completedAt) }}
+              </span>
             </li>
           </ul>
           <p

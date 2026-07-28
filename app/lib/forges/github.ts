@@ -187,7 +187,14 @@ interface GhActionJobResponse {
   started_at?: string | null
   completed_at?: string | null
   html_url?: string
-  steps?: { name: string; number?: number; status?: string | null; conclusion?: string | null }[]
+  steps?: {
+    name: string
+    number?: number
+    status?: string | null
+    conclusion?: string | null
+    started_at?: string | null
+    completed_at?: string | null
+  }[]
 }
 
 interface GhActionJobsListResponse {
@@ -709,7 +716,9 @@ function mapJob(j: GhActionJobResponse): ForgeActionJob {
     steps: (j.steps ?? []).map((s) => ({
       name: s.name,
       number: s.number,
-      status: ghRunStatus(s.status, s.conclusion)
+      status: ghRunStatus(s.status, s.conclusion),
+      startedAt: s.started_at ?? null,
+      completedAt: s.completed_at ?? null
     }))
   }
 }

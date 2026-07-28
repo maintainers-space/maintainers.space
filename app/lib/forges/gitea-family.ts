@@ -852,7 +852,9 @@ export function createGiteaFamilyProvider(config: GiteaFamilyConfig): ForgeProvi
         (s): ForgeActionStep => ({
           name: s.name ?? '',
           status: giteaRunStatus(s.status),
-          number: s.number
+          number: s.number,
+          startedAt: s.started ?? null,
+          completedAt: s.stopped ?? null
         })
       )
     }
