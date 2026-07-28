@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import type { EmojiEntry } from '~/utils/emoji'
+import { useEmojiAutocomplete } from '~/composables/useEmojiAutocomplete'
+
 const props = withDefaults(
   defineProps<{
     modelValue: string
@@ -32,6 +35,30 @@ const tabItems = [
 
 function textarea(): HTMLTextAreaElement | null {
   return wrapRef.value?.querySelector('textarea') ?? null
+}
+
+const emojiAutocomplete = useEmojiAutocomplete(textarea, model)
+
+function onTextareaKeydown(e: KeyboardEvent): void {
+  if (emojiAutocomplete.onKeydown(e)) return
+  if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') emit('submit')
+}
+
+const emojiQuery = ref('')
+const toolbarEmoji = computed<EmojiEntry[]>(() => searchEmoji(emojiQuery.value, 24))
+
+function insertEmoji(entry: EmojiEntry): void {
+  const ta = textarea()
+  if (!ta) return
+  const s = ta.selectionStart
+  const e = ta.selectionEnd
+  const val = model.value
+  model.value = val.slice(0, s) + entry.emoji + val.slice(e)
+  nextTick(() => {
+    ta.focus()
+    const pos = s + entry.emoji.length
+    ta.setSelectionRange(pos, pos)
+  })
 }
 
 /** Wrap the current selection with `before`/`after`, seeding `placeholder` when empty. */
@@ -111,6 +138,33 @@ const tools = [
           :disabled="disabled"
           @click="t.run"
         />
+        <UPopover>
+          <UButton
+            icon="i-lucide-smile-plus"
+            title="Emoji"
+            color="neutral"
+            variant="ghost"
+            size="xs"
+            :disabled="disabled"
+          />
+          <template #content>
+            <div class="w-56 p-2">
+              <UInput v-model="emojiQuery" placeholder="Search emoji…" size="xs" class="w-full" />
+              <div class="mt-2 grid max-h-40 grid-cols-6 gap-1 overflow-y-auto">
+                <button
+                  v-for="entry in toolbarEmoji"
+                  :key="entry.slug"
+                  type="button"
+                  class="rounded-md p-1 text-lg hover:bg-elevated"
+                  :title="entry.name"
+                  @click="insertEmoji(entry)"
+                >
+                  {{ entry.emoji }}
+                </button>
+              </div>
+            </div>
+          </template>
+        </UPopover>
       </div>
     </div>
 
@@ -123,8 +177,17 @@ const tools = [
         variant="none"
         autoresize
         class="w-full"
-        @keydown.meta.enter="emit('submit')"
-        @keydown.ctrl.enter="emit('submit')"
+        @input="emojiAutocomplete.sync"
+        @click="emojiAutocomplete.sync"
+        @blur="emojiAutocomplete.close"
+        @keydown="onTextareaKeydown"
+      />
+      <EmojiAutocompleteDropdown
+        :results="emojiAutocomplete.results.value"
+        :active-index="emojiAutocomplete.activeIndex.value"
+        :top="emojiAutocomplete.top.value"
+        :left="emojiAutocomplete.left.value"
+        @select="emojiAutocomplete.insert"
       />
     </div>
 
