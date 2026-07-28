@@ -1,8 +1,7 @@
 <script setup lang="ts">
 import type { NavigationMenuItem } from '@nuxt/ui'
-import { forgeList, getForge } from '~/lib/forges'
 
-const { isAuthenticated, profile, did } = useAuth()
+const { isAuthenticated } = useAuth()
 const { accounts, loaded: accountsLoaded, refresh: refreshAccounts } = useForgeAccounts()
 const open = ref(false)
 const paletteOpen = ref(false)
@@ -66,44 +65,6 @@ const nav = computed<NavigationMenuItem[]>(() => {
   }
   return items
 })
-
-// Links to the viewer's profile on each connected provider, in registry order
-// (OAuth-connected forges, then Tangled via its atproto handle, then AT
-// Protocol itself). The rare case where we intentionally leave the app for the
-// provider's own site.
-const external = computed<NavigationMenuItem[]>(() => {
-  const list = accounts.value ?? []
-  const out: NavigationMenuItem[] = []
-  for (const forge of forgeList) {
-    if (forge.id === 'tangled') continue // uses the atproto handle below, not a linked account
-    const account = list.find((a) => a.provider === forge.id)
-    if (!account?.username) continue
-    out.push({
-      label: forge.label,
-      icon: forge.icon,
-      to: account.profileUrl || forge.ownerWebUrl?.(account.username) || '#',
-      target: '_blank'
-    })
-  }
-  if (profile.value?.handle) {
-    const tangled = getForge('tangled')
-    out.push({
-      label: tangled?.label ?? 'Tangled',
-      icon: tangled?.icon ?? 'i-lucide-git-fork',
-      to: tangled?.ownerWebUrl?.(profile.value.handle) ?? '#',
-      target: '_blank'
-    })
-  }
-  if (did.value) {
-    out.push({
-      label: 'AT Protocol',
-      icon: 'i-simple-icons-bluesky',
-      to: `https://bsky.app/profile/${did.value}`,
-      target: '_blank'
-    })
-  }
-  return out
-})
 </script>
 
 <template>
@@ -142,15 +103,6 @@ const external = computed<NavigationMenuItem[]>(() => {
         <UNavigationMenu :collapsed="collapsed" :items="nav" orientation="vertical" tooltip />
 
         <ExploreSidebar v-if="!collapsed" />
-
-        <UNavigationMenu
-          v-if="external.length"
-          :collapsed="collapsed"
-          :items="external"
-          orientation="vertical"
-          tooltip
-          class="mt-auto"
-        />
       </template>
 
       <template #footer="{ collapsed }">
