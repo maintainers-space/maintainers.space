@@ -1,5 +1,6 @@
 import emojiByChar from 'unicode-emoji-json/data-by-emoji.json'
 import orderedEmoji from 'unicode-emoji-json/data-ordered-emoji.json'
+import type { ForgeReactionKind } from '~/types/forge'
 
 export interface EmojiEntry {
   emoji: string
@@ -24,4 +25,38 @@ export function searchEmoji(query: string, limit = 20): EmojiEntry[] {
     }
   }
   return results
+}
+
+/** The classic 8-emoji reaction set every reacting forge (GitHub/GitLab/Gitea) accepts. */
+export const REACTION_KINDS: ForgeReactionKind[] = [
+  'thumbsup',
+  'thumbsdown',
+  'laugh',
+  'hooray',
+  'confused',
+  'heart',
+  'rocket',
+  'eyes'
+]
+
+export const REACTION_EMOJI: Record<ForgeReactionKind, string> = {
+  thumbsup: '👍',
+  thumbsdown: '👎',
+  laugh: '😄',
+  hooray: '🎉',
+  confused: '😕',
+  heart: '❤️',
+  rocket: '🚀',
+  eyes: '👀'
+}
+
+export const REACTION_LABEL: Record<ForgeReactionKind, string> = {
+  thumbsup: 'thumbs up',
+  thumbsdown: 'thumbs down',
+  laugh: 'laugh',
+  hooray: 'hooray',
+  confused: 'confused',
+  heart: 'heart',
+  rocket: 'rocket',
+  eyes: 'eyes'
 }

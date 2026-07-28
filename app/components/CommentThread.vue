@@ -1,7 +1,17 @@
 <script setup lang="ts">
-import type { ForgeComment } from '~/types/forge'
+import type { ForgeComment, ForgeReactionTargetKind } from '~/types/forge'
 
-defineProps<{ comments: ForgeComment[] }>()
+const props = defineProps<{
+  comments: ForgeComment[]
+  /** Thread this comment list belongs to, for reactions. Omit to hide the reaction bar. */
+  threadKind?: ForgeReactionTargetKind
+  threadId?: string
+}>()
+
+function reactionTarget(commentId: string) {
+  if (!props.threadKind || !props.threadId) return undefined
+  return { kind: props.threadKind, threadId: props.threadId, commentId }
+}
 </script>
 
 <template>
@@ -22,6 +32,9 @@ defineProps<{ comments: ForgeComment[] }>()
       <div class="px-4 py-3">
         <MarkdownBody :content="c.body" empty="No content." />
       </div>
+      <div v-if="reactionTarget(c.id)" class="border-t border-default px-4 py-2">
+        <ReactionBar :reactions="c.reactions" :target="reactionTarget(c.id)!" />
+      </div>
       <div v-if="c.replies?.length" class="space-y-3 border-t border-default bg-elevated/20 p-3">
         <div
           v-for="reply in c.replies"
@@ -36,6 +49,9 @@ defineProps<{ comments: ForgeComment[] }>()
           </header>
           <div class="py-2">
             <MarkdownBody :content="reply.body" empty="No content." />
+          </div>
+          <div v-if="reactionTarget(reply.id)" class="pb-2">
+            <ReactionBar :reactions="reply.reactions" :target="reactionTarget(reply.id)!" />
           </div>
         </div>
       </div>
