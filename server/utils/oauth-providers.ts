@@ -13,8 +13,8 @@ export interface OAuthProviderConfig {
   scope?: string
   /** Most forges accept client id/secret in the token POST body; some require HTTP Basic auth instead. */
   tokenAuthStyle?: 'basic'
-  /** Set when the forge's OAuth app has a redirect URI fixed at registration time and rejects one on the authorize request (Sourcehut). */
-  omitRedirectUriInAuthorize?: boolean
+  /** Set when the forge's OAuth app has a redirect URI fixed at registration time and rejects one on the authorize *and* token requests (Sourcehut). */
+  fixedRedirectUri?: boolean
   /** Fetch the connecting user's forge username with the freshly-issued token, to bind a signed attestation. */
   fetchUsername: (token: string) => Promise<string>
   /** Recorded on the linked-account record for disambiguation. Omit only where adding one would change an already-shipped record key. */
@@ -101,7 +101,7 @@ export const oauthProviders: Record<string, OAuthProviderConfig> = {
     tokenAuthStyle: 'basic',
     // sr.ht OAuth clients have a single redirect URI fixed at registration time
     // and reject one being sent on the authorize request.
-    omitRedirectUriInAuthorize: true,
+    fixedRedirectUri: true,
     host: 'sr.ht',
     fetchUsername: async (token) => {
       const res = await $fetch<{ data?: { me?: { canonicalName?: string } } }>(

@@ -59,7 +59,9 @@ export default defineEventHandler(async (event) => {
     const body = new URLSearchParams({
       code: String(query.code),
       grant_type: 'authorization_code',
-      redirect_uri: redirectUri,
+      // Omitted here too when the authorize request never sent one — sending it
+      // now would no longer match "no redirect_uri was used at authorization".
+      ...(provider.fixedRedirectUri ? {} : { redirect_uri: redirectUri }),
       ...(basicAuth
         ? {}
         : { client_id: credentials.clientId, client_secret: credentials.clientSecret })

@@ -52,7 +52,7 @@ export default defineEventHandler((event) => {
 
   const authorize = new URL(provider.authorizeUrl)
   authorize.searchParams.set('client_id', credentials.clientId)
-  if (!provider.omitRedirectUriInAuthorize) {
+  if (!provider.fixedRedirectUri) {
     authorize.searchParams.set('redirect_uri', `${origin}/api/auth/${providerId}/callback`)
   }
   authorize.searchParams.set('response_type', 'code')
