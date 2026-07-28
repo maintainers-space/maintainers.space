@@ -99,6 +99,7 @@ const items = computed<DropdownMenuItem[][]>(() => {
     to="/login"
     color="primary"
     block
+    class="py-2.5"
     :square="collapsed"
     :icon="collapsed ? 'i-lucide-log-in' : undefined"
     :label="collapsed ? undefined : 'Sign in'"
