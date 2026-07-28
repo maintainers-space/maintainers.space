@@ -86,12 +86,10 @@ const { data, pending, error } = useAsyncData<ForgeDiscussionDetail | null>(
         <div class="px-4 py-3">
           <MarkdownBody :content="data.body ?? ''" empty="No content." />
         </div>
-        <div class="border-t border-default px-4 py-2">
-          <ReactionBar
-            :reactions="data.reactions"
-            :target="{ kind: 'discussion', threadId: data.id }"
-          />
-        </div>
+        <ReactionBar
+          :reactions="data.reactions"
+          :target="{ kind: 'discussion', threadId: data.id }"
+        />
       </article>
 
       <CommentThread

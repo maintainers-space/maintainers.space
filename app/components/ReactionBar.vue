@@ -72,7 +72,10 @@ async function toggle(kind: ForgeReactionKind): Promise<void> {
 </script>
 
 <template>
-  <div v-if="local.length || canReact" class="flex flex-wrap items-center gap-1.5">
+  <div
+    v-if="local.length || canReact"
+    class="flex flex-wrap items-center gap-1.5 border-t border-default px-4 py-2"
+  >
     <button
       v-for="r in local"
       :key="r.kind"

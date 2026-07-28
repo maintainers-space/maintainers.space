@@ -32,18 +32,21 @@ function reactionTarget(commentId: string) {
       <div class="px-4 py-3">
         <MarkdownBody :content="c.body" empty="No content." />
       </div>
-      <div v-if="reactionTarget(c.id)" class="border-t border-default px-4 py-2">
-        <ReactionBar :reactions="c.reactions" :target="reactionTarget(c.id)!" />
-      </div>
+      <ReactionBar
+        v-if="reactionTarget(c.id)"
+        :reactions="c.reactions"
+        :target="reactionTarget(c.id)!"
+      />
+
       <div v-if="c.replies?.length" class="divide-y divide-default border-t border-default">
-        <div v-for="reply in c.replies" :key="reply.id" class="py-3 pr-4 pl-10">
-          <header class="flex items-center gap-2 text-sm">
+        <div v-for="reply in c.replies" :key="reply.id">
+          <header class="flex items-center gap-2 px-4 pt-3 text-sm">
             <UserLink :user="reply.author" />
             <span v-if="reply.createdAt" class="text-muted"
               >replied {{ formatRelativeTime(reply.createdAt) }}</span
             >
           </header>
-          <div class="py-2">
+          <div class="px-4 py-1.5">
             <MarkdownBody :content="reply.body" empty="No content." />
           </div>
           <ReactionBar

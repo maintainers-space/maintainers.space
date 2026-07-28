@@ -81,9 +81,7 @@ const { data, pending, error } = useLiveAsyncData<ForgeIssueDetail | null>(
         <div class="px-4 py-3">
           <MarkdownBody :content="data.body ?? ''" empty="No description provided." />
         </div>
-        <div class="border-t border-default px-4 py-2">
-          <ReactionBar :reactions="data.reactions" :target="{ kind: 'issue', threadId: data.id }" />
-        </div>
+        <ReactionBar :reactions="data.reactions" :target="{ kind: 'issue', threadId: data.id }" />
       </article>
 
       <CommentThread

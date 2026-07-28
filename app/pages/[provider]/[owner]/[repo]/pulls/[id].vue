@@ -225,12 +225,7 @@ async function onDiffComment(payload: { path: string; line: number; body: string
           <div class="px-4 py-3">
             <MarkdownBody :content="data.body ?? ''" empty="No description provided." />
           </div>
-          <div class="border-t border-default px-4 py-2">
-            <ReactionBar
-              :reactions="data.reactions"
-              :target="{ kind: 'pull', threadId: data.id }"
-            />
-          </div>
+          <ReactionBar :reactions="data.reactions" :target="{ kind: 'pull', threadId: data.id }" />
         </article>
         <CommentThread
           v-if="data.comments.length"
