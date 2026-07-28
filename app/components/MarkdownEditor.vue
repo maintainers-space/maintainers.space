@@ -183,6 +183,7 @@ const tools = [
         @keydown="onTextareaKeydown"
       />
       <EmojiAutocompleteDropdown
+        :open="emojiAutocomplete.open.value"
         :results="emojiAutocomplete.results.value"
         :active-index="emojiAutocomplete.activeIndex.value"
         :top="emojiAutocomplete.top.value"

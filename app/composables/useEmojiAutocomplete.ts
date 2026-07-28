@@ -36,7 +36,7 @@ export function useEmojiAutocomplete(
   let tokenStart = -1
   let mirror: HTMLDivElement | null = null
 
-  const results = computed(() => searchEmoji(query.value, 8))
+  const results = computed(() => (open.value ? searchEmoji(query.value, 8) : []))
 
   function close(): void {
     open.value = false

@@ -2,6 +2,7 @@
 import type { EmojiEntry } from '~/utils/emoji'
 
 defineProps<{
+  open: boolean
   results: EmojiEntry[]
   activeIndex: number
   top: number
@@ -13,7 +14,7 @@ const emit = defineEmits<{ select: [EmojiEntry] }>()
 <template>
   <Teleport to="body">
     <div
-      v-if="results.length"
+      v-if="open && results.length"
       class="fixed z-50 max-h-56 w-56 overflow-y-auto rounded-lg border border-default bg-default p-1 shadow-lg"
       :style="{ top: `${top}px`, left: `${left}px` }"
     >
