@@ -347,6 +347,19 @@ export interface ForgeActionRun {
   ref?: Record<string, unknown>
 }
 
+export interface ForgeLogSection {
+  name: string
+  lines: string[]
+  startedAt?: string | null
+  completedAt?: string | null
+}
+
+/** `sections` splits a job's log by step (GitHub/Gitea) or CI stage (GitLab); `raw` is the unsplit fallback. */
+export interface ForgeJobLog {
+  sections?: ForgeLogSection[]
+  raw?: string
+}
+
 export type ForgeSearchSort = 'best' | 'stars' | 'updated' | 'created' | 'forks'
 export interface ForgeSearchOptions extends ForgePageOptions {
   sort?: ForgeSearchSort
@@ -581,6 +594,12 @@ export interface ForgeProvider {
     opts?: ForgePageOptions
   ) => Promise<Paginated<ForgeActionRun>>
   getActionRun?: (repo: RepoLocator, id: string, opts?: ForgeReadOptions) => Promise<ForgeActionRun>
+  /** Raw log for a single job, split into per-step/section chunks where possible. `null` if unavailable. */
+  getActionJobLog?: (
+    repo: RepoLocator,
+    jobId: string,
+    opts?: ForgeReadOptions
+  ) => Promise<ForgeJobLog | null>
 
   // Search ---------------------------------------------------------------
   searchRepos?: (q: string, opts?: ForgeSearchOptions) => Promise<Paginated<ForgeRepo>>
