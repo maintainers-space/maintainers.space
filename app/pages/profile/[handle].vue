@@ -186,7 +186,7 @@ const bskyUrl = computed(() =>
   profile.value ? `https://bsky.app/profile/${profile.value.did}` : undefined
 )
 
-useHead(() => ({ title: `${displayName.value} · koinon` }))
+useHead(() => ({ title: `${displayName.value} · maintainers.space` }))
 </script>
 
 <template>

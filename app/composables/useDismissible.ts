@@ -1,4 +1,4 @@
-const PREFIX = 'koinon:dismissed:'
+const PREFIX = 'maintainers.space:dismissed:'
 
 /** A banner the viewer can close, which then stays hidden for `days` before reappearing. */
 export function useDismissible(key: string, days = 14) {

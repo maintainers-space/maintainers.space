@@ -13,7 +13,7 @@ import { OAUTH_SCOPE } from '~/lib/atproto/oauth'
 import { fetchPublicProfile } from '~/lib/atproto/public'
 import { clearCache } from '~/lib/cache'
 
-const CURRENT_DID_KEY = 'koinon:current-did'
+const CURRENT_DID_KEY = 'maintainers.space:current-did'
 
 export interface AtpProfile {
   did: string

@@ -8,7 +8,7 @@ import type { ForgeId, ForgeRepo, ForgeUser } from '~/types/forge'
 //
 // Node identity: anyone reachable through the atproto follow graph has a
 // known DID, so every one of their linked forge accounts (public
-// `dev.koinon.forgeAccount` records, same mechanism as the profile page) is
+// `space.maintainers.forgeAccount` records, same mechanism as the profile page) is
 // resolved and merged into one node. People reached only through a
 // forge-native graph (a following list, a repo's contributors) have no known
 // DID and get one node per `provider:login` — unless that exact login

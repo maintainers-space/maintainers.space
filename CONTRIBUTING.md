@@ -1,4 +1,4 @@
-# Contributing to koinon
+# Contributing to maintainers.space
 
 Thanks for your interest in contributing! This document covers getting a local environment running, the OAuth apps you'll need for the forges you want to work on, and the conventions the codebase follows.
 
@@ -34,7 +34,7 @@ Start the dev server:
 pnpm dev
 ```
 
-koinon binds its dev server to `127.0.0.1` rather than `localhost`. The AT Protocol OAuth flow used for sign-in rejects `localhost` redirect URIs outright, so open `http://127.0.0.1:3000`, not `http://localhost:3000`.
+maintainers.space binds its dev server to `127.0.0.1` rather than `localhost`. The AT Protocol OAuth flow used for sign-in rejects `localhost` redirect URIs outright, so open `http://127.0.0.1:3000`, not `http://localhost:3000`.
 
 Signing in with atproto needs no configuration in development: it uses a loopback OAuth client scoped to `127.0.0.1`. Linking a GitHub, GitLab, Codeberg, Gitea, Bitbucket or Sourcehut account is opt-in per provider. The app runs fine with none of them configured, it just disables linking for whichever provider you haven't set up. If you're working on something that touches one of those forges, set up that provider's OAuth app using the instructions below and export its client ID and secret before running `pnpm dev`:
 
@@ -44,7 +44,7 @@ NUXT_GITHUB_CLIENT_ID=... NUXT_GITHUB_CLIENT_SECRET=... pnpm dev
 
 ## Environment variables
 
-Every provider follows the same shape: create an OAuth application on that forge, point its callback at koinon's own callback route, and set the resulting client ID and secret as environment variables (or in a local `.env` file, see `.env.example`). In development the origin is `http://127.0.0.1:3000`. In production it's wherever you deploy.
+Every provider follows the same shape: create an OAuth application on that forge, point its callback at maintainers.space's own callback route, and set the resulting client ID and secret as environment variables (or in a local `.env` file, see `.env.example`). In development the origin is `http://127.0.0.1:3000`. In production it's wherever you deploy.
 
 ### GitHub
 
@@ -54,7 +54,7 @@ Create an OAuth App at [github.com/settings/developers](https://github.com/setti
 http://127.0.0.1:3000/api/auth/github/callback
 ```
 
-GitHub OAuth Apps don't ask you to pick scopes up front. koinon requests `read:user read:org notifications public_repo` at authorization time, which covers reading your repos, orgs, issues, pull requests and notifications. Set the resulting credentials:
+GitHub OAuth Apps don't ask you to pick scopes up front. maintainers.space requests `read:user read:org notifications public_repo` at authorization time, which covers reading your repos, orgs, issues, pull requests and notifications. Set the resulting credentials:
 
 ```bash
 NUXT_GITHUB_CLIENT_ID=your_client_id
@@ -69,7 +69,7 @@ Create an Application at [gitlab.com/-/user_settings/applications](https://gitla
 http://127.0.0.1:3000/api/auth/gitlab/callback
 ```
 
-Unlike GitHub, GitLab requires you to select scopes when creating the application. Check `api`, since koinon aims for full parity with the GitHub integration: reading repos, issues and merge requests, the Todos inbox, and approving, merging or commenting on merge requests all need it. Set:
+Unlike GitHub, GitLab requires you to select scopes when creating the application. Check `api`, since maintainers.space aims for full parity with the GitHub integration: reading repos, issues and merge requests, the Todos inbox, and approving, merging or commenting on merge requests all need it. Set:
 
 ```bash
 NUXT_GITLAB_CLIENT_ID=your_application_id
@@ -138,7 +138,7 @@ NUXT_SOURCEHUT_CLIENT_SECRET=your_client_secret
 
 ### Attestation signing key
 
-This one isn't a forge OAuth app. It's a private key koinon's own server uses to sign proof that a linked forge account really was verified through OAuth, rather than just claimed in a self-editable atproto record. It's optional: without it, linking still works, but linked accounts show no "Verified" badge.
+This one isn't a forge OAuth app. It's a private key maintainers.space's own server uses to sign proof that a linked forge account really was verified through OAuth, rather than just claimed in a self-editable atproto record. It's optional: without it, linking still works, but linked accounts show no "Verified" badge.
 
 Generate a private ES256 key as JWK JSON:
 
@@ -171,7 +171,7 @@ server/         # Nitro server
 ├── routes/     # Non-/api routes (.well-known/jwks.json)
 └── utils/      # Server-only utilities (cache, attestation, proxy, oauth-providers)
 
-lexicons/       # koinon's own atproto lexicon (dev.koinon.forgeAccount)
+lexicons/       # maintainers.space's own atproto lexicon (space.maintainers.forgeAccount)
 ```
 
 Each forge (`app/lib/forges/{github,gitlab,codeberg,tangled,gitea,bitbucket,sourcehut}.ts`) implements the same `ForgeProvider` interface defined in `app/types/forge.ts`, mapping that provider's raw API responses into a common set of types (`ForgeRepo`, `ForgeIssue`, `ForgePull`, and so on) so the rest of the app never has to know which forge it's talking to. Registering a new forge is one entry in `app/lib/forges/index.ts` — every cross-forge surface (search, explore, notifications, timeline, home dashboard) iterates that registry generically rather than hardcoding a provider list. Codeberg and Gitea share one implementation (`app/lib/forges/gitea-family.ts`, a factory parameterized by API/web base URL) since both are Gitea-flavored REST APIs; Forgejo could be added the same way later if a good second public instance turns up.

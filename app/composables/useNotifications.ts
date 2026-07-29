@@ -3,7 +3,7 @@ import { cached, invalidate, TTL } from '~/lib/cache'
 import type { ForgeInboxItem, ForgeNotification } from '~/types/forge'
 
 /** localStorage key holding thread ids the user has completed. */
-const DISMISSED_KEY = 'koinon:inbox-dismissed'
+const DISMISSED_KEY = 'maintainers.space:inbox-dismissed'
 const DISMISS_TTL = 30 * 86_400_000
 
 /**

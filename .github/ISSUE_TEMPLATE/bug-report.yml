@@ -1,5 +1,5 @@
 name: "\U0001F41E Bug report"
-description: Create a report to help us improve koinon
+description: Create a report to help us improve maintainers.space
 type: bug
 labels: ['pending triage']
 body:
@@ -7,7 +7,7 @@ body:
     attributes:
       value: |
         Please carefully read the contribution docs before creating a bug report
-        👉 https://github.com/trueberryless/koinon/blob/main/CONTRIBUTING.md
+        👉 https://github.com/maintainers-space/maintainers.space/blob/main/CONTRIBUTING.md
   - type: input
     id: provider
     attributes:

@@ -20,7 +20,7 @@ import { getForgeToken } from '~/lib/forges/token-store'
 // independent services (git.sr.ht, todo.sr.ht, meta.sr.ht), each with its own
 // `/query` endpoint. Usernames are `~`-prefixed in URLs (`git.sr.ht/~user/repo`).
 //
-// This is the most limited forge in koinon by design of the platform itself,
+// This is the most limited forge in maintainers.space by design of the platform itself,
 // not by choice — confirmed against current sr.ht docs:
 //   - No pull/merge requests: sr.ht's contribution model is `git send-email` to
 //     mailing lists (lists.sr.ht), with no native PR feature at all.
@@ -42,7 +42,7 @@ import { getForgeToken } from '~/lib/forges/token-store'
 // reading public repos anonymously (verified: an unauthenticated query against
 // git.sr.ht/query returns `ERR_UNAUTHORIZED`, not a data response). So, unlike
 // GitHub/GitLab/Codeberg/Gitea/Bitbucket, Sourcehut repos are only browsable in
-// koinon once the viewer has connected their own Sourcehut account — there is
+// maintainers.space once the viewer has connected their own Sourcehut account — there is
 // no anonymous "try an example" path for this forge.
 const GIT = 'https://git.sr.ht/query'
 const TODO = 'https://todo.sr.ht/query'

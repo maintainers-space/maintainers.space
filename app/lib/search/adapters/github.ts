@@ -1,6 +1,6 @@
 import type { QueryNode } from '~/lib/search/parser'
 
-// koinon qualifier key -> GitHub search qualifier. Unknown keys are dropped and
+// maintainers.space qualifier key -> GitHub search qualifier. Unknown keys are dropped and
 // reported so the UI can show a "partial results" hint.
 const GH_KEYS: Record<string, string> = {
   language: 'language',
@@ -52,7 +52,7 @@ export interface GitHubQueryResult {
   dropped: string[]
 }
 
-/** Render a koinon AST into a GitHub search query string. */
+/** Render a maintainers.space AST into a GitHub search query string. */
 export function astToGitHubQuery(node: QueryNode | null): GitHubQueryResult {
   const dropped: string[] = []
 

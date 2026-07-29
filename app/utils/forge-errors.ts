@@ -19,7 +19,7 @@ export function describeForgeError(e: unknown): ForgeErrorHint {
   if (raw && GITHUB_OAUTH_RESTRICTION.test(raw)) {
     return {
       description:
-        "This organization restricts third-party apps and hasn't approved koinon yet. Ask an organization owner to approve it, or request access yourself.",
+        "This organization restricts third-party apps and hasn't approved maintainers.space yet. Ask an organization owner to approve it, or request access yourself.",
       to: 'https://github.com/settings/connections/applications',
       linkLabel: 'Open GitHub settings'
     }

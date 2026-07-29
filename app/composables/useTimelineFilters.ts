@@ -31,7 +31,7 @@ export const KIND_FILTER_LABEL: Record<FilterableKind, string> = {
   fork: 'Forks'
 }
 
-const STORAGE_KEY = 'koinon:timeline-event-filters'
+const STORAGE_KEY = 'maintainers.space:timeline-event-filters'
 
 const enabled = ref<Set<FilterableKind>>(new Set(FILTERABLE_KINDS))
 

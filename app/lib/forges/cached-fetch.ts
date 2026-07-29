@@ -2,7 +2,7 @@
 // Authenticated reads go straight to the forge (per-user, already above the
 // anonymous rate limit, not shareable across viewers so not worth caching).
 // Anonymous reads are identical for every viewer, so they're routed through
-// one of koinon's own cached proxies instead of hitting the forge's (often
+// one of maintainers.space's own cached proxies instead of hitting the forge's (often
 // strict) unauthenticated rate limit on every request.
 
 export interface CachedFetchOptions {

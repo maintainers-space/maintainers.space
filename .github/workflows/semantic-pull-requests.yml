@@ -19,7 +19,7 @@ jobs:
       contents: read
       pull-requests: read # for amannn/action-semantic-pull-request to analyze PRs
       statuses: write # for amannn/action-semantic-pull-request to mark status of analyzed PR
-    if: github.repository == 'trueberryless/koinon'
+    if: github.repository == 'trueberryless/maintainers.space'
     runs-on: ubuntu-latest
     name: 🏷️ Validate PR title
     steps:

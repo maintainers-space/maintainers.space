@@ -925,7 +925,7 @@ export function createGiteaFamilyProvider(config: GiteaFamilyConfig): ForgeProvi
     })) as T
   }
 
-  /** Search-endpoint fetch: anonymous reads go through koinon's cached proxy, token reads go straight to the forge. */
+  /** Search-endpoint fetch: anonymous reads go through maintainers.space's cached proxy, token reads go straight to the forge. */
   async function gfSearchFetch<T>(
     path: string,
     query: Record<string, unknown>,

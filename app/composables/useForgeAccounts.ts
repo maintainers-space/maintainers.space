@@ -2,7 +2,7 @@ import { ok } from '@atcute/client'
 import type {} from '@atcute/atproto'
 import type { Did, Nsid } from '@atcute/lexicons'
 
-export const FORGE_ACCOUNT_COLLECTION = 'dev.koinon.forgeAccount'
+export const FORGE_ACCOUNT_COLLECTION = 'space.maintainers.forgeAccount'
 const COLLECTION = FORGE_ACCOUNT_COLLECTION as Nsid
 
 export interface ForgeAccountRecord {
@@ -14,9 +14,9 @@ export interface ForgeAccountRecord {
   avatarUrl?: string
   profileUrl?: string
   verified?: boolean
-  /** Compact JWS (ES256) issued by the koinon server binding this DID to the account. */
+  /** Compact JWS (ES256) issued by the maintainers.space server binding this DID to the account. */
   attestation?: string
-  /** Origin of the koinon server that issued `attestation` (JWKS at /.well-known/jwks.json). */
+  /** Origin of the maintainers.space server that issued `attestation` (JWKS at /.well-known/jwks.json). */
   attestedBy?: string
   createdAt: string
 }
@@ -109,7 +109,7 @@ export function useForgeAccounts() {
             repo: did.value as Did,
             collection: COLLECTION,
             rkey: makeRkey(input.provider, input.username, input.host),
-            // koinon's lexicons aren't published on-network, so the PDS can't resolve
+            // maintainers.space's lexicons aren't published on-network, so the PDS can't resolve
             // them; skip validation or the write is rejected with "could not find lexicon".
             validate: false,
             record: record as unknown as Record<string, unknown>

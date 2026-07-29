@@ -149,7 +149,7 @@ export function useTimeline() {
           const self = did.value
           if (!self) return [] as ForgeContribution[]
           const follows = await fetchFollows(self, 60).catch(() => [])
-          // Bobbin's rate limit is shared across every koinon user on the same
+          // Bobbin's rate limit is shared across every maintainers.space user on the same
           // proxy, so keep this fan-out modest rather than bursting requests.
           const chunks = await mapLimit(follows.slice(0, 12), 3, (f) =>
             forge.listUserEvents!(f.did, { limit: 100 }).catch(() => [] as ForgeContribution[])

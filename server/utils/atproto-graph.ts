@@ -8,7 +8,7 @@
 const PUBLIC_APPVIEW = 'https://public.api.bsky.app'
 
 /** Must match `FORGE_ACCOUNT_COLLECTION` in `app/composables/useForgeAccounts.ts`. */
-export const FORGE_ACCOUNT_COLLECTION = 'dev.koinon.forgeAccount'
+export const FORGE_ACCOUNT_COLLECTION = 'space.maintainers.forgeAccount'
 
 export interface GraphFollow {
   did: string

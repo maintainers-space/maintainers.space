@@ -76,15 +76,15 @@ export default defineNuxtConfig({
 
   compatibilityDate: '2026-06-30',
 
-  // Local icon collection (prefix "koinon") for brand marks Iconify doesn't
-  // ship — e.g. the official Tangled "dolly" logo at app/assets/icons/tangled.svg
-  // → usable anywhere as `i-koinon-tangled`.
+  // Local icon collection (prefix "maintainers-space") for brand marks Iconify
+  // doesn't ship — e.g. the official Tangled "dolly" logo at
+  // app/assets/icons/tangled.svg → usable anywhere as `i-maintainers-space-tangled`.
   icon: {
-    customCollections: [{ prefix: 'koinon', dir: './app/assets/icons' }],
+    customCollections: [{ prefix: 'maintainers-space', dir: './app/assets/icons' }],
     // The Tangled mark is referenced dynamically (via forge.icon), so pin it
     // into the client bundle — static scanning alone can't discover it.
     clientBundle: {
-      icons: ['koinon:tangled'],
+      icons: ['maintainers-space:tangled'],
       scan: true
     }
   }

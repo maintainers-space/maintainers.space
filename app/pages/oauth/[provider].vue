@@ -21,7 +21,7 @@ const message = ref(`Connecting your ${label} account…`)
 onMounted(async () => {
   if (!auth) {
     status.value = 'error'
-    message.value = `koinon doesn't support signing in with "${providerId}" this way.`
+    message.value = `maintainers.space doesn't support signing in with "${providerId}" this way.`
     return
   }
   try {

@@ -1,8 +1,8 @@
 // Client-side verification of server-signed forge-account attestations.
 //
-// A `dev.koinon.forgeAccount` record is public and user-writable, so its
+// A `space.maintainers.forgeAccount` record is public and user-writable, so its
 // `verified: true` flag is meaningless on its own. Trust is established only by
-// the `attestation` — a compact JWS signed by the koinon server (see
+// the `attestation` — a compact JWS signed by the maintainers.space server (see
 // server/utils/attestation.ts). This verifies that signature and that its claims
 // match the record (owner DID, provider, username), so a forged/edited record
 // cannot display as verified.
@@ -10,7 +10,7 @@
 import { jwtVerify, createRemoteJWKSet, type JWTVerifyGetKey } from 'jose'
 
 /** Must match ATTESTATION_AUDIENCE in server/utils/attestation.ts. */
-const ATTESTATION_AUDIENCE = 'dev.koinon.forgeAccount'
+const ATTESTATION_AUDIENCE = 'space.maintainers.forgeAccount'
 
 export interface AttestableAccount {
   provider: string

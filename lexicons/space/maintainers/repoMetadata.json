@@ -1,6 +1,6 @@
 {
   "lexicon": 1,
-  "id": "dev.koinon.repoMetadata",
+  "id": "space.maintainers.repoMetadata",
   "defs": {
     "main": {
       "type": "record",
@@ -43,13 +43,13 @@
           },
           "attestation": {
             "type": "string",
-            "description": "Compact JWS (ES256) issued by the koinon server proving the record owner's DID held admin access to this repo when signed. Its payload asserts { sub: <owner did>, provider, owner, name, host? }. Absent for Tangled, where ownership is proven by the record owner being the repo's atproto DID. Verified against the issuer's JWKS.",
+            "description": "Compact JWS (ES256) issued by the maintainers.space server proving the record owner's DID held admin access to this repo when signed. Its payload asserts { sub: <owner did>, provider, owner, name, host? }. Absent for Tangled, where ownership is proven by the record owner being the repo's atproto DID. Verified against the issuer's JWKS.",
             "maxLength": 4096
           },
           "attestedBy": {
             "type": "string",
             "format": "uri",
-            "description": "Origin of the koinon server that issued 'attestation'. Its public keys are published at '<attestedBy>/.well-known/jwks.json'. Verifiers must pin this to a trusted issuer."
+            "description": "Origin of the maintainers.space server that issued 'attestation'. Its public keys are published at '<attestedBy>/.well-known/jwks.json'. Verifiers must pin this to a trusted issuer."
           },
           "createdAt": {
             "type": "string",

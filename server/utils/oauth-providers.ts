@@ -43,7 +43,7 @@ export const oauthProviders: Record<string, OAuthProviderConfig> = {
     fetchUsername: (token) =>
       fetchUsernameRest('https://api.github.com/user', token, 'login', {
         Accept: 'application/vnd.github+json',
-        'User-Agent': 'koinon'
+        'User-Agent': 'maintainers.space'
       })
     // No `host`: preserves the record key existing linked GitHub accounts already use.
   },

@@ -469,7 +469,7 @@ async function ghGraphql<T>(
   return res.data as T
 }
 
-/** Search-endpoint fetch: anonymous reads go through koinon's cached proxy, token reads go straight to GitHub. */
+/** Search-endpoint fetch: anonymous reads go through maintainers.space's cached proxy, token reads go straight to GitHub. */
 async function ghSearchFetch<T>(
   path: string,
   query: Record<string, unknown>,
@@ -1399,7 +1399,7 @@ export const githubProvider: ForgeProvider = {
 
   async getActionJobLog(repo, jobId, opts): Promise<ForgeJobLog | null> {
     // GitHub's logs endpoint redirects to blob storage whose CORS is locked to
-    // GitHub's own origin — fetch it via koinon's own server instead, where
+    // GitHub's own origin — fetch it via maintainers.space's own server instead, where
     // redirects are just followed server-to-server with no CORS involved.
     const token = opts?.token ?? getForgeToken('github')
     if (!token) return null

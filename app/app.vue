@@ -17,13 +17,14 @@ useHead({
   }
 })
 
-const title = 'koinon — one place for every forge'
+const title = 'maintainers.space — one place for every forge'
 const description =
   'Browse repositories across GitHub and Tangled, and link your forge accounts to your AT Protocol identity.'
 
 useSeoMeta({
   title,
-  titleTemplate: (chunk?: string) => (chunk && chunk !== title ? `${chunk} · koinon` : title),
+  titleTemplate: (chunk?: string) =>
+    chunk && chunk !== title ? `${chunk} · maintainers.space` : title,
   description,
   ogTitle: title,
   ogDescription: description,

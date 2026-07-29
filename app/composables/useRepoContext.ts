@@ -12,7 +12,7 @@ export interface RepoContext {
   defaultBranch: ComputedRef<string>
 }
 
-const KEY: InjectionKey<RepoContext> = Symbol('koinon-repo-context')
+const KEY: InjectionKey<RepoContext> = Symbol('maintainers-space-repo-context')
 
 /** Reads the /:provider/:owner/:repo route params into typed refs. */
 export function useRepoParams() {

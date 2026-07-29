@@ -1,6 +1,6 @@
-// Publishes the koinon server's public attestation key(s) as a JWKS document.
+// Publishes the maintainers.space server's public attestation key(s) as a JWKS document.
 //
-// Verifiers (koinon clients rendering the "Verified" badge) fetch this to check
+// Verifiers (maintainers.space clients rendering the "Verified" badge) fetch this to check
 // the signature on a forge-account attestation. Served at /.well-known/jwks.json.
 // Returns an empty key set when no signing key is configured.
 export default defineEventHandler(async (event) => {

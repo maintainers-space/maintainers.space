@@ -6,7 +6,7 @@
 // repositories you visit often *and* recently bubble to the top.
 import type { ForgeRepo } from '~/types/forge'
 
-const STORAGE_KEY = 'koinon:repo-visits'
+const STORAGE_KEY = 'maintainers.space:repo-visits'
 const MAX_ENTRIES = 80
 /** Half-life (days) for the recency decay used when ranking favourites. */
 const HALF_LIFE_DAYS = 21

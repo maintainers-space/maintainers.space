@@ -8,8 +8,8 @@ interface ForgeAccountValue {
 }
 
 /**
- * Cached, same-origin wrapper around a person's public `dev.koinon.forgeAccount`
- * records — every forge account they've linked through koinon — for the
+ * Cached, same-origin wrapper around a person's public `space.maintainers.forgeAccount`
+ * records — every forge account they've linked through maintainers.space — for the
  * Explore social graph's cross-provider identity merge (see
  * `app/pages/profile/[handle].vue`, which reads the exact same records
  * client-side for the profile page). Safe to expose with a `did` rather than

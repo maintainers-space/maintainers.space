@@ -1,13 +1,13 @@
 // Optional, clearly-scoped personal access tokens for forge APIs.
 //
-// koinon works fully unauthenticated; a token is only ever used to unlock extra
+// maintainers.space works fully unauthenticated; a token is only ever used to unlock extra
 // provider features (e.g. GitHub code search, higher rate limits). Tokens live in
 // localStorage on the user's device and are never sent anywhere but the forge.
 
 import type { ForgeId } from '~/types/forge'
 import { syncForgeTokens } from '~/lib/forges/token-store'
 
-const STORAGE_PREFIX = 'koinon:forge-token:'
+const STORAGE_PREFIX = 'maintainers.space:forge-token:'
 
 const _tokens = ref<Record<string, string>>({})
 let _loaded = false

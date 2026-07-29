@@ -289,7 +289,7 @@ interface GlStarrerResponse {
 }
 
 // GitLab.com REST API v4. A self-managed host could be supported later by making
-// this configurable; for now koinon targets gitlab.com like it targets github.com.
+// this configurable; for now maintainers.space targets gitlab.com like it targets github.com.
 const API = 'https://gitlab.com/api/v4'
 const WEB = 'https://gitlab.com'
 
@@ -740,7 +740,7 @@ async function glFetch<T>(
   })) as T
 }
 
-/** Search-endpoint fetch: anonymous reads go through koinon's cached proxy, token reads go straight to GitLab. */
+/** Search-endpoint fetch: anonymous reads go through maintainers.space's cached proxy, token reads go straight to GitLab. */
 async function glSearchFetch<T>(
   path: string,
   query: Record<string, unknown>,

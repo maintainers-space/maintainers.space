@@ -21,7 +21,7 @@ const APPVIEW_URL = 'https://public.api.bsky.app'
 
 /**
  * Races several handle-resolution methods and returns the first to *succeed*.
- * Resolution only fails if every method fails. This is what makes koinon able to
+ * Resolution only fails if every method fails. This is what makes maintainers.space able to
  * sign in ANY handle from ANY PDS directly in the browser:
  *
  *   - XRPC (AppView): delegates DNS/well-known lookup to a server, so it is not
@@ -72,7 +72,7 @@ class FallbackHandleResolver implements HandleResolver {
 
 /**
  * A single, robust, fully-decentralized identity resolver shared across the app
- * (OAuth login + every public read). This is the backbone that lets koinon
+ * (OAuth login + every public read). This is the backbone that lets maintainers.space
  * support *any* atproto account regardless of which PDS hosts it.
  *
  * Handle -> DID resolution races the methods described on FallbackHandleResolver

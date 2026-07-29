@@ -7,7 +7,7 @@ export interface AccentOption {
   needsDarkText?: boolean
 }
 
-/** `brand` is koinon's own yellow (see main.css); the rest are Tailwind's named palettes. */
+/** `brand` is maintainers.space's own yellow (see main.css); the rest are Tailwind's named palettes. */
 export const ACCENT_COLORS: AccentOption[] = [
   { id: 'brand', label: 'Yellow', swatch: '#eab308', needsDarkText: true },
   { id: 'red', label: 'Red', swatch: '#ef4444' },
@@ -28,7 +28,7 @@ export const ACCENT_COLORS: AccentOption[] = [
   { id: 'rose', label: 'Rose', swatch: '#f43f5e' }
 ]
 
-const STORAGE_KEY = 'koinon:accent-color'
+const STORAGE_KEY = 'maintainers.space:accent-color'
 export const DEFAULT_ACCENT = 'brand'
 
 const DARK_TEXT_BUTTON = [
@@ -65,7 +65,7 @@ function applyAccent(id: string): void {
 }
 
 /**
- * A small rounded koinon glyph tinted to the given accent —
+ * A small rounded maintainers.space glyph tinted to the given accent —
  * mirrors AppLogo.vue's icon so the browser tab matches the sidebar mark.
  */
 export function accentFaviconDataUri(accentId: string): string {

@@ -23,5 +23,5 @@ Before creating the pull request, please make sure you do the following:
 - Run `pnpm lint`, `pnpm typecheck` and `pnpm knip` locally. CI runs them too, but it's faster to catch issues before pushing.
 - Add any additional context, tradeoffs, follow-ups, or things reviewers should be aware of.
 
-Thank you for contributing to koinon!
+Thank you for contributing to maintainers.space!
 ----------------------------------------------------------------------->

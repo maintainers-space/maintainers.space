@@ -3,8 +3,8 @@
 // atproto PDS records are public AND user-writable, so a `verified: true` flag a
 // user sets on their own record proves nothing — anyone could claim any username.
 // To make "this GitHub account belongs to this atproto DID" un-forgeable, the
-// koinon SERVER (the only party that actually proves GitHub ownership via OAuth,
-// and the only holder of the private key) signs a compact JWS binding
+// maintainers.space SERVER (the only party that actually proves GitHub ownership
+// via OAuth, and the only holder of the private key) signs a compact JWS binding
 // { iss: origin, sub: did, aud, provider, username }. The user cannot forge it
 // because they don't have the private key; verifiers check the signature against
 // the server's published JWKS and that `sub` equals the record owner's DID.
@@ -12,7 +12,7 @@
 import { SignJWT, importJWK, calculateJwkThumbprint, type JWK } from 'jose'
 
 /** JWS audience — identifies the purpose so a token can't be replayed elsewhere. */
-export const ATTESTATION_AUDIENCE = 'dev.koinon.forgeAccount'
+export const ATTESTATION_AUDIENCE = 'space.maintainers.forgeAccount'
 const ALG = 'ES256'
 
 interface LoadedKey {

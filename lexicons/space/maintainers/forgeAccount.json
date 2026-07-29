@@ -1,6 +1,6 @@
 {
   "lexicon": 1,
-  "id": "dev.koinon.forgeAccount",
+  "id": "space.maintainers.forgeAccount",
   "defs": {
     "main": {
       "type": "record",
@@ -46,13 +46,13 @@
           },
           "attestation": {
             "type": "string",
-            "description": "Compact JWS (ES256) issued by the koinon server binding this account to the record owner's DID. Its payload asserts { sub: <owner did>, provider, username }. Because it is signed with the server's private key, the record owner cannot forge or tamper with it. Verified against the issuer's JWKS.",
+            "description": "Compact JWS (ES256) issued by the maintainers.space server binding this account to the record owner's DID. Its payload asserts { sub: <owner did>, provider, username }. Because it is signed with the server's private key, the record owner cannot forge or tamper with it. Verified against the issuer's JWKS.",
             "maxLength": 4096
           },
           "attestedBy": {
             "type": "string",
             "format": "uri",
-            "description": "Origin of the koinon server that issued 'attestation'. Its public keys are published at '<attestedBy>/.well-known/jwks.json'. Verifiers must pin this to a trusted issuer."
+            "description": "Origin of the maintainers.space server that issued 'attestation'. Its public keys are published at '<attestedBy>/.well-known/jwks.json'. Verifiers must pin this to a trusted issuer."
           },
           "createdAt": {
             "type": "string",

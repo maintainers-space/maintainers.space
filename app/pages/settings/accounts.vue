@@ -25,7 +25,7 @@ watch(
 )
 
 // Two independent facts, previously (and wrongly) conflated:
-//   • linked   → a dev.koinon.forgeAccount record exists on your PDS. This syncs
+//   • linked   → a space.maintainers.forgeAccount record exists on your PDS. This syncs
 //                across every device the moment you sign in with atproto.
 //   • connected→ an OAuth token is present in THIS browser. It never leaves the
 //                device, so a fresh device is "linked" but not yet "connected".
@@ -150,7 +150,7 @@ async function onUnlink(account: ForgeAccount) {
       <p v-if="p.state === 'needs-auth'" class="mt-3 text-xs text-muted">
         Your accounts stay linked to your identity, but the OAuth token that authorizes API access
         lives only on each device for security. Authorizing here is usually a single click —
-        {{ p.label }} remembers you already approved koinon.
+        {{ p.label }} remembers you already approved maintainers.space.
       </p>
     </UCard>
 

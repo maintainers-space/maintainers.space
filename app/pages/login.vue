@@ -56,7 +56,7 @@ async function onSubmit(event: FormSubmitEvent<Schema>) {
       >
         <UIcon name="i-lucide-git-merge" class="size-5" />
       </span>
-      <span class="text-2xl font-semibold tracking-tight text-highlighted">koinon</span>
+      <span class="text-2xl font-semibold tracking-tight text-highlighted">maintainers.space</span>
     </NuxtLink>
 
     <UCard class="w-full max-w-sm">
@@ -76,7 +76,7 @@ async function onSubmit(event: FormSubmitEvent<Schema>) {
           variant="soft"
           icon="i-lucide-shield-alert"
           title="Can't reach your provider"
-          description="Your network may be blocking Bluesky domains. Browsing works through koinon's built-in proxy, but the sign-in redirect must reach your account's provider directly — try a different network for the initial sign-in, or ask IT to allow your PDS (e.g. bsky.social)."
+          description="Your network may be blocking Bluesky domains. Browsing works through maintainers.space's built-in proxy, but the sign-in redirect must reach your account's provider directly — try a different network for the initial sign-in, or ask IT to allow your PDS (e.g. bsky.social)."
           class="mb-1"
         />
         <UFormField name="handle" label="Handle or DID">
@@ -127,8 +127,8 @@ async function onSubmit(event: FormSubmitEvent<Schema>) {
           trailing-icon="i-lucide-external-link"
         />
         <p class="text-center text-xs text-dimmed">
-          koinon uses your AT Protocol identity — create one on any PDS (Bluesky, npmx, or
-          self-hosted) and sign in here.
+          maintainers.space uses your AT Protocol identity — create one on any PDS (Bluesky, npmx,
+          or self-hosted) and sign in here.
         </p>
       </div>
 
@@ -156,8 +156,8 @@ async function onSubmit(event: FormSubmitEvent<Schema>) {
     </UCard>
 
     <p class="max-w-sm text-center text-xs text-dimmed">
-      Koinon uses AT Protocol OAuth. Your credentials are entered on your own provider — never
-      shared with koinon.
+      maintainers.space uses AT Protocol OAuth. Your credentials are entered on your own provider —
+      never shared with maintainers.space.
     </p>
   </div>
 </template>

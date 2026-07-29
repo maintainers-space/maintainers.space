@@ -194,7 +194,7 @@ function retryDelayMs(e: unknown): number | null {
 /**
  * Every Tangled read goes through this one call site — routing rate-limit
  * handling through it covers the whole provider. Bobbin's rate limit is
- * per-source-IP on koinon's own proxy, shared across every koinon user, so a
+ * per-source-IP on maintainers.space's own proxy, shared across every maintainers.space user, so a
  * single 429 is retried once (honoring `Retry-After`) rather than surfaced.
  */
 async function bobbin<T>(
@@ -472,7 +472,7 @@ function mapPipeline(p: TangledPipeline): ForgeActionRun {
 export const tangledProvider: ForgeProvider = {
   id: 'tangled',
   label: 'Tangled',
-  icon: 'i-koinon-tangled',
+  icon: 'i-maintainers-space-tangled',
   color: '#4f46e5',
   ownerLabel: 'Handle',
   ownerPlaceholder: 'e.g. tangled.org',

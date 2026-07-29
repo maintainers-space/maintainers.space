@@ -107,7 +107,7 @@ const triggerSpin = () => {
         </g>
       </svg>
     </span>
-    <span v-if="!collapsed" class="text-lg tracking-tight">koinon</span>
+    <span v-if="!collapsed" class="text-lg tracking-tight">maintainers</span>
   </NuxtLink>
 </template>
 

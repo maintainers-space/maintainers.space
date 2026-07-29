@@ -1,16 +1,16 @@
 {
-  "name": "koinon",
+  "name": "maintainers.space",
   "private": true,
   "description": "Unified forges interaction website",
-  "homepage": "https://koinon.felixs.dev",
+  "homepage": "https://maintainers.space",
   "bugs": {
-    "url": "https://github.com/trueberryless/koinon/issues"
+    "url": "https://github.com/maintainers-space/maintainers.space/issues"
   },
   "license": "MIT",
   "author": "trueberryless <trueberryless@gmail.com> (https://felixs.dev)",
   "repository": {
     "type": "git",
-    "url": "https://github.com/trueberryless/koinon.git"
+    "url": "https://github.com/maintainers-space/maintainers.space.git"
   },
   "type": "module",
   "scripts": {
