@@ -32,6 +32,13 @@ export const CACHE_MEDIUM: CachePolicy = { browser: 120, cdn: 300, netlify: 900,
 /** Effectively-immutable content (blobs at a pinned commit, etc.). */
 export const CACHE_LONG: CachePolicy = { browser: 600, cdn: 3600, netlify: 86_400, swr: 86_400 }
 
+/**
+ * ~5 minute–1 hour class. For anonymous public search results: identical for
+ * every viewer, so a repeat of the same query can be served from the edge
+ * instead of re-hitting the forge's (often low) anonymous rate limit.
+ */
+export const CACHE_SEARCH: CachePolicy = { browser: 300, cdn: 900, netlify: 3600, swr: 1800 }
+
 /** Explicitly opt out of shared caching (authenticated / per-user responses). */
 export function setNoStore(event: H3Event): void {
   setResponseHeader(event, 'Cache-Control', 'private, no-store')

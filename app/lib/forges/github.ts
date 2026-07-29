@@ -41,6 +41,7 @@ import type {
 
 import { getForgeToken } from '~/lib/forges/token-store'
 import { parseActionsRunnerLog } from '~/lib/forges/actions-log'
+import { searchFetch } from '~/lib/forges/search-fetch'
 
 const API = 'https://api.github.com'
 
@@ -466,6 +467,23 @@ async function ghGraphql<T>(
   if (res.errors?.length)
     throw createError({ statusCode: 400, statusMessage: res.errors[0]?.message ?? 'GraphQL error' })
   return res.data as T
+}
+
+/** Search-endpoint fetch: anonymous reads go through koinon's cached proxy, token reads go straight to GitHub. */
+async function ghSearchFetch<T>(
+  path: string,
+  query: Record<string, unknown>,
+  opts?: ForgeSearchOptions,
+  accept = 'application/vnd.github+json'
+): Promise<T> {
+  const token = opts?.token ?? getForgeToken('github')
+  return searchFetch<T>(`${API}${path}`, query, {
+    token,
+    headers: ghHeaders({ ...opts, token }, accept),
+    accept,
+    noCache: opts?.noCache,
+    signal: opts?.signal
+  })
 }
 
 const ghLoginCache = new Map<string, string>()
@@ -1456,11 +1474,11 @@ export const githubProvider: ForgeProvider = {
   async searchRepos(q, opts): Promise<Paginated<ForgeRepo>> {
     const page = opts?.cursor ? Number(opts.cursor) : 1
     const perPage = opts?.limit ?? 20
-    const data = await $fetch<GhSearchReposResponse>(`${API}/search/repositories`, {
-      headers: ghHeaders(opts),
-      query: { q, per_page: perPage, page, sort: mapSort(opts?.sort), order: opts?.order },
-      signal: opts?.signal
-    })
+    const data = await ghSearchFetch<GhSearchReposResponse>(
+      '/search/repositories',
+      { q, per_page: perPage, page, sort: mapSort(opts?.sort), order: opts?.order },
+      opts
+    )
     const items = (data.items ?? []).map(mapRepo)
     return {
       items,
@@ -1473,11 +1491,12 @@ export const githubProvider: ForgeProvider = {
   async searchIssues(q, opts): Promise<Paginated<ForgeIssue>> {
     const page = opts?.cursor ? Number(opts.cursor) : 1
     const perPage = opts?.limit ?? 20
-    const data = await $fetch<GhSearchIssuesResponse>(`${API}/search/issues`, {
-      headers: ghHeaders(opts, 'application/vnd.github.text-match+json'),
-      query: { q, per_page: perPage, page, sort: mapSort(opts?.sort), order: opts?.order },
-      signal: opts?.signal
-    })
+    const data = await ghSearchFetch<GhSearchIssuesResponse>(
+      '/search/issues',
+      { q, per_page: perPage, page, sort: mapSort(opts?.sort), order: opts?.order },
+      opts,
+      'application/vnd.github.text-match+json'
+    )
     const items = (data.items ?? []).map((r) => {
       const issue = mapIssue(r)
       const repoUrl = r.repository_url ? String(r.repository_url) : ''
@@ -1535,11 +1554,11 @@ export const githubProvider: ForgeProvider = {
   async searchUsers(q, opts): Promise<Paginated<ForgeUser>> {
     const page = opts?.cursor ? Number(opts.cursor) : 1
     const perPage = opts?.limit ?? 20
-    const data = await $fetch<GhSearchUsersResponse>(`${API}/search/users`, {
-      headers: ghHeaders(opts),
-      query: { q, per_page: perPage, page },
-      signal: opts?.signal
-    })
+    const data = await ghSearchFetch<GhSearchUsersResponse>(
+      '/search/users',
+      { q, per_page: perPage, page },
+      opts
+    )
     const items = (data.items ?? []).map(
       (u): ForgeUser => ({
         provider: 'github',

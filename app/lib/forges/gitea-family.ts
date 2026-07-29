@@ -38,6 +38,7 @@ import type {
 
 import { getForgeToken } from '~/lib/forges/token-store'
 import { parseActionsRunnerLog } from '~/lib/forges/actions-log'
+import { searchFetch } from '~/lib/forges/search-fetch'
 
 /** Config for one Gitea-flavored instance (Gitea itself, or a fork like Forgejo). */
 export interface GiteaFamilyConfig {
@@ -923,6 +924,21 @@ export function createGiteaFamilyProvider(config: GiteaFamilyConfig): ForgeProvi
     })) as T
   }
 
+  /** Search-endpoint fetch: anonymous reads go through koinon's cached proxy, token reads go straight to the forge. */
+  async function gfSearchFetch<T>(
+    path: string,
+    query: Record<string, unknown>,
+    opts?: ForgeSearchOptions
+  ): Promise<T> {
+    const token = opts?.token ?? getForgeToken(providerId)
+    return searchFetch<T>(`${API}${path}`, query, {
+      token,
+      headers: headers({ ...opts, token }),
+      noCache: opts?.noCache,
+      signal: opts?.signal
+    })
+  }
+
   const reactionLoginCache = new Map<string, string>()
 
   /** Only used to compute `viewerReacted` for display — Gitea's own delete-reaction call needs no id. */
@@ -1262,7 +1278,7 @@ export function createGiteaFamilyProvider(config: GiteaFamilyConfig): ForgeProvi
     async searchRepos(q, opts): Promise<Paginated<ForgeRepo>> {
       const page = opts?.cursor ? Number(opts.cursor) : 1
       const limit = opts?.limit ?? 20
-      const data = await gfFetch<GfSearchReposResponse>(
+      const data = await gfSearchFetch<GfSearchReposResponse>(
         `/repos/search`,
         { q, sort: mapSort(opts?.sort), order: opts?.order, page, limit },
         opts
@@ -1274,7 +1290,7 @@ export function createGiteaFamilyProvider(config: GiteaFamilyConfig): ForgeProvi
     async searchIssues(q, opts): Promise<Paginated<ForgeIssue>> {
       const page = opts?.cursor ? Number(opts.cursor) : 1
       const limit = opts?.limit ?? 20
-      const data = await gfFetch<GfSearchIssueResponse[]>(
+      const data = await gfSearchFetch<GfSearchIssueResponse[]>(
         `/repos/issues/search`,
         { q, type: 'issues', state: 'open', page, limit },
         opts
@@ -1286,7 +1302,11 @@ export function createGiteaFamilyProvider(config: GiteaFamilyConfig): ForgeProvi
     async searchUsers(q, opts): Promise<Paginated<ForgeUser>> {
       const page = opts?.cursor ? Number(opts.cursor) : 1
       const limit = opts?.limit ?? 20
-      const data = await gfFetch<GfSearchUsersResponse>(`/users/search`, { q, page, limit }, opts)
+      const data = await gfSearchFetch<GfSearchUsersResponse>(
+        `/users/search`,
+        { q, page, limit },
+        opts
+      )
       const items = (data?.data ?? [])
         .map(mapUser)
         .filter((u: ForgeUser | undefined): u is ForgeUser => !!u)

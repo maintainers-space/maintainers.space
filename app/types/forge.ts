@@ -398,6 +398,8 @@ export type ForgeSearchSort = 'best' | 'stars' | 'updated' | 'created' | 'forks'
 export interface ForgeSearchOptions extends ForgePageOptions {
   sort?: ForgeSearchSort
   order?: 'asc' | 'desc'
+  /** Bypass the anonymous-search cache proxy (used once after a full page reload). */
+  noCache?: boolean
 }
 
 export interface ForgeSearchCode {

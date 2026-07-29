@@ -31,6 +31,7 @@ import type {
   ForgeRepo,
   ForgeRunStatus,
   ForgeSearchCode,
+  ForgeSearchOptions,
   ForgeTreeEntry,
   ForgeUser,
   Paginated,
@@ -39,6 +40,7 @@ import type {
 
 import { getForgeToken } from '~/lib/forges/token-store'
 import { parseGitlabJobTrace } from '~/lib/forges/actions-log'
+import { searchFetch } from '~/lib/forges/search-fetch'
 
 // Raw GitLab REST API v4 response shapes — only the fields this file actually
 // reads. These are intentionally loose (most fields optional) since GitLab's
@@ -737,6 +739,21 @@ async function glFetch<T>(
   })) as T
 }
 
+/** Search-endpoint fetch: anonymous reads go through koinon's cached proxy, token reads go straight to GitLab. */
+async function glSearchFetch<T>(
+  path: string,
+  query: Record<string, unknown>,
+  opts?: ForgeSearchOptions
+): Promise<T> {
+  const token = opts?.token ?? getForgeToken('gitlab')
+  return searchFetch<T>(`${API}${path}`, query, {
+    token,
+    headers: glHeaders({ ...opts, token }),
+    noCache: opts?.noCache,
+    signal: opts?.signal
+  })
+}
+
 async function getReadme(
   id: string,
   ref: string,
@@ -1155,7 +1172,7 @@ export const gitlabProvider: ForgeProvider = {
           : opts?.sort === 'updated'
             ? 'updated_at'
             : undefined
-    const data = await glFetch<GlProjectResponse[]>(
+    const data = await glSearchFetch<GlProjectResponse[]>(
       `/projects`,
       {
         search: q,
@@ -1213,7 +1230,7 @@ export const gitlabProvider: ForgeProvider = {
   async searchUsers(q, opts): Promise<Paginated<ForgeUser>> {
     const page = opts?.cursor ? Number(opts.cursor) : 1
     const perPage = opts?.limit ?? 20
-    const data = await glFetch<GlUserResponse[]>(
+    const data = await glSearchFetch<GlUserResponse[]>(
       `/users`,
       { search: q, per_page: perPage, page },
       opts
