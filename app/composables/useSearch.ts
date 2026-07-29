@@ -178,7 +178,7 @@ export function useSearch() {
     error.value = null
   }
 
-  async function run(raw: string, opts?: { limit?: number }): Promise<void> {
+  async function run(raw: string, opts?: { limit?: number; noCache?: boolean }): Promise<void> {
     const q = parseQuery(raw)
     parsed.value = q
     reset()
@@ -284,7 +284,8 @@ export function useSearch() {
         limit,
         token: getToken(pid),
         sort: sortOption(q),
-        order: q.sortOrder
+        order: q.sortOrder,
+        noCache: opts?.noCache
       }
 
       if (types.includes('repos') && forge.searchRepos) {
