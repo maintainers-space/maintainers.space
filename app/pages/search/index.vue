@@ -65,8 +65,7 @@ const syntax = [
   { q: 'provider:codeberg forgejo', d: 'search only Codeberg' },
   { q: 'provider:gitea editor', d: 'search only Gitea' },
   { q: 'owner:tangled.org parser', d: 'search a Tangled owner' },
-  { q: 'owner:atlassian provider:bitbucket', d: 'search a Bitbucket workspace' },
-  { q: 'owner:~sircmpwn provider:sourcehut', d: 'search a Sourcehut user' }
+  { q: 'owner:atlassian provider:bitbucket', d: 'search a Bitbucket workspace' }
 ]
 </script>
 

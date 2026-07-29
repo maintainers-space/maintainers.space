@@ -8,7 +8,6 @@ export type ForgeId =
   | 'codeberg'
   | 'gitea'
   | 'bitbucket'
-  | 'sourcehut'
   | (string & {})
 
 export interface ForgeReadOptions {

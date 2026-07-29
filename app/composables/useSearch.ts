@@ -29,7 +29,6 @@ const DEFAULT_TYPES: ResultType[] = ['repos', 'issues', 'users']
  */
 const CLIENT_FILTER_SCOPES: Partial<Record<ForgeId, string[]>> = {
   tangled: ['owner', 'user', 'org', 'handle', 'from', 'author'],
-  sourcehut: ['owner', 'user', 'handle', 'from', 'author'],
   bitbucket: ['workspace', 'ws', 'owner']
 }
 

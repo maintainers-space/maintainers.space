@@ -13,7 +13,7 @@ export interface OAuthProviderConfig {
   scope?: string
   /** Most forges accept client id/secret in the token POST body; some require HTTP Basic auth instead. */
   tokenAuthStyle?: 'basic'
-  /** Set when the forge's OAuth app has a redirect URI fixed at registration time and rejects one on the authorize *and* token requests (Sourcehut). */
+  /** Set when the forge's OAuth app has a redirect URI fixed at registration time and rejects one on the authorize *and* token requests. */
   fixedRedirectUri?: boolean
   /** Fetch the connecting user's forge username with the freshly-issued token, to bind a signed attestation. */
   fetchUsername: (token: string) => Promise<string>
@@ -89,30 +89,6 @@ export const oauthProviders: Record<string, OAuthProviderConfig> = {
         { headers: { Authorization: `Bearer ${token}` } }
       )
       return user.nickname ?? user.uuid ?? ''
-    }
-  },
-  sourcehut: {
-    label: 'Sourcehut',
-    authorizeUrl: 'https://meta.sr.ht/oauth2/authorize',
-    // Note the hyphen — sr.ht's token endpoint is `access-token`, not `access_token`.
-    tokenUrl: 'https://meta.sr.ht/oauth2/access-token',
-    scope:
-      'meta.sr.ht/PROFILE:RO git.sr.ht/REPOSITORIES:RO todo.sr.ht/TRACKERS:RO todo.sr.ht/TICKETS:RW',
-    tokenAuthStyle: 'basic',
-    // sr.ht OAuth clients have a single redirect URI fixed at registration time
-    // and reject one being sent on the authorize request.
-    fixedRedirectUri: true,
-    host: 'sr.ht',
-    fetchUsername: async (token) => {
-      const res = await $fetch<{ data?: { me?: { canonicalName?: string } } }>(
-        'https://meta.sr.ht/query',
-        {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-          body: { query: '{ me { canonicalName } }' }
-        }
-      )
-      return (res.data?.me?.canonicalName ?? '').replace(/^~/, '')
     }
   }
 }

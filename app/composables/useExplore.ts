@@ -8,8 +8,7 @@ import type { ForgeId, ForgeRepo } from '~/types/forge'
  * all. Placeholders, swap for better examples as each forge gains real traction.
  */
 const FEATURED_OWNERS: Partial<Record<ForgeId, string>> = {
-  tangled: 'tangled.org',
-  sourcehut: '~sircmpwn'
+  tangled: 'tangled.org'
 }
 
 export type ExploreScope = 'trending' | 'following'

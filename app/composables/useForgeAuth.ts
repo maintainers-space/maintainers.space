@@ -98,20 +98,6 @@ async function fetchAuthedBitbucketUser(token: string): Promise<ForgeAuthUser> {
   }
 }
 
-interface SourcehutMeResponse {
-  data?: { me?: { canonicalName?: string; email?: string } }
-}
-
-async function fetchAuthedSourcehutUser(token: string): Promise<ForgeAuthUser> {
-  const res = await $fetch<SourcehutMeResponse>('https://meta.sr.ht/query', {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: { query: '{ me { canonicalName email } }' }
-  })
-  const username = (res.data?.me?.canonicalName ?? '').replace(/^~/, '')
-  return { username, profileUrl: username ? `https://git.sr.ht/~${username}` : undefined }
-}
-
 interface ForgeAuthClientConfig {
   /** Recorded on the linked-account record for disambiguation (see useForgeAccounts). */
   host?: string
@@ -124,8 +110,7 @@ const FORGE_AUTH_CLIENTS: Partial<Record<ForgeId, ForgeAuthClientConfig>> = {
   gitlab: { host: 'gitlab.com', fetchUser: fetchAuthedGitlabUser },
   codeberg: { host: 'codeberg.org', fetchUser: fetchAuthedCodebergUser },
   gitea: { host: 'gitea.com', fetchUser: fetchAuthedGiteaUser },
-  bitbucket: { host: 'bitbucket.org', fetchUser: fetchAuthedBitbucketUser },
-  sourcehut: { host: 'sr.ht', fetchUser: fetchAuthedSourcehutUser }
+  bitbucket: { host: 'bitbucket.org', fetchUser: fetchAuthedBitbucketUser }
 }
 
 /**

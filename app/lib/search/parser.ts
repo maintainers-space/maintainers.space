@@ -233,9 +233,7 @@ const PROVIDER_ALIASES: Record<string, ForgeId> = {
   gitea: 'gitea',
   forgejo: 'forgejo',
   bitbucket: 'bitbucket',
-  bb: 'bitbucket',
-  sourcehut: 'sourcehut',
-  sh: 'sourcehut'
+  bb: 'bitbucket'
 }
 
 function typeAlias(value: string): ResultType | undefined {

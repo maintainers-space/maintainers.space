@@ -12,7 +12,7 @@
         "properties": {
           "provider": {
             "type": "string",
-            "description": "Forge provider identifier, e.g. 'github', 'gitlab', 'codeberg', 'gitea', 'bitbucket', 'sourcehut', 'tangled'.",
+            "description": "Forge provider identifier, e.g. 'github', 'gitlab', 'codeberg', 'gitea', 'bitbucket', 'tangled'.",
             "maxLength": 64
           },
           "username": {
