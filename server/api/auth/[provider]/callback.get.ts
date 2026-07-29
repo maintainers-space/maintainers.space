@@ -68,6 +68,10 @@ export default defineEventHandler(async (event) => {
       method: 'POST',
       headers: {
         Accept: 'application/json',
+        // Some token endpoints (sr.ht) strictly match this header rather than
+        // inferring it from the body, and reject the
+        // "...;charset=UTF-8" suffix a bare URLSearchParams body produces.
+        'Content-Type': 'application/x-www-form-urlencoded',
         ...(basicAuth
           ? {
               Authorization: `Basic ${btoa(`${credentials.clientId}:${credentials.clientSecret}`)}`
@@ -109,7 +113,12 @@ export default defineEventHandler(async (event) => {
     }
 
     return sendRedirect(event, `/oauth/${providerId}#${fragment.toString()}`)
-  } catch {
-    return fail(`Could not complete ${provider.label} sign-in. Please try again.`)
+  } catch (err) {
+    // Surface the upstream OAuth error (e.g. invalid_grant, invalid_client, a
+    // redirect_uri mismatch on the forge's own client registration) instead of
+    // a generic message that hides the real cause.
+    const e = err as { data?: { error?: string; error_description?: string } }
+    const detail = e.data?.error_description || e.data?.error
+    return fail(detail || `Could not complete ${provider.label} sign-in. Please try again.`)
   }
 })
