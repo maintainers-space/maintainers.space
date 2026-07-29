@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { ForgeContribution } from '~/types/forge'
+import { KIND_FILTER_LABEL } from '~/composables/useTimelineFilters'
 
 const { isAuthenticated } = useAuth()
 const {
@@ -33,7 +34,12 @@ function refresh() {
   else loadFriends(true)
 }
 
-onMounted(() => ensureLoaded(tab.value))
+const filters = useTimelineFilters()
+
+onMounted(() => {
+  filters.load()
+  ensureLoaded(tab.value)
+})
 watch(tab, (t) => ensureLoaded(t))
 
 const activeLoading = computed(() => (tab.value === 'me' ? meLoading.value : friendsLoading.value))
@@ -70,8 +76,10 @@ function groupByDay(items: ForgeContribution[]): DayGroup[] {
   return groups
 }
 
-const meGroups = computed(() => groupByDay(meItems.value))
-const friendsGroups = computed(() => groupByDay(friendsItems.value))
+const meGroups = computed(() => groupByDay(meItems.value.filter((c) => filters.isEnabled(c.kind))))
+const friendsGroups = computed(() =>
+  groupByDay(friendsItems.value.filter((c) => filters.isEnabled(c.kind)))
+)
 </script>
 
 <template>
@@ -119,6 +127,19 @@ const friendsGroups = computed(() => groupByDay(friendsItems.value))
             </template>
             <template v-else> Recent activity from the people you follow, newest first. </template>
           </p>
+
+          <!-- Persisted event-type filter -->
+          <div class="flex flex-wrap gap-1.5">
+            <UButton
+              v-for="kind in filters.kinds"
+              :key="kind"
+              size="xs"
+              :color="filters.isEnabled(kind) ? 'primary' : 'neutral'"
+              :variant="filters.isEnabled(kind) ? 'subtle' : 'ghost'"
+              :label="KIND_FILTER_LABEL[kind]"
+              @click="filters.toggle(kind)"
+            />
+          </div>
 
           <!-- Me -->
           <div v-show="tab === 'me'" class="space-y-6">
