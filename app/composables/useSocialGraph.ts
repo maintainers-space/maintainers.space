@@ -45,6 +45,8 @@ export interface GraphProjectNode {
   id: string
   label: string
   provider: ForgeId
+  owner: string
+  name: string
   fullName: string
   url?: string | null
 }
@@ -204,6 +206,8 @@ export function useSocialGraph() {
         id,
         label: repo.name,
         provider: repo.provider,
+        owner: repo.owner,
+        name: repo.name,
         fullName: repo.fullName,
         url: repo.url
       }

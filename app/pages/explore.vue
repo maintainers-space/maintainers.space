@@ -1,49 +1,34 @@
 <script setup lang="ts">
-import type { ExplorePeriod, ExploreScope } from '~/composables/useExplore'
+import type { GraphNode, GraphPersonNode } from '~/composables/useSocialGraph'
 
-const { repos, loading, notes, load } = useExplore()
 const { isAuthenticated } = useAuth()
+const { nodes, links, loading, error, load } = useSocialGraph()
 
-const scope = useRouteTab<ExploreScope>(
-  'scope',
-  ['trending', 'following'],
-  isAuthenticated.value ? 'following' : 'trending'
-)
-const period = useRouteTab<ExplorePeriod>('period', ['daily', 'weekly', 'monthly'], 'weekly')
-const language = useRouteTab(
-  'lang',
-  ['all', 'TypeScript', 'JavaScript', 'Python', 'Rust', 'Go', 'Vue', 'C++', 'Zig'],
-  'all'
-)
+const graphEl = ref<{ zoomToFit: () => void } | null>(null)
+const selected = ref<GraphPersonNode | null>(null)
+const selectedScreen = ref<{ x: number; y: number } | null>(null)
 
-// Following requires sign-in; fall back to trending for anonymous visitors even
-// if a stale ?scope=following lands in the URL.
-watchEffect(() => {
-  if (!isAuthenticated.value && scope.value === 'following') scope.value = 'trending'
-})
-
-const scopeItems = computed(() => [
-  { label: 'Trending', value: 'trending', icon: 'i-lucide-flame' },
-  ...(isAuthenticated.value
-    ? [{ label: 'Following', value: 'following', icon: 'i-lucide-users' }]
-    : [])
-])
-
-const periodItems = [
-  { label: 'Today', value: 'daily' },
-  { label: 'This week', value: 'weekly' },
-  { label: 'This month', value: 'monthly' }
-]
-
-const languages = ['all', 'TypeScript', 'JavaScript', 'Python', 'Rust', 'Go', 'Vue', 'C++', 'Zig']
-
-function reload(force = false): void {
-  const lang = language.value && language.value !== 'all' ? language.value : undefined
-  load({ scope: scope.value, period: period.value, language: lang, limit: 30, force })
+function onSelect(node: GraphNode | null, screen: { x: number; y: number } | null): void {
+  if (node?.kind === 'project') {
+    selected.value = null
+    navigateTo(repoPath({ provider: node.provider, owner: node.owner, name: node.name }))
+    return
+  }
+  selected.value = node
+  selectedScreen.value = screen
 }
 
-watch([scope, period, language], () => reload())
-onMounted(() => reload())
+async function reload(): Promise<void> {
+  await load()
+  nextTick(() => graphEl.value?.zoomToFit())
+}
+
+onMounted(() => {
+  if (isAuthenticated.value) reload()
+})
+watch(isAuthenticated, (v) => {
+  if (v) reload()
+})
 </script>
 
 <template>
@@ -61,77 +46,81 @@ onMounted(() => reload())
             size="sm"
             :loading="loading"
             aria-label="Refresh"
-            @click="reload(true)"
+            @click="reload"
           />
         </template>
       </UDashboardNavbar>
     </template>
 
     <template #body>
-      <div class="mx-auto w-full max-w-5xl space-y-6 py-2">
-        <div class="flex flex-wrap items-center justify-between gap-3">
-          <UTabs v-model="scope" :items="scopeItems" :content="false" size="sm" class="w-auto" />
-          <div class="flex items-center gap-2">
-            <USelect
-              v-if="scope === 'trending'"
-              v-model="period"
-              :items="periodItems"
-              size="sm"
-              class="w-36"
-            />
-            <USelect
-              v-model="language"
-              :items="languages.map((l) => ({ label: l === 'all' ? 'Any language' : l, value: l }))"
-              size="sm"
-              class="w-40"
-            />
+      <div
+        v-if="!isAuthenticated"
+        class="mx-auto flex h-full max-w-md items-center justify-center text-center"
+      >
+        <div>
+          <UIcon name="i-lucide-share-2" class="mx-auto size-8 text-muted" />
+          <p class="mt-3 text-sm text-muted">
+            Sign in to explore your cross-forge social graph — friends, friends of friends, and the
+            projects that connect you.
+          </p>
+        </div>
+      </div>
+
+      <div v-else class="relative h-full w-full">
+        <div v-if="loading && !nodes.length" class="flex h-full items-center justify-center">
+          <div class="flex items-center gap-2 text-sm text-muted">
+            <UIcon name="i-lucide-loader-circle" class="size-4 animate-spin" />Building your graph…
           </div>
         </div>
 
-        <div v-if="notes.length" class="space-y-2">
-          <UAlert
-            v-for="(n, i) in notes"
-            :key="i"
-            color="neutral"
-            variant="subtle"
-            icon="i-lucide-info"
-            :description="n"
-            :ui="{ description: 'text-xs' }"
-          />
-        </div>
-
-        <div v-if="loading && !repos.length" class="grid gap-3 sm:grid-cols-2">
-          <USkeleton v-for="i in 6" :key="i" class="h-28 w-full" />
-        </div>
-
         <div
-          v-else-if="!repos.length"
-          class="rounded-lg border border-dashed border-default py-16 text-center"
+          v-else-if="!nodes.length"
+          class="flex h-full flex-col items-center justify-center text-center"
         >
-          <UIcon name="i-lucide-telescope" class="mx-auto size-8 text-muted" />
-          <p class="mt-3 text-sm text-muted">Nothing to explore right now.</p>
-          <p class="mx-auto mt-1 max-w-md text-xs text-muted">
-            GitHub throttles anonymous discovery to a few requests per minute. Connect your GitHub
-            account in
+          <UIcon name="i-lucide-share-2" class="size-8 text-muted" />
+          <p class="mt-3 text-sm text-muted">No connections found yet.</p>
+          <p class="mx-auto mt-1 max-w-sm text-xs text-muted">
+            Follow people on Bluesky or on a linked forge, or connect a forge account in
             <NuxtLink to="/settings/accounts" class="text-primary hover:underline"
               >settings</NuxtLink
-            >
-            to raise the limit, or try again in a moment.
+            >, to start building your graph.
           </p>
-          <UButton
-            class="mt-4"
-            icon="i-lucide-refresh-cw"
-            color="neutral"
-            variant="subtle"
-            size="sm"
-            label="Try again"
-            :loading="loading"
-            @click="reload(true)"
-          />
         </div>
 
-        <div v-else class="grid gap-3 sm:grid-cols-2">
-          <SearchResultRepo v-for="r in repos" :key="`${r.provider}:${r.fullName}`" :repo="r" />
+        <template v-else>
+          <ExploreSocialGraph ref="graphEl" :nodes="nodes" :links="links" @select="onSelect" />
+          <ExplorePersonCard
+            v-if="selected && selectedScreen"
+            :node="selected"
+            :screen="selectedScreen"
+            @close="selected = null"
+          />
+        </template>
+
+        <UAlert
+          v-if="error"
+          color="error"
+          variant="subtle"
+          icon="i-lucide-circle-alert"
+          :description="error"
+          class="absolute bottom-4 left-1/2 w-auto -translate-x-1/2"
+        />
+
+        <div
+          class="pointer-events-none absolute bottom-4 left-4 flex flex-wrap gap-3 rounded-lg border border-default bg-default/80 px-3 py-1.5 text-xs text-muted backdrop-blur"
+        >
+          <span class="inline-flex items-center gap-1.5"
+            ><span class="size-2 rounded-full bg-[#eab308]" />You</span
+          >
+          <span class="inline-flex items-center gap-1.5"
+            ><span class="size-2 rounded-full bg-[#3b82f6]" />Friends</span
+          >
+          <span class="inline-flex items-center gap-1.5"
+            ><span class="size-2 rounded-full bg-[#8b5cf6]" />Friends of friends</span
+          >
+          <span class="inline-flex items-center gap-1.5"
+            ><span class="size-2 bg-neutral-500" />Projects</span
+          >
         </div>
       </div>
     </template>
