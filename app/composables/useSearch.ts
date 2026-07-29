@@ -329,7 +329,7 @@ export function useSearch() {
                 totals.value = { ...totals.value, users: (totals.value.users ?? 0) + r.total }
             })
             .catch(() => {
-              /* user search is best-effort */
+              noteSet.add(`${forge.label} people search failed or was rate-limited.`)
             })
         )
       }

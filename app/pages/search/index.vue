@@ -150,6 +150,19 @@ const syntax = [
             </SearchGroup>
 
             <SearchGroup
+              title="People"
+              icon="i-lucide-users"
+              :count="results.users.length"
+              :total="totals.users"
+            >
+              <SearchResultUser
+                v-for="u in results.users"
+                :key="`${u.provider}:${u.login}`"
+                :user="u"
+              />
+            </SearchGroup>
+
+            <SearchGroup
               title="Code"
               icon="i-lucide-code"
               :count="results.code.length"
@@ -181,19 +194,6 @@ const syntax = [
                 v-for="(d, i) in results.discussions"
                 :key="`${d.provider}:${d.id}:${i}`"
                 :discussion="d"
-              />
-            </SearchGroup>
-
-            <SearchGroup
-              title="People"
-              icon="i-lucide-users"
-              :count="results.users.length"
-              :total="totals.users"
-            >
-              <SearchResultUser
-                v-for="u in results.users"
-                :key="`${u.provider}:${u.login}`"
-                :user="u"
               />
             </SearchGroup>
           </div>
