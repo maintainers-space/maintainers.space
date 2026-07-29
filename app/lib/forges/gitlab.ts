@@ -40,7 +40,8 @@ import type {
 
 import { getForgeToken } from '~/lib/forges/token-store'
 import { parseGitlabJobTrace } from '~/lib/forges/actions-log'
-import { searchFetch } from '~/lib/forges/search-fetch'
+import { cachedFetch } from '~/lib/forges/cached-fetch'
+import { deriveContributorsFromCommits } from '~/lib/forges/derive-contributors'
 
 // Raw GitLab REST API v4 response shapes — only the fields this file actually
 // reads. These are intentionally loose (most fields optional) since GitLab's
@@ -746,7 +747,7 @@ async function glSearchFetch<T>(
   opts?: ForgeSearchOptions
 ): Promise<T> {
   const token = opts?.token ?? getForgeToken('gitlab')
-  return searchFetch<T>(`${API}${path}`, query, {
+  return cachedFetch<T>(`${API}${path}`, query, {
     token,
     headers: glHeaders({ ...opts, token }),
     noCache: opts?.noCache,
@@ -1476,6 +1477,47 @@ export const gitlabProvider: ForgeProvider = {
       opts
     ).catch(() => [])
     return (data ?? []).map(mapUser).filter((u): u is ForgeUser => !!u)
+  },
+
+  async listUserFollowing(login, opts): Promise<ForgeUser[]> {
+    const uid = await resolveUserId(login, opts)
+    if (uid == null) return []
+    const data = await cachedFetch<GlUserResponse[]>(
+      `${API}/users/${uid}/following`,
+      { per_page: opts?.limit ?? 100 },
+      {
+        token: opts?.token ?? getForgeToken('gitlab'),
+        headers: glHeaders(opts),
+        proxyPath: '/api/graph-proxy',
+        signal: opts?.signal
+      }
+    ).catch(() => [])
+    return (data ?? []).map(mapUser).filter((u): u is ForgeUser => !!u)
+  },
+
+  async listUserFollowers(login, opts): Promise<ForgeUser[]> {
+    const uid = await resolveUserId(login, opts)
+    if (uid == null) return []
+    const data = await cachedFetch<GlUserResponse[]>(
+      `${API}/users/${uid}/followers`,
+      { per_page: opts?.limit ?? 100 },
+      {
+        token: opts?.token ?? getForgeToken('gitlab'),
+        headers: glHeaders(opts),
+        proxyPath: '/api/graph-proxy',
+        signal: opts?.signal
+      }
+    ).catch(() => [])
+    return (data ?? []).map(mapUser).filter((u): u is ForgeUser => !!u)
+  },
+
+  async listContributors(repo, opts): Promise<ForgeUser[]> {
+    return deriveContributorsFromCommits(
+      'gitlab',
+      () => gitlabProvider.getRepo!(repo.owner, repo.name, opts).then((r) => r.defaultBranch),
+      (ref) => gitlabProvider.listCommits!(repo, ref, { ...opts, limit: 100 }),
+      opts?.limit ?? 8
+    )
   },
 
   async listUserEvents(login, opts): Promise<ForgeContribution[]> {

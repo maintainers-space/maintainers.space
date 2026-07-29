@@ -709,6 +709,21 @@ export interface ForgeProvider {
   /** People (users, not orgs) the authenticated viewer follows. */
   listFollowing?: (opts?: ForgePageOptions) => Promise<ForgeUser[]>
 
+  /**
+   * Public, anonymous-readable social graph for an *arbitrary* login — unlike
+   * {@link listFollowing}, which only resolves the token holder's own list.
+   * Powers the Explore graph's "friends of friends" layer.
+   */
+  listUserFollowing?: (login: string, opts?: ForgePageOptions) => Promise<ForgeUser[]>
+  /** Public, anonymous-readable followers of an arbitrary login. */
+  listUserFollowers?: (login: string, opts?: ForgePageOptions) => Promise<ForgeUser[]>
+  /**
+   * People who contribute to a repository, for the Explore graph's project
+   * nodes. A real contributors endpoint where the forge has one, otherwise
+   * derived from recent commit authors (see `deriveContributorsFromCommits`).
+   */
+  listContributors?: (repo: RepoLocator, opts?: ForgePageOptions) => Promise<ForgeUser[]>
+
   // Activity -------------------------------------------------------------
   /** Recent public activity for a user, newest first (bounded by the forge). */
   listUserEvents?: (login: string, opts?: ForgePageOptions) => Promise<ForgeContribution[]>

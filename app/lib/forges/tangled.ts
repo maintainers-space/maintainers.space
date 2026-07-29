@@ -1,5 +1,6 @@
 import { resolveHandleToDid } from '~/lib/atproto/public'
 import { noCacheHeaders } from '~/lib/reload-nav'
+import { deriveContributorsFromCommits } from '~/lib/forges/derive-contributors'
 import type {
   ForgeActionJob,
   ForgeActionRun,
@@ -609,6 +610,17 @@ export const tangledProvider: ForgeProvider = {
       total: data.total,
       cursor: commits.length === limit && last ? last.sha : undefined
     }
+  },
+
+  async listContributors(repo, opts): Promise<ForgeUser[]> {
+    const resolved = await resolveRepo(repo.owner, repo.name, repo.ref, opts).catch(() => null)
+    if (!resolved) return []
+    return deriveContributorsFromCommits(
+      'tangled',
+      () => getDefaultBranch(resolved.atUri, opts),
+      (ref) => tangledProvider.listCommits!(repo, ref, { ...opts, limit: 100 }),
+      opts?.limit ?? 8
+    )
   },
 
   async getCommit(repo, sha, opts): Promise<ForgeCommitDetail> {
