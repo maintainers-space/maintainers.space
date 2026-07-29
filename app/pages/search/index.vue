@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { forgeList } from '~/lib/forges'
+
 const route = useRoute()
 const router = useRouter()
 
@@ -44,14 +46,27 @@ watch(
 
 const hasQuery = computed(() => !!String(route.query.q ?? '').trim())
 
+// Built from the forge registry rather than hardcoded, so this never goes
+// stale again as forges are added.
+const forgeNamesLabel = computed(() =>
+  new Intl.ListFormat('en', { style: 'long', type: 'conjunction' }).format(
+    forgeList.map((f) => f.label)
+  )
+)
+
 const syntax = [
   { q: 'react OR vue', d: 'either term' },
   { q: 'auth NOT test', d: 'exclude a term' },
   { q: '"exact phrase"', d: 'match a phrase' },
-  { q: 'language:rust stars:>100', d: 'qualifiers' },
+  { q: 'language:rust stars:>100', d: 'GitHub qualifiers' },
   { q: 'provider:github type:issues', d: 'scope providers & types' },
   { q: 'provider:github type:discussions', d: 'scope to discussions' },
-  { q: 'owner:tangled.org parser', d: 'search a Tangled owner' }
+  { q: 'provider:gitlab sort:stars react', d: 'search only GitLab' },
+  { q: 'provider:codeberg forgejo', d: 'search only Codeberg' },
+  { q: 'provider:gitea editor', d: 'search only Gitea' },
+  { q: 'owner:tangled.org parser', d: 'search a Tangled owner' },
+  { q: 'owner:atlassian provider:bitbucket', d: 'search a Bitbucket workspace' },
+  { q: 'owner:~sircmpwn provider:sourcehut', d: 'search a Sourcehut user' }
 ]
 </script>
 
@@ -85,9 +100,10 @@ const syntax = [
         <!-- Syntax hints when idle -->
         <div v-if="!hasQuery" class="space-y-4">
           <p class="text-sm text-muted">
-            One search across GitHub and Tangled. Combine terms with <UKbd>OR</UKbd>,
+            One search across {{ forgeNamesLabel }}. Combine terms with <UKbd>OR</UKbd>,
             <UKbd>NOT</UKbd>, parentheses and <code class="text-default">key:value</code> qualifiers
-            — GitHub-style.
+            — GitHub-style, plus <code class="text-default">provider:</code> and
+            <code class="text-default">owner:</code> to target a specific platform.
           </p>
           <div class="grid gap-2 sm:grid-cols-2">
             <button
