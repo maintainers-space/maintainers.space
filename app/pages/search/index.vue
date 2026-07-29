@@ -106,14 +106,12 @@ const syntax = [
         <template v-else>
           <!-- Provider / note banners -->
           <div v-if="notes.length" class="space-y-2">
-            <UAlert
+            <CommonDismissibleAlert
               v-for="(n, i) in notes"
               :key="i"
+              :storage-key="`search-note:${n}`"
               color="warning"
-              variant="subtle"
-              icon="i-lucide-info"
               :description="n"
-              :ui="{ description: 'text-xs' }"
             />
           </div>
 

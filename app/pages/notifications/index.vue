@@ -79,14 +79,11 @@ function resolvedMeta(item: ForgeInboxItem): { icon: string; class: string } {
 
         <template v-else>
           <div v-if="notes.length" class="space-y-2">
-            <UAlert
+            <CommonDismissibleAlert
               v-for="(n, i) in notes"
               :key="i"
-              color="neutral"
-              variant="subtle"
-              icon="i-lucide-info"
+              :storage-key="`notifications-note:${n}`"
               :description="n"
-              :ui="{ description: 'text-xs' }"
             >
               <template #actions>
                 <UButton
@@ -97,7 +94,7 @@ function resolvedMeta(item: ForgeInboxItem): { icon: string; class: string } {
                   label="Manage accounts"
                 />
               </template>
-            </UAlert>
+            </CommonDismissibleAlert>
           </div>
 
           <NuxtLink

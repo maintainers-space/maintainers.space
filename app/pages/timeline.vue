@@ -122,13 +122,10 @@ const friendsGroups = computed(() => groupByDay(friendsItems.value))
 
           <!-- Me -->
           <div v-show="tab === 'me'" class="space-y-6">
-            <UAlert
+            <CommonDismissibleAlert
               v-if="meNote"
-              color="neutral"
-              variant="subtle"
-              icon="i-lucide-info"
+              storage-key="timeline-note:me"
               :description="meNote"
-              :ui="{ description: 'text-xs' }"
             >
               <template #actions>
                 <UButton
@@ -139,7 +136,7 @@ const friendsGroups = computed(() => groupByDay(friendsItems.value))
                   label="Manage accounts"
                 />
               </template>
-            </UAlert>
+            </CommonDismissibleAlert>
 
             <div v-if="meLoading && !meItems.length" class="space-y-2">
               <USkeleton v-for="i in 6" :key="i" class="h-14 w-full" />
@@ -167,13 +164,10 @@ const friendsGroups = computed(() => groupByDay(friendsItems.value))
 
           <!-- Friends -->
           <div v-show="tab === 'friends'" class="space-y-6">
-            <UAlert
+            <CommonDismissibleAlert
               v-if="friendsNote"
-              color="neutral"
-              variant="subtle"
-              icon="i-lucide-info"
+              storage-key="timeline-note:friends"
               :description="friendsNote"
-              :ui="{ description: 'text-xs' }"
             >
               <template #actions>
                 <UButton
@@ -184,7 +178,7 @@ const friendsGroups = computed(() => groupByDay(friendsItems.value))
                   label="Manage accounts"
                 />
               </template>
-            </UAlert>
+            </CommonDismissibleAlert>
 
             <div v-if="friendsLoading && !friendsItems.length" class="space-y-2">
               <USkeleton v-for="i in 6" :key="i" class="h-14 w-full" />
