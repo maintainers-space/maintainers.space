@@ -21,9 +21,9 @@ async function mapLimit<T, R>(
   return results
 }
 
-/** Drop low-signal noise (starring repos) from an activity feed. */
+/** Drop low-signal noise: starring repos, and the generic "was active" fallback that carries no real subject. */
 function meaningful(c: ForgeContribution): boolean {
-  return c.kind !== 'star'
+  return c.kind !== 'star' && c.kind !== 'other'
 }
 
 function dedupe(items: ForgeContribution[]): ForgeContribution[] {
@@ -34,6 +34,28 @@ function dedupe(items: ForgeContribution[]): ForgeContribution[] {
     seen.add(key)
     return true
   })
+}
+
+/**
+ * Collapse every event about the same PR/issue (opened, reviewed, commented,
+ * merged, ...) into the single highest-impact one, so one subject reads as
+ * one entry — e.g. "merged #67 <title>" — instead of a burst of near-
+ * duplicate rows. Events with no subject number (push, create, release, fork)
+ * have nothing to group by and pass through unchanged.
+ */
+function consolidate(items: ForgeContribution[]): ForgeContribution[] {
+  const bySubject = new Map<string, ForgeContribution>()
+  const rest: ForgeContribution[] = []
+  for (const c of items) {
+    if (c.number == null) {
+      rest.push(c)
+      continue
+    }
+    const key = `${c.provider}:${c.repo.fullName}:${c.number}`
+    const existing = bySubject.get(key)
+    if (!existing || (c.impact ?? 0) > (existing.impact ?? 0)) bySubject.set(key, c)
+  }
+  return [...rest, ...bySubject.values()]
 }
 
 /**
@@ -111,9 +133,9 @@ export function useTimeline() {
       }
     }
     const chunks = await Promise.all(jobs)
-    return dedupe(chunks.flat())
-      .filter(meaningful)
-      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+    return consolidate(dedupe(chunks.flat()).filter(meaningful)).sort((a, b) =>
+      b.createdAt.localeCompare(a.createdAt)
+    )
   }
 
   /** Pool "activity from people you follow" across every forge. */
@@ -146,7 +168,7 @@ export function useTimeline() {
         return chunks.flat()
       })
     )
-    return dedupe(buckets.flat()).filter(meaningful)
+    return consolidate(dedupe(buckets.flat()).filter(meaningful))
   }
 
   async function loadMe(force = false): Promise<void> {
