@@ -4,10 +4,19 @@ import { useRepoContext } from '~/composables/useRepoContext'
 
 const route = useRoute()
 const { provider, owner, name, forge, locator } = useRepoContext()
+const { get: getToken } = useForgeTokens()
 const base = computed(() =>
   repoPath({ provider: provider.value, owner: owner.value, name: name.value })
 )
 const id = computed(() => String(route.params.id))
+
+// GitHub's log endpoint hard-requires a token — expanding a step there without
+// one always resolves to nothing, which used to be the only way to find that
+// out. Skip the dead-end expand affordance in that case; the external-link
+// icon on every step is the reliable way in regardless of provider.
+const canFetchLogs = computed(
+  () => !!forge.value?.getActionJobLog && (provider.value !== 'github' || !!getToken('github'))
+)
 
 const { data, pending, error } = useLiveAsyncData<ForgeActionRun | null>(
   () => `run:${provider.value}:${owner.value}:${name.value}:${id.value}`,
@@ -34,6 +43,7 @@ function stepLog(job: ForgeActionJob, step: ForgeActionStep): string[] | null {
 }
 
 async function toggleStep(job: ForgeActionJob, index: number): Promise<void> {
+  if (!canFetchLogs.value) return
   const key = stepKey(job, index)
   if (expandedSteps.value[key]) {
     delete expandedSteps.value[key]
@@ -111,7 +121,8 @@ async function toggleStep(job: ForgeActionJob, index: number): Promise<void> {
             <li v-for="(step, i) in job.steps" :key="i" class="text-sm">
               <button
                 type="button"
-                class="flex w-full items-center gap-2 px-4 py-2 text-left hover:bg-elevated/40"
+                class="flex w-full items-center gap-2 px-4 py-2 text-left"
+                :class="canFetchLogs ? 'hover:bg-elevated/40' : 'cursor-default'"
                 @click="toggleStep(job, i)"
               >
                 <StateBadge :state="step.status" kind="run" size="xs" />
@@ -122,14 +133,26 @@ async function toggleStep(job: ForgeActionJob, index: number): Promise<void> {
                 >
                   {{ formatDuration(step.startedAt, step.completedAt) }}
                 </span>
+                <a
+                  v-if="job.url"
+                  :href="job.url"
+                  target="_blank"
+                  rel="noopener"
+                  :title="`View this step's logs on ${forge?.label}`"
+                  class="shrink-0 text-muted hover:text-primary"
+                  @click.stop
+                >
+                  <UIcon name="i-lucide-external-link" class="size-4" />
+                </a>
                 <UIcon
+                  v-if="canFetchLogs"
                   name="i-lucide-chevron-down"
                   class="size-4 shrink-0 text-muted transition-transform"
                   :class="{ 'rotate-180': expandedSteps[stepKey(job, i)] }"
                 />
               </button>
               <div
-                v-if="expandedSteps[stepKey(job, i)]"
+                v-if="canFetchLogs && expandedSteps[stepKey(job, i)]"
                 class="border-t border-default bg-elevated/20 px-4 py-2"
               >
                 <USkeleton v-if="jobLogLoading[job.id]" class="h-16 w-full" />
@@ -138,16 +161,7 @@ async function toggleStep(job: ForgeActionJob, index: number): Promise<void> {
                   class="max-h-96 overflow-auto whitespace-pre-wrap font-mono text-xs text-default"
                   >{{ stepLog(job, step)?.join('\n') }}</pre>
                 <p v-else class="text-xs text-muted">
-                  Logs aren't available here.
-                  <a
-                    v-if="job.url"
-                    :href="job.url"
-                    target="_blank"
-                    rel="noopener"
-                    class="text-primary hover:underline"
-                  >
-                    View full log on {{ forge?.label }}
-                  </a>
+                  This step has no log content on {{ forge?.label }}.
                 </p>
               </div>
             </li>
