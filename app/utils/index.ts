@@ -59,7 +59,7 @@ export function formatDate(input?: string | number | Date | null): string {
   return new Intl.DateTimeFormat('en', { dateStyle: 'medium' }).format(date)
 }
 
-/** Shorten a DID for display, e.g. did:plc:wshs7t2adsemcrrd4snkeqli → did:plc:wshs…keqli */
+/** Shorten a DID for display, e.g. did:plc:wshs7t2adsemcrrd4snkeqli → did:plc:wshs…eqli */
 export function shortDid(did?: string | null): string {
   if (!did) return ''
   if (!did.startsWith('did:')) return did
