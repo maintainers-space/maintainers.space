@@ -117,6 +117,8 @@ interface GfRepoResponse {
   fork?: boolean
   created_at?: string | null
   updated_at?: string | null
+  has_issues?: boolean
+  has_pull_requests?: boolean
 }
 
 interface GfTopicsResponse {
@@ -520,7 +522,11 @@ export function createGiteaFamilyProvider(config: GiteaFamilyConfig): ForgeProvi
       isFork: r.fork,
       license: null,
       createdAt: r.created_at ?? null,
-      updatedAt: r.updated_at ?? null
+      updatedAt: r.updated_at ?? null,
+      features:
+        r.has_issues === undefined && r.has_pull_requests === undefined
+          ? undefined
+          : { issues: r.has_issues, pulls: r.has_pull_requests }
     }
   }
 

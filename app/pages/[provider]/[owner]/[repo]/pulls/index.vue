@@ -7,6 +7,8 @@ const base = computed(() =>
   repoPath({ provider: provider.value, owner: owner.value, name: name.value })
 )
 
+const termPlural = computed(() => pullsTerm(provider.value, { plural: true }))
+
 const state = ref<'open' | 'closed' | 'merged'>('open')
 const items = ref<ForgePull[]>([])
 const loading = ref(false)
@@ -33,7 +35,7 @@ async function load(): Promise<void> {
     const page = await forge.value.listPulls(locator.value, { state: state.value, limit: 30 })
     items.value = page.items
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Failed to load pull requests.'
+    error.value = e instanceof Error ? e.message : `Failed to load ${termPlural.value}.`
   } finally {
     loading.value = false
   }
@@ -136,7 +138,7 @@ function color(s: ForgePullState): string {
       </ol>
     </div>
 
-    <ListToolbar v-model:search="q" :count="filtered.length" placeholder="Filter pull requests…">
+    <ListToolbar v-model:search="q" :count="filtered.length" :placeholder="`Filter ${termPlural}…`">
       <template #filters>
         <UButton
           :color="state === 'open' ? 'primary' : 'neutral'"
@@ -174,7 +176,7 @@ function color(s: ForgePullState): string {
       color="error"
       variant="subtle"
       icon="i-lucide-circle-alert"
-      title="Could not load pull requests"
+      :title="`Could not load ${termPlural}`"
       :description="error"
     />
 
@@ -184,7 +186,7 @@ function color(s: ForgePullState): string {
     >
       <UIcon name="i-lucide-git-pull-request-closed" class="mx-auto size-8 text-muted" />
       <p class="mt-3 text-sm text-muted">
-        {{ q ? 'No pull requests match your filter.' : `No ${state} pull requests.` }}
+        {{ q ? `No ${termPlural} match your filter.` : `No ${state} ${termPlural}.` }}
       </p>
     </div>
 

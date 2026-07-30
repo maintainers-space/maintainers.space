@@ -73,6 +73,18 @@ export interface ForgeRepo {
   license?: string | null
   createdAt?: string | null
   updatedAt?: string | null
+  /**
+   * Per-repo feature toggles, when the forge reports them (e.g. GitHub
+   * Discussions is opt-in per repo; issues/MRs can be turned off per repo on
+   * GitHub/GitLab/Gitea). `undefined` per-field means the forge didn't report
+   * it — treat as enabled, not disabled. Only populated by single-repo
+   * fetches (`getRepo`/`getOverview`), not list/search results.
+   */
+  features?: {
+    issues?: boolean
+    pulls?: boolean
+    discussions?: boolean
+  }
   /** Provider-specific handles (AT-URI, knot, repoDid, ...) for follow-up calls. */
   ref?: Record<string, unknown>
 }

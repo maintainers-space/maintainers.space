@@ -95,6 +95,16 @@ export function userPath(user: { provider: string; login: string }): string {
   return `/${user.provider}/${seg(user.login)}`
 }
 
+/** GitLab calls them "merge requests" — every other forge says "pull requests". Same route, different word. */
+export function pullsTerm(
+  provider: string,
+  opts: { plural?: boolean; capitalize?: boolean } = {}
+): string {
+  const word = provider === 'gitlab' ? 'merge request' : 'pull request'
+  const withPlural = opts.plural ? `${word}s` : word
+  return opts.capitalize ? withPlural.charAt(0).toUpperCase() + withPlural.slice(1) : withPlural
+}
+
 /** Canonical in-app path for an issue or pull request. */
 export function issuePath(issue: {
   provider: string

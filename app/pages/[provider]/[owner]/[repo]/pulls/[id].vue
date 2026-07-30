@@ -168,7 +168,7 @@ async function onDiffComment(payload: { path: string; line: number; body: string
       size="xs"
       color="neutral"
       variant="ghost"
-      label="All pull requests"
+      :label="`All ${pullsTerm(provider, { plural: true })}`"
     />
 
     <div v-if="pending && !data" class="space-y-3">
@@ -181,7 +181,7 @@ async function onDiffComment(payload: { path: string; line: number; body: string
       color="error"
       variant="subtle"
       icon="i-lucide-circle-alert"
-      title="Could not load pull request"
+      :title="`Could not load ${pullsTerm(provider)}`"
       :description="error?.message"
     />
 

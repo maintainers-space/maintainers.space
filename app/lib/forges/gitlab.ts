@@ -86,6 +86,8 @@ interface GlProjectResponse {
   created_at?: string | null
   last_activity_at?: string | null
   updated_at?: string | null
+  issues_enabled?: boolean
+  merge_requests_enabled?: boolean
 }
 
 /** Fields shared by merge-request-shaped payloads (MRs and MR-ish todo targets). */
@@ -463,6 +465,10 @@ function mapRepo(r: GlProjectResponse): ForgeRepo {
     license: r.license?.nickname ?? r.license?.name ?? null,
     createdAt: r.created_at ?? null,
     updatedAt: r.last_activity_at ?? r.updated_at ?? null,
+    features:
+      r.issues_enabled === undefined && r.merge_requests_enabled === undefined
+        ? undefined
+        : { issues: r.issues_enabled, pulls: r.merge_requests_enabled },
     ref: { id: r.id }
   }
 }

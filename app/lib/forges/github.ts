@@ -83,6 +83,8 @@ interface GhRepoResponse {
   created_at?: string | null
   pushed_at?: string | null
   updated_at?: string | null
+  has_issues?: boolean
+  has_discussions?: boolean
 }
 
 interface GhIssueResponse {
@@ -674,7 +676,11 @@ function mapRepo(r: GhRepoResponse): ForgeRepo {
     isFork: r.fork,
     license: r.license?.spdx_id ?? null,
     createdAt: r.created_at ?? null,
-    updatedAt: r.pushed_at ?? r.updated_at ?? null
+    updatedAt: r.pushed_at ?? r.updated_at ?? null,
+    features:
+      r.has_issues === undefined && r.has_discussions === undefined
+        ? undefined
+        : { issues: r.has_issues, discussions: r.has_discussions }
   }
 }
 

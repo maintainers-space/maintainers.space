@@ -29,10 +29,14 @@ export function useRepoContextMenu(repo: MaybeRefOrGetter<ForgeRepo>) {
       { label: 'Open repository', icon: 'i-lucide-book-marked', to: base },
       { label: 'View commits', icon: 'i-lucide-history', to: `${base}/commits` }
     ]
-    if (caps?.issues)
+    if (caps?.issues && r.features?.issues !== false)
       nav.push({ label: 'Issues', icon: 'i-lucide-circle-dot', to: `${base}/issues` })
-    if (caps?.pulls)
-      nav.push({ label: 'Pull requests', icon: 'i-lucide-git-pull-request', to: `${base}/pulls` })
+    if (caps?.pulls && r.features?.pulls !== false)
+      nav.push({
+        label: pullsTerm(r.provider, { plural: true, capitalize: true }),
+        icon: 'i-lucide-git-pull-request',
+        to: `${base}/pulls`
+      })
     if (caps?.actions) nav.push({ label: 'Actions', icon: 'i-lucide-play', to: `${base}/actions` })
 
     const clip: ContextMenuItem[] = [

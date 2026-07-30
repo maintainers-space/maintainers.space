@@ -65,18 +65,24 @@ const isCode = computed(
   () => route.path === base.value || ['tree', 'blob', 'commits', 'commit'].some(startsWith)
 )
 
+// Forge-level capability says this provider supports the feature at all;
+// per-repo `features` (when the forge reports it, e.g. GitHub Discussions is
+// opt-in per repo) says whether *this* repo actually has it turned on.
+// `undefined` means the forge didn't report it — don't hide on a guess.
+const features = computed(() => meta.value?.features)
+
 const tabs = computed(() => {
   const items = [{ label: 'Code', icon: 'i-lucide-code', to: base.value, active: isCode.value }]
-  if (caps.value?.issues)
+  if (caps.value?.issues && features.value?.issues !== false)
     items.push({
       label: 'Issues',
       icon: 'i-lucide-circle-dot',
       to: `${base.value}/issues`,
       active: startsWith('issues')
     })
-  if (caps.value?.pulls)
+  if (caps.value?.pulls && features.value?.pulls !== false)
     items.push({
-      label: 'Pull requests',
+      label: pullsTerm(provider.value, { plural: true, capitalize: true }),
       icon: 'i-lucide-git-pull-request',
       to: `${base.value}/pulls`,
       active: startsWith('pulls')
@@ -88,7 +94,7 @@ const tabs = computed(() => {
       to: `${base.value}/actions`,
       active: startsWith('actions')
     })
-  if (caps.value?.discussions)
+  if (caps.value?.discussions && features.value?.discussions !== false)
     items.push({
       label: 'Discussions',
       icon: 'i-lucide-messages-square',
