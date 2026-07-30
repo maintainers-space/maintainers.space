@@ -41,7 +41,9 @@ const items = computed<DropdownMenuItem[][]>(() => {
       onSelect: () => {
         appearanceModal.open()
       }
-    }
+    },
+    { label: 'Privacy', icon: 'i-lucide-shield', to: '/privacy' },
+    { label: 'Terms', icon: 'i-lucide-file-text', to: '/terms' }
   ])
   groups.push([
     { label: 'Sign out', icon: 'i-lucide-log-out', color: 'error', onSelect: onSignOut }
