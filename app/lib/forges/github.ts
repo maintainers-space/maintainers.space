@@ -1071,6 +1071,7 @@ export const githubProvider: ForgeProvider = {
   label: 'GitHub',
   icon: 'i-simple-icons-github',
   color: '#1f2328',
+  dominance: 12,
   ownerLabel: 'Owner',
   ownerPlaceholder: 'e.g. vuejs',
   repoPlaceholder: 'e.g. core',

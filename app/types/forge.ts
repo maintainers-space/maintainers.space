@@ -549,6 +549,13 @@ export interface ForgeProvider {
   icon: string
   /** Brand color (hex) for badges/accents. */
   color?: string
+  /**
+   * Relative real-world prevalence of this forge (repo/user volume), used to
+   * correct pooled cross-forge lists so one dominant forge doesn't crowd out
+   * smaller ones. Higher = more dominant. Defaults to 1 (least dominant) when
+   * omitted. See `app/lib/forge-balance.ts`.
+   */
+  dominance?: number
   /** Label for the first URL segment, e.g. "Organization" or "Handle". */
   ownerLabel: string
   ownerPlaceholder: string

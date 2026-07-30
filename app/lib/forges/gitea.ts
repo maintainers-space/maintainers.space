@@ -9,6 +9,7 @@ export const giteaProvider = createGiteaFamilyProvider({
   label: 'Gitea',
   icon: 'i-simple-icons-gitea',
   color: '#609926',
+  dominance: 1.2,
   apiBase: 'https://gitea.com/api/v1',
   webBase: 'https://gitea.com',
   ownerLabel: 'Owner',

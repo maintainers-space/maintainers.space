@@ -47,6 +47,8 @@ export interface GiteaFamilyConfig {
   label: string
   icon: string
   color?: string
+  /** See `ForgeProvider.dominance`. Defaults to 1 when omitted. */
+  dominance?: number
   /** e.g. "https://codeberg.org/api/v1" */
   apiBase: string
   /** e.g. "https://codeberg.org" */
@@ -966,6 +968,7 @@ export function createGiteaFamilyProvider(config: GiteaFamilyConfig): ForgeProvi
     label: config.label,
     icon: config.icon,
     color: config.color,
+    dominance: config.dominance,
     ownerLabel: config.ownerLabel ?? 'Owner',
     ownerPlaceholder: config.ownerPlaceholder,
     repoPlaceholder: config.repoPlaceholder,

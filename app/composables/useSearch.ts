@@ -2,6 +2,7 @@ import { getForge, isForgeId, forgeList } from '~/lib/forges'
 import { parseQuery, type ParsedQuery, type QueryNode, type ResultType } from '~/lib/search/parser'
 import { astToGitHubQuery } from '~/lib/search/adapters/github'
 import { astToClientFilterPlan, clientFilterMatches } from '~/lib/search/adapters/generic'
+import { balanceByDominance } from '~/lib/forge-balance'
 import type {
   ForgeId,
   ForgeDiscussion,
@@ -384,11 +385,15 @@ export function useSearch() {
     } finally {
       if (myToken === runToken) {
         const terms = plainText
-        results.repos = rankRepos(results.repos, terms)
-        results.issues = rankIssues(results.issues, terms)
-        results.discussions = rankDiscussions(results.discussions, terms)
-        results.users = rankUsers(results.users, terms)
-        results.code = rankCode(results.code, terms)
+        // Rank within each provider first, then interleave providers by
+        // dominance so results read as one fair, forge-agnostic list rather
+        // than "GitHub, then everyone else" once relevance ties are broken by
+        // GitHub's much larger star counts.
+        results.repos = balanceByDominance(rankRepos(results.repos, terms))
+        results.issues = balanceByDominance(rankIssues(results.issues, terms))
+        results.discussions = balanceByDominance(rankDiscussions(results.discussions, terms))
+        results.users = balanceByDominance(rankUsers(results.users, terms))
+        results.code = balanceByDominance(rankCode(results.code, terms))
         notes.value = [...noteSet]
         loading.value = false
       }

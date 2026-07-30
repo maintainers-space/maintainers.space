@@ -7,6 +7,7 @@ export const codebergProvider = createGiteaFamilyProvider({
   label: 'Codeberg',
   icon: 'i-simple-icons-codeberg',
   color: '#2185d0',
+  dominance: 1.5,
   apiBase: 'https://codeberg.org/api/v1',
   webBase: 'https://codeberg.org',
   ownerLabel: 'Owner',

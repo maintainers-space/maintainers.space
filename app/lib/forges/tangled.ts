@@ -474,6 +474,7 @@ export const tangledProvider: ForgeProvider = {
   label: 'Tangled',
   icon: 'i-maintainers-space-tangled',
   color: '#4f46e5',
+  dominance: 1,
   ownerLabel: 'Handle',
   ownerPlaceholder: 'e.g. tangled.org',
   repoPlaceholder: 'e.g. core',

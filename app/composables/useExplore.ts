@@ -1,6 +1,7 @@
 import { forgeList, getForge } from '~/lib/forges'
 import { fetchFollows } from '~/lib/atproto/public'
 import { cached, TTL } from '~/lib/cache'
+import { balanceByDominance } from '~/lib/forge-balance'
 import type { ForgeId, ForgeRepo } from '~/types/forge'
 
 /**
@@ -71,49 +72,6 @@ function sortRepos(list: ForgeRepo[], scope: ExploreScope): ForgeRepo[] {
     )
   }
   return list.sort((a, b) => String(b.updatedAt ?? '').localeCompare(String(a.updatedAt ?? '')))
-}
-
-/**
- * Interleave GitHub with every other forge at a fixed ratio, so the page reads
- * as "mostly GitHub, with the rest mixed in regularly" rather than "GitHub,
- * then eventually everyone else way down the list" — pure star-count ranking
- * otherwise buries every smaller forge, since GitHub's counts dwarf theirs.
- * Each provider's own internal rank order (already sorted) is preserved.
- */
-function balanceProviders(sorted: ForgeRepo[], githubWeight = 3): ForgeRepo[] {
-  const github = sorted.filter((r) => r.provider === 'github')
-  const byProvider = new Map<string, ForgeRepo[]>()
-  for (const r of sorted) {
-    if (r.provider === 'github') continue
-    const list = byProvider.get(r.provider) ?? []
-    list.push(r)
-    byProvider.set(r.provider, list)
-  }
-  const otherProviders = [...byProvider.keys()]
-
-  const out: ForgeRepo[] = []
-  let gi = 0
-  let providerCursor = 0
-  let sinceOther = 0
-  while (gi < github.length || byProvider.size > 0) {
-    if (gi < github.length && (sinceOther < githubWeight || byProvider.size === 0)) {
-      out.push(github[gi++]!)
-      sinceOther++
-      continue
-    }
-    for (let tries = 0; tries < otherProviders.length; tries++) {
-      const id = otherProviders[providerCursor % otherProviders.length]!
-      providerCursor++
-      const list = byProvider.get(id)
-      if (list?.length) {
-        out.push(list.shift()!)
-        if (!list.length) byProvider.delete(id)
-        sinceOther = 0
-        break
-      }
-    }
-  }
-  return out
 }
 
 /** Rewrite a Tangled repo listed by DID to display the follower's handle. */
@@ -280,10 +238,10 @@ export function useExplore() {
           } else {
             await loadDiscovery(period, limit, opts.language, collected, noteSet)
           }
-          // Rank each provider's own repos first, then interleave providers so
-          // one forge (GitHub) doesn't crowd out the rest once pooled.
+          // Rank each provider's own repos first, then interleave providers by
+          // their configured dominance so no single forge crowds out the rest.
           const ranked = sortRepos(dedupe(collected), scope)
-          return { repos: balanceProviders(ranked), notes: [...noteSet] }
+          return { repos: balanceByDominance(ranked), notes: [...noteSet] }
         },
         { ttl: TTL.MEDIUM, force: opts.force }
       )

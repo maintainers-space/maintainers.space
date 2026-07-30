@@ -411,6 +411,7 @@ export const bitbucketProvider: ForgeProvider = {
   label: 'Bitbucket',
   icon: 'i-simple-icons-bitbucket',
   color: '#0052cc',
+  dominance: 3,
   ownerLabel: 'Workspace',
   ownerPlaceholder: 'e.g. atlassian',
   repoPlaceholder: 'e.g. aui',

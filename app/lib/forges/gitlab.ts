@@ -796,6 +796,7 @@ export const gitlabProvider: ForgeProvider = {
   label: 'GitLab',
   icon: 'i-simple-icons-gitlab',
   color: '#fc6d26',
+  dominance: 4,
   ownerLabel: 'Owner',
   ownerPlaceholder: 'e.g. gitlab-org',
   repoPlaceholder: 'e.g. gitlab',
