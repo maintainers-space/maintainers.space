@@ -4,11 +4,11 @@
 // (e.g. opened -> reviewed -> merged becomes one "merged #67" row, expandable
 // to the sub-events), and same-kind/same-repo bursts with no subject of their
 // own (mainly pushes) merge into one "pushed N commits to owner/repo" entry
-// as long as they fall within a rolling window — exact minute-by-minute order
-// isn't the point, a clean read of what happened is.
+// as long as they land on the same calendar day. Day-scoped rather than a
+// rolling time window on purpose: a window spanning multiple days can fold a
+// burst's newest event onto one day while its older events vanish from every
+// day in between, making days that genuinely had activity look empty.
 import type { ForgeContribution, ForgeId, ForgeUser } from '~/types/forge'
-
-const DEFAULT_WINDOW_MS = 3 * 24 * 60 * 60 * 1000
 
 export interface TimelineEntry {
   key: string
@@ -32,11 +32,18 @@ function highestImpact(events: ForgeContribution[]): ForgeContribution {
   return events.reduce((best, e) => ((e.impact ?? 0) > (best.impact ?? 0) ? e : best))
 }
 
+function sameCalendarDay(a: string, b: string): boolean {
+  const da = new Date(a)
+  const db = new Date(b)
+  return (
+    da.getFullYear() === db.getFullYear() &&
+    da.getMonth() === db.getMonth() &&
+    da.getDate() === db.getDate()
+  )
+}
+
 /** `items` must already be sorted newest-first. */
-export function aggregateTimeline(
-  items: ForgeContribution[],
-  burstWindowMs = DEFAULT_WINDOW_MS
-): TimelineEntry[] {
+export function aggregateTimeline(items: ForgeContribution[]): TimelineEntry[] {
   const openByKey = new Map<string, TimelineEntry>()
   const order: TimelineEntry[] = []
 
@@ -44,13 +51,10 @@ export function aggregateTimeline(
     const key = subjectGroupKey(c)
     const existing = openByKey.get(key)
     const hasSubject = c.number != null
-    const withinWindow =
-      hasSubject ||
-      (existing &&
-        new Date(existing.events[0]!.createdAt).getTime() - new Date(c.createdAt).getTime() <=
-          burstWindowMs)
+    const continuesBurst =
+      hasSubject || (existing && sameCalendarDay(existing.events[0]!.createdAt, c.createdAt))
 
-    if (existing && withinWindow) {
+    if (existing && continuesBurst) {
       existing.events.push(c)
       continue
     }
@@ -75,7 +79,11 @@ export function aggregateTimeline(
   return order
 }
 
-/** Total commit count represented by a (possibly aggregated) push entry. */
+/**
+ * Total commit count represented by a (possibly aggregated) push entry. Some
+ * forges report a `count` without the individual commits (or vice versa) —
+ * take whichever side of that pair actually has a number, per event.
+ */
 export function totalCommitCount(entry: TimelineEntry): number {
-  return entry.events.reduce((sum, e) => sum + (e.count ?? e.commits?.length ?? 0), 0)
+  return entry.events.reduce((sum, e) => sum + Math.max(e.count ?? 0, e.commits?.length ?? 0), 0)
 }
