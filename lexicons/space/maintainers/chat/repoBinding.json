@@ -1,0 +1,50 @@
+{
+  "lexicon": 1,
+  "id": "space.maintainers.chat.repoBinding",
+  "defs": {
+    "main": {
+      "type": "record",
+      "description": "Binds a social.colibri.community (identified by this record's own repo DID) to the code-forge owner(s) it provides chat for. Lives on the community DID's own repo, so no separate attestation is needed: the community's credentials are already custodied by the AppView that created it for a live-verified forge admin, and this record is that same AppView's account speaking for itself.",
+      "key": "literal:self",
+      "record": {
+        "type": "object",
+        "required": ["boundOwners", "createdAt"],
+        "properties": {
+          "boundOwners": {
+            "type": "array",
+            "description": "Forge owner(s) (users or organisations) this community serves. Ordinarily a single entry; the array leaves room for a community to later claim more than one owner without a schema change.",
+            "minLength": 1,
+            "maxLength": 10,
+            "items": { "type": "ref", "ref": "#ownerRef" }
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "datetime",
+            "description": "Timestamp the binding was created."
+          }
+        }
+      }
+    },
+    "ownerRef": {
+      "type": "object",
+      "required": ["provider", "owner"],
+      "properties": {
+        "provider": {
+          "type": "string",
+          "description": "Forge provider identifier, e.g. 'github', 'gitlab', 'codeberg', 'gitea', 'bitbucket', 'tangled'.",
+          "maxLength": 64
+        },
+        "host": {
+          "type": "string",
+          "description": "Host for self-hosted instances. Omit for the provider's canonical host.",
+          "maxLength": 253
+        },
+        "owner": {
+          "type": "string",
+          "description": "Owner (user or organisation) login on the forge.",
+          "maxLength": 256
+        }
+      }
+    }
+  }
+}
