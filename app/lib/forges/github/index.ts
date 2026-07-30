@@ -1,18 +1,11 @@
 import type {
-  ForgeActionJob,
-  ForgeActionRun,
   ForgeBranch,
   ForgeBlob,
-  ForgeCommit,
-  ForgeCommitActor,
   ForgeCommitDetail,
   ForgeComment,
   ForgeContribution,
-  ForgeContributionCommit,
   ForgeDiscussion,
   ForgeDiscussionDetail,
-  ForgeEventKind,
-  ForgeFileDiff,
   ForgeInboxItem,
   ForgeIssue,
   ForgeIssueDetail,
@@ -22,16 +15,11 @@ import type {
   ForgeMergeResult,
   ForgeMyWork,
   ForgeNotification,
-  ForgePull,
   ForgePullDetail,
-  ForgePullState,
   ForgeProvider,
-  ForgeReactionKind,
-  ForgeReactionSummary,
   ForgeReactionTarget,
   ForgeReadOptions,
   ForgeRepo,
-  ForgeRunStatus,
   ForgeSearchCode,
   ForgeSearchOptions,
   ForgeTreeEntry,
@@ -43,405 +31,59 @@ import type {
 import { getForgeToken } from '~/lib/forges/token-store'
 import { parseActionsRunnerLog } from '~/lib/forges/actions-log'
 import { cachedFetch } from '~/lib/forges/cached-fetch'
+import type {
+  GhActionJobsListResponse,
+  GhActionRunResponse,
+  GhActionRunsListResponse,
+  GhBranchResponse,
+  GhCommentResponse,
+  GhCommitResponse,
+  GhEventResponse,
+  GhFileDiffResponse,
+  GhGraphqlDiscussionDetailResponse,
+  GhGraphqlDiscussionListResponse,
+  GhGraphqlDiscussionNode,
+  GhGraphqlDiscussionSearchResponse,
+  GhGraphqlMergeQueueEntryNode,
+  GhGraphqlMergeQueueResponse,
+  GhIssueResponse,
+  GhMergeResultResponse,
+  GhNotificationResponse,
+  GhPullResponse,
+  GhReadmeResponse,
+  GhRepoResponse,
+  GhSearchCodeResponse,
+  GhSearchIssuesResponse,
+  GhSearchReposResponse,
+  GhSearchUsersResponse,
+  GhTreeEntryResponse,
+  GhUserResponse
+} from './types'
+import {
+  botKindOf,
+  decodeBase64Utf8,
+  GH_REACTION_CONTENT,
+  GH_REACTION_GRAPHQL,
+  looksBinary,
+  mapComment,
+  mapCommit,
+  mapDiscussion,
+  mapDiscussionComment,
+  mapEvent,
+  mapFileDiff,
+  mapIssue,
+  mapJob,
+  mapPull,
+  mapReactionGroups,
+  mapReactions,
+  mapRepo,
+  mapRun,
+  mapUser,
+  pullState,
+  sortEntries
+} from './mappers'
 
 const API = 'https://api.github.com'
-
-// Raw GitHub REST/GraphQL API response shapes -----------------------------
-// These mirror only the fields actually read by the mapX() functions below;
-// they are not exhaustive representations of GitHub's API responses.
-
-interface GhUserResponse {
-  login?: string
-  avatar_url?: string | null
-  html_url?: string | null
-  type?: string
-}
-
-interface GhLabelResponse {
-  name: string
-  color?: string | null
-  description?: string | null
-}
-
-interface GhRepoResponse {
-  owner?: GhUserResponse | null
-  name: string
-  full_name?: string
-  description?: string | null
-  default_branch?: string
-  html_url: string
-  homepage?: string | null
-  language?: string | null
-  topics?: string[]
-  stargazers_count?: number
-  forks_count?: number
-  subscribers_count?: number
-  watchers_count?: number
-  open_issues_count?: number
-  private?: boolean
-  fork?: boolean
-  license?: { spdx_id?: string | null } | null
-  created_at?: string | null
-  pushed_at?: string | null
-  updated_at?: string | null
-  has_issues?: boolean
-  has_discussions?: boolean
-}
-
-interface GhIssueResponse {
-  number: number
-  title: string
-  state?: string
-  user?: GhUserResponse | null
-  body?: string | null
-  comments?: number
-  labels?: (string | GhLabelResponse)[]
-  created_at?: string | null
-  updated_at?: string | null
-  closed_at?: string | null
-  html_url?: string
-  pull_request?: unknown
-  /** Present on /search/issues results. */
-  repository_url?: string
-  reactions?: GhReactionsResponse
-}
-
-interface GhPullResponse {
-  number: number
-  title: string
-  state?: string
-  merged_at?: string | null
-  merged?: boolean
-  draft?: boolean
-  user?: GhUserResponse | null
-  body?: string | null
-  comments?: number
-  labels?: { name: string; color?: string | null }[]
-  head?: { ref?: string }
-  base?: { ref?: string }
-  created_at?: string | null
-  updated_at?: string | null
-  closed_at?: string | null
-  html_url?: string
-  additions?: number
-  deletions?: number
-  changed_files?: number
-  commits?: number
-  reactions?: GhReactionsResponse
-}
-
-interface GhReactionsResponse {
-  '+1'?: number
-  '-1'?: number
-  laugh?: number
-  hooray?: number
-  confused?: number
-  heart?: number
-  rocket?: number
-  eyes?: number
-}
-
-interface GhCommentResponse {
-  id: number | string
-  user?: GhUserResponse | null
-  body?: string | null
-  created_at?: string | null
-  html_url?: string
-  reactions?: GhReactionsResponse
-}
-
-interface GhCommitGitActor {
-  name?: string
-  email?: string
-  date?: string
-}
-
-interface GhCommitResponse {
-  sha: string
-  commit?: {
-    message?: string
-    author?: GhCommitGitActor | null
-    committer?: GhCommitGitActor | null
-  }
-  author?: GhUserResponse | null
-  committer?: GhUserResponse | null
-  html_url?: string
-  parents?: { sha: string }[]
-  stats?: { additions?: number; deletions?: number }
-  files?: GhFileDiffResponse[]
-}
-
-interface GhFileDiffResponse {
-  previous_filename?: string
-  filename: string
-  status?: string
-  additions?: number
-  deletions?: number
-  patch?: string | null
-  changes?: number
-}
-
-interface GhActionRunResponse {
-  id: number | string
-  name?: string
-  display_title?: string
-  run_number?: number
-  status?: string | null
-  conclusion?: string | null
-  event?: string
-  head_branch?: string
-  head_sha?: string
-  head_commit?: { message?: string } | null
-  actor?: GhUserResponse | null
-  created_at?: string | null
-  updated_at?: string | null
-  html_url?: string
-}
-
-interface GhActionRunsListResponse {
-  workflow_runs?: GhActionRunResponse[]
-  total_count?: number
-}
-
-interface GhActionJobResponse {
-  id: number | string
-  name: string
-  status?: string | null
-  conclusion?: string | null
-  started_at?: string | null
-  completed_at?: string | null
-  html_url?: string
-  steps?: {
-    name: string
-    number?: number
-    status?: string | null
-    conclusion?: string | null
-    started_at?: string | null
-    completed_at?: string | null
-  }[]
-}
-
-interface GhActionJobsListResponse {
-  jobs?: GhActionJobResponse[]
-}
-
-/** Shape of a single entry returned by the repo-contents endpoint (file or dir listing). */
-interface GhTreeEntryResponse {
-  name: string
-  path: string
-  type?: string
-  size?: number
-  sha?: string
-  content?: string
-  encoding?: string
-}
-
-interface GhReadmeResponse {
-  name: string
-  content: string
-}
-
-interface GhBranchResponse {
-  name: string
-  commit?: { sha?: string }
-}
-
-interface GhMergeResultResponse {
-  merged?: boolean
-  message?: string
-}
-
-interface GhEventActor {
-  login?: string
-  avatar_url?: string
-}
-
-interface GhEventRepoRef {
-  name?: string
-}
-
-interface GhEventPushCommit {
-  sha?: string
-  message?: string
-}
-
-interface GhEventPayload {
-  size?: number
-  commits?: GhEventPushCommit[]
-  head?: string
-  ref?: string
-  ref_type?: string
-  action?: string
-  number?: number
-  pull_request?: { merged?: boolean; title?: string; number?: number; html_url?: string }
-  review?: { html_url?: string }
-  issue?: { title?: string; number?: number; html_url?: string }
-  comment?: { html_url?: string }
-  release?: { name?: string; tag_name?: string; html_url?: string }
-  forkee?: { html_url?: string }
-}
-
-/** A raw item from the GitHub events API (/users/:login/events). */
-interface GhEventResponse {
-  id?: string | number
-  type?: string
-  actor?: GhEventActor
-  repo?: GhEventRepoRef
-  created_at?: string
-  payload?: GhEventPayload
-}
-
-interface GhNotificationResponse {
-  id: string | number
-  repository?: {
-    owner?: { login?: string }
-    name?: string
-    full_name?: string
-    html_url?: string
-  }
-  subject?: {
-    type?: string
-    title?: string
-    url?: string
-  }
-  reason?: string
-  unread?: boolean
-  updated_at?: string
-  last_read_at?: string | null
-}
-
-interface GhSearchReposResponse {
-  items?: GhRepoResponse[]
-  total_count?: number
-  incomplete_results?: boolean
-}
-
-interface GhSearchIssuesResponse {
-  items?: GhIssueResponse[]
-  total_count?: number
-  incomplete_results?: boolean
-}
-
-interface GhSearchCodeItem {
-  repository?: {
-    owner?: GhUserResponse | null
-    name?: string
-    full_name?: string
-    html_url?: string
-  }
-  path: string
-  html_url?: string
-  text_matches?: { fragment?: string }[]
-}
-
-interface GhSearchCodeResponse {
-  items?: GhSearchCodeItem[]
-  total_count?: number
-}
-
-interface GhSearchUsersResponse {
-  items?: GhUserResponse[]
-  total_count?: number
-}
-
-/** A GraphQL author/actor reference (discussions, merge queue entries). */
-interface GhGraphqlActor {
-  login?: string
-  avatarUrl?: string
-  url?: string
-}
-
-interface GhGraphqlReactionGroup {
-  content: string
-  viewerHasReacted?: boolean
-  users?: { totalCount?: number }
-}
-
-interface GhGraphqlDiscussionCommentNode {
-  id: string
-  body: string
-  createdAt: string
-  url: string
-  author?: GhGraphqlActor | null
-  /** Present on the single-discussion detail query (GitHub Discussions are exactly 2 levels deep). */
-  replies?: { nodes?: GhGraphqlDiscussionCommentNode[] }
-  reactionGroups?: GhGraphqlReactionGroup[]
-}
-
-/**
- * A discussion node from the GraphQL API. Serves the list, detail and search
- * queries, which each select a slightly different subset of these fields.
- */
-interface GhGraphqlDiscussionNode {
-  /** GraphQL node id — present on the single-discussion detail query, needed to react to the root post. */
-  id?: string
-  number: number
-  title: string
-  createdAt: string
-  updatedAt?: string
-  url: string
-  answerChosenAt?: string | null
-  category?: { name?: string } | null
-  comments?: { totalCount?: number; nodes?: GhGraphqlDiscussionCommentNode[] }
-  author?: GhGraphqlActor | null
-  /** Present on the single-discussion detail query. */
-  body?: string
-  reactionGroups?: GhGraphqlReactionGroup[]
-  /** Present on the cross-repo discussion search query. */
-  repository?: {
-    name: string
-    nameWithOwner: string
-    url: string
-    owner?: { login?: string }
-  }
-}
-
-interface GhGraphqlDiscussionListResponse {
-  repository?: {
-    discussions?: {
-      totalCount?: number
-      pageInfo?: { endCursor?: string; hasNextPage?: boolean }
-      nodes?: GhGraphqlDiscussionNode[]
-    }
-  }
-}
-
-interface GhGraphqlDiscussionDetailResponse {
-  repository?: {
-    discussion?: GhGraphqlDiscussionNode
-  }
-}
-
-interface GhGraphqlDiscussionSearchResponse {
-  search?: {
-    discussionCount?: number
-    pageInfo?: { endCursor?: string; hasNextPage?: boolean }
-    nodes?: (GhGraphqlDiscussionNode | null)[]
-  }
-}
-
-interface GhGraphqlPullRequestRef {
-  number?: number
-  title?: string
-  url?: string
-  author?: GhGraphqlActor | null
-}
-
-interface GhGraphqlMergeQueueEntryNode {
-  state?: string
-  enqueuedAt?: string | null
-  pullRequest?: GhGraphqlPullRequestRef
-}
-
-interface GhGraphqlMergeQueueResponse {
-  repository?: {
-    mergeQueue?: {
-      entries?: {
-        nodes?: (GhGraphqlMergeQueueEntryNode | null)[]
-      }
-    } | null
-  } | null
-}
 
 function ghHeaders(
   opts?: ForgeReadOptions,
@@ -550,357 +192,11 @@ async function ghMapLimit<T, R>(
   return results
 }
 
-/** Classify a login as a known dependency bot, else null. */
-function botKindOf(login?: string | null): 'dependabot' | 'renovate' | null {
-  const l = String(login ?? '').toLowerCase()
-  if (!l) return null
-  if (l.includes('dependabot')) return 'dependabot'
-  if (l.includes('renovate')) return 'renovate'
-  return null
-}
-
 /** Best-effort HTTP status extraction from an ofetch error. */
 function errStatus(e: unknown): number | undefined {
   if (!e || typeof e !== 'object') return undefined
   const err = e as { statusCode?: number; status?: number; response?: { status?: number } }
   return err.statusCode ?? err.status ?? err.response?.status
-}
-
-function mapDiscussion(d: GhGraphqlDiscussionNode): ForgeDiscussion {
-  return {
-    provider: 'github',
-    id: String(d.number),
-    number: d.number,
-    title: d.title,
-    category: d.category?.name ?? null,
-    author: d.author
-      ? {
-          provider: 'github',
-          login: d.author.login ?? '',
-          avatarUrl: d.author.avatarUrl,
-          url: d.author.url
-        }
-      : undefined,
-    commentCount: d.comments?.totalCount,
-    createdAt: d.createdAt,
-    url: d.url,
-    answered: !!d.answerChosenAt
-  }
-}
-
-function mapDiscussionComment(c: GhGraphqlDiscussionCommentNode): ForgeComment {
-  return {
-    id: String(c.id),
-    author: c.author
-      ? {
-          provider: 'github',
-          login: c.author.login ?? '',
-          avatarUrl: c.author.avatarUrl,
-          url: c.author.url
-        }
-      : undefined,
-    body: c.body ?? '',
-    createdAt: c.createdAt,
-    url: c.url,
-    replies: c.replies?.nodes?.map(mapDiscussionComment),
-    reactions: mapReactionGroups(c.reactionGroups)
-  }
-}
-
-function decodeBase64Utf8(b64: string): string {
-  const binary = atob(b64.replace(/\s/g, ''))
-  const bytes = Uint8Array.from(binary, (ch) => ch.charCodeAt(0))
-  return new TextDecoder().decode(bytes)
-}
-
-function looksBinary(b64: string): boolean {
-  try {
-    const sample = atob(b64.replace(/\s/g, '').slice(0, 512))
-    for (let i = 0; i < sample.length; i++) {
-      const c = sample.charCodeAt(i)
-      if (c === 0) return true
-    }
-    return false
-  } catch {
-    return false
-  }
-}
-
-function sortEntries(a: ForgeTreeEntry, b: ForgeTreeEntry): number {
-  if (a.type !== b.type) return a.type === 'dir' ? -1 : 1
-  return a.name.localeCompare(b.name)
-}
-
-function mapUser(u: GhUserResponse | null | undefined): ForgeUser | undefined {
-  if (!u) return undefined
-  return {
-    provider: 'github',
-    login: u.login ?? '',
-    avatarUrl: u.avatar_url ?? null,
-    url: u.html_url ?? null
-  }
-}
-
-function mapCommitActor(
-  gitActor: GhCommitGitActor | null | undefined,
-  ghUser: GhUserResponse | null | undefined
-): ForgeCommitActor | undefined {
-  if (!gitActor && !ghUser) return undefined
-  return {
-    name: gitActor?.name,
-    email: gitActor?.email,
-    when: gitActor?.date,
-    login: ghUser?.login,
-    avatarUrl: ghUser?.avatar_url ?? null
-  }
-}
-
-function mapRepo(r: GhRepoResponse): ForgeRepo {
-  return {
-    provider: 'github',
-    owner: r.owner?.login ?? '',
-    name: r.name,
-    fullName: r.full_name ?? `${r.owner?.login ?? ''}/${r.name}`,
-    description: r.description ?? null,
-    defaultBranch: r.default_branch || 'main',
-    url: r.html_url,
-    ownerUrl: r.owner?.html_url ?? undefined,
-    ownerAvatar: r.owner?.avatar_url ?? null,
-    homepage: r.homepage || null,
-    language: r.language ?? null,
-    topics: r.topics ?? [],
-    stars: r.stargazers_count,
-    forks: r.forks_count,
-    watchers: r.subscribers_count ?? r.watchers_count,
-    issues: r.open_issues_count,
-    isPrivate: r.private,
-    isFork: r.fork,
-    license: r.license?.spdx_id ?? null,
-    createdAt: r.created_at ?? null,
-    updatedAt: r.pushed_at ?? r.updated_at ?? null,
-    features:
-      r.has_issues === undefined && r.has_discussions === undefined
-        ? undefined
-        : { issues: r.has_issues, discussions: r.has_discussions }
-  }
-}
-
-function mapIssue(r: GhIssueResponse): ForgeIssue {
-  return {
-    provider: 'github',
-    id: String(r.number),
-    number: r.number,
-    title: r.title,
-    state: r.state === 'closed' ? 'closed' : 'open',
-    author: mapUser(r.user),
-    body: r.body ?? null,
-    commentCount: r.comments,
-    labels: (r.labels ?? []).map((l) =>
-      typeof l === 'string'
-        ? { name: l }
-        : { name: l.name, color: l.color, description: l.description }
-    ),
-    createdAt: r.created_at ?? null,
-    updatedAt: r.updated_at ?? null,
-    closedAt: r.closed_at ?? null,
-    url: r.html_url,
-    isPull: !!r.pull_request
-  }
-}
-
-function pullState(r: GhPullResponse): ForgePullState {
-  if (r.merged_at || r.merged) return 'merged'
-  if (r.state === 'closed') return 'closed'
-  if (r.draft) return 'draft'
-  return 'open'
-}
-
-function mapPull(r: GhPullResponse): ForgePull {
-  return {
-    provider: 'github',
-    id: String(r.number),
-    number: r.number,
-    title: r.title,
-    state: pullState(r),
-    author: mapUser(r.user),
-    body: r.body ?? null,
-    commentCount: r.comments,
-    labels: (r.labels ?? []).map((l) => ({ name: l.name, color: l.color })),
-    sourceBranch: r.head?.ref,
-    targetBranch: r.base?.ref,
-    createdAt: r.created_at ?? null,
-    updatedAt: r.updated_at ?? null,
-    mergedAt: r.merged_at ?? null,
-    closedAt: r.closed_at ?? null,
-    url: r.html_url
-  }
-}
-
-/** REST reaction `content` values. Every reacting forge (GitHub/GitLab/Gitea) accepts this same set. */
-const GH_REACTION_CONTENT: Record<ForgeReactionKind, keyof GhReactionsResponse> = {
-  thumbsup: '+1',
-  thumbsdown: '-1',
-  laugh: 'laugh',
-  hooray: 'hooray',
-  confused: 'confused',
-  heart: 'heart',
-  rocket: 'rocket',
-  eyes: 'eyes'
-}
-
-/** GraphQL `ReactionContent` enum values, used for Discussions (Discussions have no REST reactions API). */
-const GH_REACTION_GRAPHQL: Record<ForgeReactionKind, string> = {
-  thumbsup: 'THUMBS_UP',
-  thumbsdown: 'THUMBS_DOWN',
-  laugh: 'LAUGH',
-  hooray: 'HOORAY',
-  confused: 'CONFUSED',
-  heart: 'HEART',
-  rocket: 'ROCKET',
-  eyes: 'EYES'
-}
-
-function mapReactions(r?: GhReactionsResponse): ForgeReactionSummary[] | undefined {
-  if (!r) return undefined
-  const summaries = (Object.keys(GH_REACTION_CONTENT) as ForgeReactionKind[])
-    .map(
-      (kind): ForgeReactionSummary => ({
-        kind,
-        count: r[GH_REACTION_CONTENT[kind]] ?? 0,
-        // GitHub's REST reaction summary has no per-viewer info; the reaction bar
-        // tracks "mine" optimistically from the viewer's own clicks this session.
-        viewerReacted: false
-      })
-    )
-    .filter((s) => s.count > 0)
-  return summaries.length ? summaries : undefined
-}
-
-const GH_REACTION_FROM_GRAPHQL: Record<string, ForgeReactionKind> = Object.fromEntries(
-  (Object.entries(GH_REACTION_GRAPHQL) as [ForgeReactionKind, string][]).map(([kind, content]) => [
-    content,
-    kind
-  ])
-)
-
-/** Discussions/discussion comments carry real viewer-reacted info via GraphQL, unlike the REST summary. */
-function mapReactionGroups(groups?: GhGraphqlReactionGroup[]): ForgeReactionSummary[] | undefined {
-  if (!groups?.length) return undefined
-  const summaries = groups
-    .map((g): ForgeReactionSummary | null => {
-      const kind = GH_REACTION_FROM_GRAPHQL[g.content]
-      if (!kind) return null
-      return { kind, count: g.users?.totalCount ?? 0, viewerReacted: !!g.viewerHasReacted }
-    })
-    .filter((s): s is ForgeReactionSummary => !!s && s.count > 0)
-  return summaries.length ? summaries : undefined
-}
-
-function mapComment(r: GhCommentResponse): ForgeComment {
-  return {
-    id: String(r.id),
-    author: mapUser(r.user),
-    body: r.body ?? '',
-    createdAt: r.created_at ?? null,
-    url: r.html_url,
-    reactions: mapReactions(r.reactions)
-  }
-}
-
-function mapCommit(r: GhCommitResponse): ForgeCommit {
-  const sha: string = r.sha
-  return {
-    sha,
-    shortSha: sha ? sha.slice(0, 7) : '',
-    message: r.commit?.message ?? '',
-    author: mapCommitActor(r.commit?.author, r.author),
-    committer: mapCommitActor(r.commit?.committer, r.committer),
-    url: r.html_url,
-    parents: (r.parents ?? []).map((p) => p.sha)
-  }
-}
-
-function mapFileDiff(f: GhFileDiffResponse): ForgeFileDiff {
-  const status: ForgeFileDiff['status'] =
-    f.status === 'added'
-      ? 'added'
-      : f.status === 'removed'
-        ? 'removed'
-        : f.status === 'renamed'
-          ? 'renamed'
-          : f.status === 'copied'
-            ? 'copied'
-            : f.status === 'changed'
-              ? 'changed'
-              : 'modified'
-  return {
-    oldPath: f.previous_filename,
-    path: f.filename,
-    status,
-    additions: f.additions,
-    deletions: f.deletions,
-    isBinary: f.patch == null && f.changes === 0,
-    patch: f.patch ?? null
-  }
-}
-
-function ghRunStatus(
-  status: string | null | undefined,
-  conclusion: string | null | undefined
-): ForgeRunStatus {
-  if (status && status !== 'completed')
-    return status === 'queued' || status === 'waiting' || status === 'pending'
-      ? 'queued'
-      : 'running'
-  switch (conclusion) {
-    case 'success':
-      return 'success'
-    case 'failure':
-      return 'failure'
-    case 'cancelled':
-      return 'cancelled'
-    case 'skipped':
-      return 'skipped'
-    case 'timed_out':
-      return 'timed_out'
-    default:
-      return 'unknown'
-  }
-}
-
-function mapRun(r: GhActionRunResponse): ForgeActionRun {
-  return {
-    provider: 'github',
-    id: String(r.id),
-    name: r.name || r.display_title || `Run #${r.run_number}`,
-    status: ghRunStatus(r.status, r.conclusion),
-    event: r.event,
-    branch: r.head_branch,
-    commitSha: r.head_sha,
-    commitMessage: r.head_commit?.message,
-    actor: mapUser(r.actor),
-    createdAt: r.created_at ?? null,
-    updatedAt: r.updated_at ?? null,
-    url: r.html_url
-  }
-}
-
-function mapJob(j: GhActionJobResponse): ForgeActionJob {
-  return {
-    id: String(j.id),
-    name: j.name,
-    status: ghRunStatus(j.status, j.conclusion),
-    startedAt: j.started_at ?? null,
-    completedAt: j.completed_at ?? null,
-    url: j.html_url,
-    steps: (j.steps ?? []).map((s) => ({
-      name: s.name,
-      number: s.number,
-      status: ghRunStatus(s.status, s.conclusion),
-      startedAt: s.started_at ?? null,
-      completedAt: s.completed_at ?? null
-    }))
-  }
 }
 
 async function getRootTree(
@@ -942,144 +238,21 @@ async function getReadme(owner: string, repo: string, ref?: string, opts?: Forge
   }
 }
 
-/** Relative "impact" weight per event kind, used to rank the friends feed. */
-const EVENT_IMPACT: Record<ForgeEventKind, number> = {
-  pr_merged: 10,
-  release: 8,
-  pr_opened: 6,
-  pr_review: 4,
-  issue_opened: 3,
-  issue_closed: 2,
-  create: 1.5,
-  push: 1,
-  comment: 1,
-  fork: 0.5,
-  star: 0.25,
-  other: 0
+function encodePath(path: string): string {
+  return path.split('/').map(encodeURIComponent).join('/')
 }
 
-/** Map a raw GitHub events-API item into a normalized contribution (or null). */
-function mapEvent(e: GhEventResponse): ForgeContribution | null {
-  const type = String(e?.type ?? '')
-  const actor = mapUser({
-    login: e?.actor?.login,
-    avatar_url: e?.actor?.avatar_url,
-    html_url: `https://github.com/${e?.actor?.login}`
-  })
-  const repoFull = String(e?.repo?.name ?? '')
-  const [owner = '', name = ''] = repoFull.split('/')
-  if (!actor || !owner || !name) return null
-  const repo = { owner, name, fullName: repoFull, url: `https://github.com/${repoFull}` }
-  const base = {
-    provider: 'github' as const,
-    id: String(e.id),
-    actor,
-    repo,
-    createdAt: String(e.created_at ?? '')
-  }
-  const p = e.payload ?? {}
-
-  let kind: ForgeEventKind
-  let title: string | null | undefined
-  let url: string | null | undefined
-  let number: number | undefined
-  let count: number | undefined
-  let refType: string | undefined
-  let commits: ForgeContributionCommit[] | undefined
-
-  switch (type) {
-    case 'PushEvent': {
-      kind = 'push'
-      const rawCommits = Array.isArray(p.commits) ? p.commits : []
-      count = p.size ?? rawCommits.length
-      const head = rawCommits[rawCommits.length - 1]
-      title = head?.message?.split('\n')[0]
-      const headSha = p.head ?? head?.sha
-      url = headSha
-        ? `https://github.com/${repoFull}/commit/${headSha}`
-        : `https://github.com/${repoFull}/commits/${String(p.ref ?? '').replace('refs/heads/', '')}`
-      commits = rawCommits
-        // GitHub lists oldest-first within a push — newest-first reads better.
-        .toReversed()
-        .map((rc) => ({
-          sha: rc.sha,
-          message: (rc.message ?? '').split('\n')[0] ?? '',
-          url: rc.sha ? `https://github.com/${repoFull}/commit/${rc.sha}` : null
-        }))
-      break
-    }
-    case 'PullRequestEvent': {
-      const merged = !!p.pull_request?.merged
-      kind =
-        p.action === 'closed' && merged
-          ? 'pr_merged'
-          : p.action === 'opened' || p.action === 'reopened'
-            ? 'pr_opened'
-            : 'other'
-      title = p.pull_request?.title
-      number = p.number ?? p.pull_request?.number
-      url = p.pull_request?.html_url
-      break
-    }
-    case 'PullRequestReviewEvent': {
-      kind = 'pr_review'
-      title = p.pull_request?.title
-      number = p.pull_request?.number
-      url = p.review?.html_url ?? p.pull_request?.html_url
-      break
-    }
-    case 'IssuesEvent': {
-      kind =
-        p.action === 'closed'
-          ? 'issue_closed'
-          : p.action === 'opened' || p.action === 'reopened'
-            ? 'issue_opened'
-            : 'other'
-      title = p.issue?.title
-      number = p.issue?.number
-      url = p.issue?.html_url
-      break
-    }
-    case 'IssueCommentEvent':
-    case 'PullRequestReviewCommentEvent':
-    case 'CommitCommentEvent': {
-      kind = 'comment'
-      title = p.issue?.title ?? p.pull_request?.title
-      number = p.issue?.number ?? p.pull_request?.number
-      url = p.comment?.html_url
-      break
-    }
-    case 'CreateEvent': {
-      kind = 'create'
-      refType = p.ref_type
-      title = p.ref ? `${p.ref_type} ${p.ref}` : p.ref_type
-      url =
-        p.ref && p.ref_type !== 'repository'
-          ? `https://github.com/${repoFull}/tree/${p.ref}`
-          : `https://github.com/${repoFull}`
-      break
-    }
-    case 'ReleaseEvent': {
-      kind = 'release'
-      title = p.release?.name || p.release?.tag_name
-      url = p.release?.html_url
-      break
-    }
-    case 'ForkEvent': {
-      kind = 'fork'
-      url = p.forkee?.html_url
-      break
-    }
-    case 'WatchEvent': {
-      kind = 'star'
-      url = repo.url
-      break
-    }
+function mapSort(sort?: ForgeSearchOptions['sort']): string | undefined {
+  switch (sort) {
+    case 'stars':
+      return 'stars'
+    case 'forks':
+      return 'forks'
+    case 'updated':
+      return 'updated'
     default:
-      return null
+      return undefined
   }
-
-  return { ...base, kind, title, url, number, count, refType, commits, impact: EVENT_IMPACT[kind] }
 }
 
 export const githubProvider: ForgeProvider = {
@@ -2058,22 +1231,5 @@ export const githubProvider: ForgeProvider = {
       run('is:open is:issue assignee:@me archived:false')
     ])
     return { authoredPulls, reviewRequests, assignedIssues }
-  }
-}
-
-function encodePath(path: string): string {
-  return path.split('/').map(encodeURIComponent).join('/')
-}
-
-function mapSort(sort?: ForgeSearchOptions['sort']): string | undefined {
-  switch (sort) {
-    case 'stars':
-      return 'stars'
-    case 'forks':
-      return 'forks'
-    case 'updated':
-      return 'updated'
-    default:
-      return undefined
   }
 }
