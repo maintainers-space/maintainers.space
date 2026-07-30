@@ -128,11 +128,13 @@ function resolvedMeta(item: ForgeInboxItem): { icon: string; class: string } {
             v-else-if="
               !inboxItems.length && !dependencyCount && !ciCount && !resolvedCount && !notes.length
             "
-            class="rounded-lg border border-dashed border-default py-16 text-center"
+            class="space-y-4"
           >
-            <UIcon name="i-lucide-check-check" class="mx-auto size-8 text-success" />
-            <p class="mt-3 text-sm text-muted">You're all caught up.</p>
-            <p class="mt-1 text-xs text-muted">Nothing needs your attention right now.</p>
+            <div class="rounded-lg border border-dashed border-default py-8 text-center">
+              <UIcon name="i-lucide-check-check" class="mx-auto size-8 text-success" />
+              <p class="mt-3 text-sm text-muted">You're all caught up.</p>
+            </div>
+            <NotificationsSpotTheBugCard />
           </div>
 
           <div v-else-if="inboxItems.length" class="space-y-2.5">

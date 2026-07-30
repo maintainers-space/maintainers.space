@@ -1,0 +1,82 @@
+[
+  {
+    "id": "pagination-slice",
+    "title": "Off-by-one in a pagination helper",
+    "language": "ts",
+    "buggy": "function paginate<T>(items: T[], page: number, pageSize: number): T[] {\n  const start = page * pageSize\n  return items.slice(start, pageSize)\n}",
+    "fixed": "function paginate<T>(items: T[], page: number, pageSize: number): T[] {\n  const start = page * pageSize\n  return items.slice(start, start + pageSize)\n}",
+    "diff": "- return items.slice(start, pageSize)\n+ return items.slice(start, start + pageSize)",
+    "explanation": "The end index was just `pageSize` instead of `start + pageSize`. Page 0 happened to work by coincidence (start is 0), but every later page sliced the wrong window — often returning nothing at all.",
+    "sponsor": { "name": "Nimbus CI", "url": "#" }
+  },
+  {
+    "id": "debounce-leak",
+    "title": "A debounce that never debounces",
+    "language": "ts",
+    "buggy": "function debounce(fn: () => void, delay: number) {\n  return () => {\n    setTimeout(fn, delay)\n  }\n}",
+    "fixed": "function debounce(fn: () => void, delay: number) {\n  let timer: ReturnType<typeof setTimeout> | undefined\n  return () => {\n    clearTimeout(timer)\n    timer = setTimeout(fn, delay)\n  }\n}",
+    "diff": "  function debounce(fn: () => void, delay: number) {\n+   let timer: ReturnType<typeof setTimeout> | undefined\n    return () => {\n-     setTimeout(fn, delay)\n+     clearTimeout(timer)\n+     timer = setTimeout(fn, delay)\n    }\n  }",
+    "explanation": "Without a stored timer id to clear, every call schedules a new timeout instead of resetting the existing one — so `fn` still fires once per call, just delayed. It throttles nothing.",
+    "sponsor": { "name": "Packlight", "url": "#" }
+  },
+  {
+    "id": "loop-var-closure",
+    "title": "A loop that forgets its own index",
+    "language": "ts",
+    "buggy": "function scheduleGreetings(names: string[]) {\n  for (var i = 0; i < names.length; i++) {\n    setTimeout(() => console.log(`Hi, ${names[i]}`), i * 100)\n  }\n}",
+    "fixed": "function scheduleGreetings(names: string[]) {\n  for (let i = 0; i < names.length; i++) {\n    setTimeout(() => console.log(`Hi, ${names[i]}`), i * 100)\n  }\n}",
+    "diff": "- for (var i = 0; i < names.length; i++) {\n+ for (let i = 0; i < names.length; i++) {",
+    "explanation": "`var` is function-scoped, so every callback closes over the same `i` — by the time the timeouts fire, the loop has already finished and `i` is `names.length` for all of them. `let` gives each iteration its own binding.",
+    "sponsor": { "name": "Routewise", "url": "#" }
+  },
+  {
+    "id": "numeric-sort",
+    "title": "Sorting scores the wrong way",
+    "language": "ts",
+    "buggy": "function topScores(scores: number[]): number[] {\n  return [...scores].sort().reverse()\n}",
+    "fixed": "function topScores(scores: number[]): number[] {\n  return [...scores].sort((a, b) => b - a)\n}",
+    "diff": "- return [...scores].sort().reverse()\n+ return [...scores].sort((a, b) => b - a)",
+    "explanation": "Array#sort() without a comparator sorts lexicographically — as strings. `[10, 2, 1]` becomes `[1, 10, 2]`, and reversing that doesn't fix the ordering, it just flips the wrong order.",
+    "sponsor": { "name": "Cachegrove", "url": "#" }
+  },
+  {
+    "id": "await-in-loop",
+    "title": "Fire-and-forget inside a loop",
+    "language": "ts",
+    "buggy": "async function notifyAll(userIds: string[]) {\n  userIds.forEach(async (id) => {\n    await sendNotification(id)\n  })\n  console.log('All notifications sent')\n}",
+    "fixed": "async function notifyAll(userIds: string[]) {\n  for (const id of userIds) {\n    await sendNotification(id)\n  }\n  console.log('All notifications sent')\n}",
+    "diff": "- userIds.forEach(async (id) => {\n-   await sendNotification(id)\n- })\n+ for (const id of userIds) {\n+   await sendNotification(id)\n+ }",
+    "explanation": "Array#forEach doesn't await its callback's return value, so the async callbacks all fire in parallel and the log line runs before any of them finish — the async/await inside is effectively decorative.",
+    "sponsor": { "name": "Signalgrid", "url": "#" }
+  },
+  {
+    "id": "index-of-zero",
+    "title": "A falsy index breaks the check",
+    "language": "ts",
+    "buggy": "function isFirstOrIncluded(list: string[], value: string): boolean {\n  if (list.indexOf(value)) {\n    return true\n  }\n  return false\n}",
+    "fixed": "function isFirstOrIncluded(list: string[], value: string): boolean {\n  return list.indexOf(value) !== -1\n}",
+    "diff": "- if (list.indexOf(value)) {\n-   return true\n- }\n- return false\n+ return list.indexOf(value) !== -1",
+    "explanation": "indexOf returns 0 for a match at the very first position, and `0` is falsy — so the one case this function most needs to handle (the value being first in the list) is the one it silently gets wrong.",
+    "sponsor": { "name": "Fluxmark", "url": "#" }
+  },
+  {
+    "id": "shallow-clone",
+    "title": "A \"copy\" that isn't one",
+    "language": "ts",
+    "buggy": "function withUpdatedAddress(user: { name: string; address: { city: string } }, city: string) {\n  const copy = { ...user }\n  copy.address.city = city\n  return copy\n}",
+    "fixed": "function withUpdatedAddress(user: { name: string; address: { city: string } }, city: string) {\n  return { ...user, address: { ...user.address, city } }\n}",
+    "diff": "- const copy = { ...user }\n- copy.address.city = city\n- return copy\n+ return { ...user, address: { ...user.address, city } }",
+    "explanation": "A spread only shallow-copies the top level — `copy.address` is still the exact same object as `user.address`, so mutating it mutates the original too. Nested objects need their own spread.",
+    "sponsor": { "name": "Orbitframe", "url": "#" }
+  },
+  {
+    "id": "unhandled-race",
+    "title": "The retry that gives up too early",
+    "language": "ts",
+    "buggy": "async function fetchWithRetry(url: string, attempts = 3): Promise<Response> {\n  for (let i = 0; i < attempts; i++) {\n    const res = await fetch(url)\n    if (res.ok) return res\n  }\n  throw new Error('failed')\n}",
+    "fixed": "async function fetchWithRetry(url: string, attempts = 3): Promise<Response> {\n  let lastError: unknown\n  for (let i = 0; i < attempts; i++) {\n    try {\n      const res = await fetch(url)\n      if (res.ok) return res\n    } catch (e) {\n      lastError = e\n    }\n  }\n  throw lastError ?? new Error('failed')\n}",
+    "diff": "  for (let i = 0; i < attempts; i++) {\n-   const res = await fetch(url)\n-   if (res.ok) return res\n+   try {\n+     const res = await fetch(url)\n+     if (res.ok) return res\n+   } catch (e) {\n+     lastError = e\n+   }\n  }",
+    "explanation": "If `fetch` itself rejects (network error, DNS failure, aborted request) rather than resolving with a non-ok response, the whole function throws immediately on attempt one — the retry loop never gets a chance to run.",
+    "sponsor": { "name": "Stormpanel", "url": "#" }
+  }
+]
