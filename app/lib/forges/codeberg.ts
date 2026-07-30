@@ -1,4 +1,4 @@
-import { createGiteaFamilyProvider } from './gitea-family'
+import { createGiteaFamilyProvider } from './gitea-shared'
 
 // Codeberg is a community-run Forgejo instance (Forgejo is a Gitea hard fork),
 // so it's just the shared Gitea-family REST client pointed at codeberg.org.

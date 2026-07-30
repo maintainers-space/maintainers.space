@@ -1,4 +1,4 @@
-import { createGiteaFamilyProvider } from './gitea-family'
+import { createGiteaFamilyProvider } from './gitea-shared'
 
 // gitea.com is Gitea's own hosted community instance (the bare domain redirects
 // to a marketing site, but the instance itself — signup, repos, OAuth apps — is
