@@ -1,25 +1,41 @@
 import type {
   ForgeBranch,
   ForgeBlob,
-  ForgeCommit,
-  ForgeCommitActor,
   ForgeCommitDetail,
   ForgeComment,
-  ForgeFileDiff,
-  ForgeId,
   ForgeMergeResult,
   ForgeMyWork,
   ForgePull,
   ForgePullDetail,
-  ForgePullState,
   ForgeProvider,
   ForgeReadOptions,
-  ForgeRepo,
-  ForgeTreeEntry,
-  ForgeUser
+  ForgeTreeEntry
 } from '~/types/forge'
-
 import { getForgeToken } from '~/lib/forges/token-store'
+import type {
+  BbAccountResponse,
+  BbBranchResponse,
+  BbCommentResponse,
+  BbCommitResponse,
+  BbDiffstatEntryResponse,
+  BbPageResponse,
+  BbPrResponse,
+  BbRepoResponse,
+  BbSrcEntryResponse,
+  BbWorkspaceResponse
+} from './types'
+import {
+  WEB,
+  loginOf,
+  mapComment,
+  mapCommit,
+  mapDiffstat,
+  mapPull,
+  mapRepo,
+  mapTreeEntry,
+  sortEntries,
+  splitUnifiedDiff
+} from './mappers'
 
 // Bitbucket Cloud REST API v2.0. Bitbucket's "owner" concept is a *workspace*,
 // not a personal account — a workspace can be a team or an individual.
@@ -36,112 +52,6 @@ import { getForgeToken } from '~/lib/forges/token-store'
 //   - Star: Bitbucket has "watchers", not "stars", and the write endpoint's
 //     behavior is unconfirmed — left unimplemented rather than guessed at.
 const API = 'https://api.bitbucket.org/2.0'
-const WEB = 'https://bitbucket.org'
-
-interface BbLinkResponse {
-  href?: string
-}
-
-interface BbLinksResponse {
-  html?: BbLinkResponse
-  self?: BbLinkResponse
-  avatar?: BbLinkResponse
-}
-
-/** An account (user) reference — Bitbucket dropped stable usernames in 2019; nickname is the closest analog. */
-interface BbAccountResponse {
-  uuid?: string
-  account_id?: string
-  display_name?: string | null
-  nickname?: string | null
-  links?: BbLinksResponse
-}
-
-interface BbWorkspaceRefResponse {
-  slug?: string
-  name?: string
-  links?: BbLinksResponse
-}
-
-interface BbRepoResponse {
-  name?: string
-  slug?: string
-  full_name?: string
-  description?: string | null
-  is_private?: boolean
-  language?: string | null
-  mainbranch?: { name?: string }
-  workspace?: BbWorkspaceRefResponse
-  website?: string | null
-  created_on?: string | null
-  updated_on?: string | null
-  links?: BbLinksResponse
-  parent?: unknown
-}
-
-interface BbPageResponse<T> {
-  values?: T[]
-  next?: string
-}
-
-interface BbCommitResponse {
-  hash?: string
-  message?: string
-  author?: { raw?: string; user?: BbAccountResponse }
-  date?: string
-  parents?: { hash?: string }[]
-  links?: BbLinksResponse
-}
-
-interface BbBranchResponse {
-  name?: string
-  target?: { hash?: string }
-}
-
-interface BbSrcEntryResponse {
-  path?: string
-  type?: string
-  size?: number
-}
-
-interface BbRepoRefResponse {
-  full_name?: string
-  links?: BbLinksResponse
-}
-
-interface BbPrResponse {
-  id?: number
-  title?: string
-  description?: string | null
-  state?: string
-  author?: BbAccountResponse
-  source?: { branch?: { name?: string }; repository?: BbRepoRefResponse }
-  destination?: { branch?: { name?: string }; repository?: BbRepoRefResponse }
-  created_on?: string | null
-  updated_on?: string | null
-  comment_count?: number
-  links?: BbLinksResponse
-}
-
-interface BbDiffstatEntryResponse {
-  status?: string
-  old?: { path?: string } | null
-  new?: { path?: string } | null
-  lines_added?: number
-  lines_removed?: number
-}
-
-interface BbCommentResponse {
-  id?: number
-  user?: BbAccountResponse
-  content?: { raw?: string }
-  created_on?: string | null
-  links?: BbLinksResponse
-}
-
-interface BbWorkspaceResponse {
-  slug?: string
-}
 
 function bbHeaders(opts?: ForgeReadOptions): Record<string, string> {
   const headers: Record<string, string> = { Accept: 'application/json' }
@@ -152,184 +62,6 @@ function bbHeaders(opts?: ForgeReadOptions): Record<string, string> {
 
 function encodePath(path: string): string {
   return path.split('/').filter(Boolean).map(encodeURIComponent).join('/')
-}
-
-/** `login` for a Bitbucket account: nickname (the closest thing left to a stable handle) or the account UUID. */
-function loginOf(u: BbAccountResponse | null | undefined): string {
-  return String(u?.nickname ?? u?.uuid ?? '')
-}
-
-function mapUser(u: BbAccountResponse | null | undefined): ForgeUser | undefined {
-  if (!u) return undefined
-  return {
-    provider: 'bitbucket',
-    login: loginOf(u),
-    displayName: u.display_name ?? null,
-    avatarUrl: u.links?.avatar?.href ?? null,
-    url: u.links?.html?.href ?? null
-  }
-}
-
-function mapRepo(r: BbRepoResponse): ForgeRepo {
-  const workspace = r.workspace?.slug ?? String(r.full_name ?? '').split('/')[0] ?? ''
-  const name = r.slug ?? r.name ?? ''
-  return {
-    provider: 'bitbucket',
-    owner: workspace,
-    name,
-    fullName: r.full_name ?? (workspace && name ? `${workspace}/${name}` : ''),
-    description: r.description ?? null,
-    defaultBranch: r.mainbranch?.name || 'main',
-    url: r.links?.html?.href ?? `${WEB}/${workspace}/${name}`,
-    ownerUrl: r.workspace?.links?.html?.href,
-    ownerAvatar: r.workspace?.links?.avatar?.href ?? null,
-    homepage: r.website || null,
-    language: r.language || null,
-    topics: [],
-    isPrivate: r.is_private,
-    isFork: !!r.parent,
-    license: null,
-    createdAt: r.created_on ?? null,
-    updatedAt: r.updated_on ?? null
-  }
-}
-
-function repoRefFrom(
-  r: BbRepoRefResponse | undefined
-): { provider: ForgeId; owner: string; name: string; fullName: string; url?: string } | undefined {
-  const fullName = r?.full_name
-  if (!fullName) return undefined
-  const idx = fullName.indexOf('/')
-  if (idx < 0) return undefined
-  return {
-    provider: 'bitbucket',
-    owner: fullName.slice(0, idx),
-    name: fullName.slice(idx + 1),
-    fullName,
-    url: r?.links?.html?.href
-  }
-}
-
-function pullState(s?: string): ForgePullState {
-  switch (s) {
-    case 'MERGED':
-      return 'merged'
-    case 'DECLINED':
-    case 'SUPERSEDED':
-      return 'closed'
-    default:
-      return 'open'
-  }
-}
-
-function mapPull(r: BbPrResponse): ForgePull {
-  const state = pullState(r.state)
-  return {
-    provider: 'bitbucket',
-    id: String(r.id ?? ''),
-    number: r.id,
-    title: r.title ?? '',
-    state,
-    author: mapUser(r.author),
-    body: r.description ?? null,
-    commentCount: r.comment_count,
-    sourceBranch: r.source?.branch?.name,
-    targetBranch: r.destination?.branch?.name,
-    createdAt: r.created_on ?? null,
-    updatedAt: r.updated_on ?? null,
-    mergedAt: state === 'merged' ? (r.updated_on ?? null) : null,
-    closedAt: state === 'closed' ? (r.updated_on ?? null) : null,
-    url: r.links?.html?.href,
-    repo: repoRefFrom(r.destination?.repository)
-  }
-}
-
-function mapComment(r: BbCommentResponse): ForgeComment {
-  return {
-    id: String(r.id ?? ''),
-    author: mapUser(r.user),
-    body: r.content?.raw ?? '',
-    createdAt: r.created_on ?? null,
-    url: r.links?.html?.href
-  }
-}
-
-/** Bitbucket's commit `author.raw` is a raw git identity string: "Name <email>". */
-function mapCommit(r: BbCommitResponse): ForgeCommit {
-  const sha = r.hash ?? ''
-  const raw = r.author?.raw ?? ''
-  const m = raw.match(/^(.*?)\s*<(.+)>\s*$/)
-  const actor: ForgeCommitActor = {
-    name: r.author?.user?.display_name ?? m?.[1] ?? raw,
-    email: m?.[2],
-    login: r.author?.user ? loginOf(r.author.user) || undefined : undefined,
-    avatarUrl: r.author?.user?.links?.avatar?.href ?? null,
-    when: r.date
-  }
-  return {
-    sha,
-    shortSha: sha.slice(0, 7),
-    message: r.message ?? '',
-    author: actor,
-    committer: actor,
-    url: r.links?.html?.href,
-    parents: (r.parents ?? []).map((p) => p.hash ?? '').filter(Boolean)
-  }
-}
-
-function diffFileStatus(status?: string): ForgeFileDiff['status'] {
-  switch (status) {
-    case 'added':
-      return 'added'
-    case 'removed':
-      return 'removed'
-    case 'renamed':
-      return 'renamed'
-    case 'modified':
-      return 'modified'
-    default:
-      return 'changed'
-  }
-}
-
-function mapDiffstat(d: BbDiffstatEntryResponse): ForgeFileDiff {
-  return {
-    oldPath: d.old?.path,
-    path: d.new?.path ?? d.old?.path ?? '',
-    status: diffFileStatus(d.status),
-    additions: d.lines_added,
-    deletions: d.lines_removed,
-    isBinary: false
-  }
-}
-
-function splitUnifiedDiff(text: string): Record<string, string> {
-  const out: Record<string, string> = {}
-  const parts = String(text ?? '')
-    .split(/(?=^diff --git )/m)
-    .filter(Boolean)
-  for (const part of parts) {
-    const plus = part.match(/^\+\+\+ b\/(.+)$/m)
-    const diff = part.match(/^diff --git a\/(.+?) b\/(.+)$/m)
-    const path = plus?.[1] && plus[1] !== '/dev/null' ? plus[1] : (diff?.[2] ?? '')
-    if (path) out[path] = part
-  }
-  return out
-}
-
-function sortEntries(a: ForgeTreeEntry, b: ForgeTreeEntry): number {
-  if (a.type !== b.type) return a.type === 'dir' ? -1 : 1
-  return a.name.localeCompare(b.name)
-}
-
-function mapTreeEntry(e: BbSrcEntryResponse): ForgeTreeEntry {
-  const path = e.path ?? ''
-  return {
-    name: path.split('/').pop() || path,
-    path,
-    type: e.type === 'commit_directory' ? 'dir' : 'file',
-    size: e.size
-  }
 }
 
 /** Bounded-concurrency map, mirroring the pattern used across every other forge client. */
