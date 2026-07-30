@@ -51,6 +51,19 @@ export default defineNuxtConfig({
     attestation: {
       privateKey: ''
     },
+    // The PDS that hosts community accounts for the Chat tab (server-only —
+    // pdsAdminPass is admin credentials, never exposed to the client). See
+    // server/api/chat/enable.post.ts, which mints a fresh account here on
+    // "Enable Chat" and hands its one-time credentials back to the client so it
+    // can both call social.colibri.community.create (BYO-PDS mode) and write
+    // maintainers.space's own repoBinding record, as the caller's own atproto
+    // session. Set NUXT_CHAT_PDS_LOC / NUXT_CHAT_PDS_ADMIN_PASS. Defaults match
+    // the local docker-compose.pds.dev.yml stack documented in the chat feature plan.
+    chat: {
+      pdsLoc: 'http://localhost:3000',
+      pdsAdminPass: '',
+      appviewHandleDomain: 'test'
+    },
     public: {
       // OAuth client id for production; overridden per-env. Empty => localhost dev client.
       atprotoClientId: '',

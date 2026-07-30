@@ -1,17 +1,29 @@
 import { configureOAuth } from '@atcute/oauth-browser-client'
+import { APPVIEW_SERVICE_ID } from '~/lib/chat/config'
 import { identityResolver } from './identity'
 
 // Granular atproto OAuth scope — request only the collections maintainers.space writes.
 //
-// maintainers.space's authenticated PDS writes are limited to two record collections:
+// maintainers.space's authenticated PDS writes are limited to a handful of record
+// collections:
 //
 //   atproto                              → identity only (required base scope)
 //   repo:space.maintainers.forgeAccount  → linked forge accounts (useForgeAccounts.ts)
 //   repo:sh.tangled.feed.star            → starring Tangled repos (useRepoStar.ts)
+//   repo:social.colibri.message          → chat messages, own PDS (useChatMessages.ts)
 //
 // A bare `repo:<nsid>` (no `action=`) grants create/update/delete for that one
 // collection. Everything else (profiles, follows, repos, Tangled reads) is a
 // public, unauthenticated read and needs no scope.
+//
+// Chat also needs two of Colibri's own published permission-sets — bundles of
+// RPC + repo permissions scoped to a specific AppView's did:web, referenced
+// with a single `include:` scope rather than hand-listing every collection/RPC
+// they cover (see https://atproto.com/specs/permission#permission-sets and
+// social.colibri.permissionCommunity / permissionMessaging in
+// https://github.com/colibri-social/appview/tree/main/lexicons). Voice
+// (permissionPush, social.colibri.voice.*) and push notifications
+// (permissionNotification) are deliberately omitted — this is a text-only v1.
 //
 // This deliberately avoids the legacy `transition:generic` scope, which grants
 // full read/write to every collection (Bluesky posts, likes, follows, profile…)
@@ -19,12 +31,19 @@ import { identityResolver } from './identity'
 //
 // NOTE: this string MUST stay in sync with the `scope` in
 // public/client-metadata.json (the production client_id document) and with the
-// collection constants FORGE_ACCOUNT_COLLECTION (useForgeAccounts.ts) and
-// TANGLED_STAR_COLLECTION (useRepoStar.ts).
+// collection constants FORGE_ACCOUNT_COLLECTION (useForgeAccounts.ts),
+// TANGLED_STAR_COLLECTION (useRepoStar.ts) and MESSAGE_COLLECTION
+// (useChatMessages.ts). Already-signed-in users don't gain a newly-added scope
+// automatically — they must re-consent; see useChatCommunity.ts's handling of
+// InvalidToken-shaped errors from calls that need it.
 export const OAUTH_SCOPE = [
   'atproto',
   'repo:space.maintainers.forgeAccount',
-  'repo:sh.tangled.feed.star'
+  'repo:sh.tangled.feed.star',
+  'repo:social.colibri.message',
+  `include:social.colibri.permissionAccount?aud=${APPVIEW_SERVICE_ID}`,
+  `include:social.colibri.permissionCommunity?aud=${APPVIEW_SERVICE_ID}`,
+  `include:social.colibri.permissionMessaging?aud=${APPVIEW_SERVICE_ID}`
 ].join(' ')
 
 let configured = false

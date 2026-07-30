@@ -101,6 +101,15 @@ const tabs = computed(() => {
       to: `${base.value}/discussions`,
       active: startsWith('discussions')
     })
+  // Chat is a maintainers.space-native feature, not a forge capability — every
+  // repo can potentially get one, gated by whether its owner has enabled it
+  // (see the chat/ page's own empty state), not by what the forge supports.
+  items.push({
+    label: 'Chat',
+    icon: 'i-lucide-message-circle',
+    to: `${base.value}/chat`,
+    active: startsWith('chat')
+  })
   return items
 })
 </script>
