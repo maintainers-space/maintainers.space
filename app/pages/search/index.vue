@@ -1,11 +1,14 @@
 <script setup lang="ts">
 import { forgeList } from '~/lib/forges'
+import { buildSuggestions, type FilterSuggestion } from '~/lib/search/suggestions'
 
 const route = useRoute()
 const router = useRouter()
 
 const input = ref(String(route.query.q ?? ''))
 const { results, totals, loading, notes, isEmpty, run, parsed } = useSearch()
+
+const searchInputRef = useTemplateRef('searchInputRef')
 
 function submit(): void {
   const q = input.value.trim()
@@ -15,6 +18,30 @@ function submit(): void {
 function applySyntaxExample(q: string): void {
   input.value = q
   submit()
+}
+
+// Suggested filter badges: what to add next, given what's already typed —
+// updates live as the query changes so it reads like an assistant, not a
+// static list.
+const suggestions = computed<FilterSuggestion[]>(() => buildSuggestions(input.value, parsed.value))
+
+function applySuggestion(s: FilterSuggestion): void {
+  const trimmed = input.value.trimEnd()
+  const insertAt = trimmed ? trimmed.length + 1 : 0
+  input.value = trimmed ? `${trimmed} ${s.insert}` : s.insert
+  if (s.placeholder) {
+    // Focus and place the caret right after the qualifier so the viewer can
+    // type the value straight away, instead of searching an empty qualifier.
+    nextTick(() => {
+      const el = searchInputRef.value?.inputRef
+      if (!el) return
+      el.focus()
+      const pos = insertAt + s.insert.length
+      el.setSelectionRange(pos, pos)
+    })
+  } else {
+    submit()
+  }
 }
 
 let debounce: ReturnType<typeof setTimeout> | undefined
@@ -82,6 +109,7 @@ const syntax = [
     <template #body>
       <div class="mx-auto w-full max-w-4xl space-y-6 py-2">
         <UInput
+          ref="searchInputRef"
           v-model="input"
           size="xl"
           icon="i-lucide-search"
@@ -95,6 +123,12 @@ const syntax = [
             <UButton size="xs" color="neutral" variant="subtle" label="Search" @click="submit" />
           </template>
         </UInput>
+
+        <SearchFilterSuggestions
+          v-if="suggestions.length"
+          :suggestions="suggestions"
+          @apply="applySuggestion"
+        />
 
         <!-- Syntax hints when idle -->
         <div v-if="!hasQuery" class="space-y-4">
@@ -119,16 +153,14 @@ const syntax = [
         </div>
 
         <template v-else>
-          <!-- Provider / note banners -->
-          <div v-if="notes.length" class="space-y-2">
-            <CommonDismissibleAlert
-              v-for="(n, i) in notes"
-              :key="i"
-              :storage-key="`search-note:${n}`"
-              color="warning"
-              :description="n"
-            />
-          </div>
+          <!-- Provider / note banners, aggregated into one low-key box -->
+          <CommonDismissibleAlert
+            v-if="notes.length"
+            :storage-key="`search-notes:${notes.slice().sort().join('|')}`"
+            color="warning"
+            title="Some results may be incomplete"
+            :description="notes.map((n) => `• ${n}`).join('\n')"
+          />
 
           <div v-if="loading && isEmpty" class="space-y-3">
             <USkeleton v-for="i in 4" :key="i" class="h-16 w-full" />

@@ -27,7 +27,7 @@ const { dismissed, dismiss } = useDismissible(props.storageKey, Infinity)
     :icon="icon"
     :title="title"
     :description="description"
-    :ui="{ description: 'text-xs' }"
+    :ui="{ description: 'text-xs whitespace-pre-line' }"
     close
     @update:open="dismiss()"
   >
