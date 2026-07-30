@@ -86,12 +86,16 @@ const verbText = computed(() =>
   props.showActor ? verb.value : verb.value.charAt(0).toUpperCase() + verb.value.slice(1)
 )
 
+const commits = computed(() => e.value.events.flatMap((ev) => ev.commits ?? []))
+
 // Expandable when there's more than the headline to show: a burst of pushes
-// (commit list), or a PR/issue lifecycle with more than one folded event.
-const expandable = computed(() => isPush.value || e.value.events.length > 1)
+// with known commits, or a PR/issue lifecycle (or push burst) with more than
+// one folded event. A lone push with no per-commit data has nothing to expand into.
+const hasCommitDetails = computed(() => isPush.value && commits.value.length > 0)
+const hasSubEvents = computed(() => e.value.events.length > 1)
+const expandable = computed(() => hasCommitDetails.value || hasSubEvents.value)
 const expanded = ref(false)
 
-const commits = computed(() => e.value.events.flatMap((ev) => ev.commits ?? []))
 const MAX_COMMITS_SHOWN = 10
 const shownCommits = computed(() => commits.value.slice(0, MAX_COMMITS_SHOWN))
 const hiddenCommitCount = computed(() =>
@@ -105,10 +109,8 @@ function subEventLabel(ev: ForgeContribution): string {
 
 <template>
   <div class="flex items-start gap-3 px-3 py-3 sm:px-4">
-    <!-- Friends: the person's avatar leads (minimalistic). Me: a tinted kind chip.
-         The solid backdrop lets the marker sit on the day's connecting line
-         (drawn behind it by the parent list) like a proper timeline node. -->
-    <NuxtLink v-if="showActor" :to="actorTo" class="z-10 mt-0.5 shrink-0 rounded-full bg-default">
+    <!-- Friends: the person's avatar leads (minimalistic). Me: a tinted kind chip. -->
+    <NuxtLink v-if="showActor" :to="actorTo" class="mt-0.5 shrink-0">
       <UAvatar
         :src="e.actor.avatarUrl ?? undefined"
         :alt="userLabel(e.actor)"
@@ -118,7 +120,7 @@ function subEventLabel(ev: ForgeContribution): string {
     </NuxtLink>
     <div
       v-else
-      class="z-10 mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full bg-default ring-4 ring-default"
+      class="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full"
       :class="style.chip"
     >
       <UIcon :name="style.icon" class="size-4" />
@@ -134,10 +136,12 @@ function subEventLabel(ev: ForgeContribution): string {
         >
         <span class="text-muted">{{ showActor ? ' ' : '' }}{{ verbText }}&nbsp;</span>
         <template v-if="isPush">
-          <span class="font-medium text-highlighted"
-            >{{ commitCount }} commit{{ commitCount === 1 ? '' : 's' }}</span
-          >
-          <span class="text-muted">&nbsp;to&nbsp;</span>
+          <template v-if="commitCount > 0">
+            <span class="font-medium text-highlighted"
+              >{{ commitCount }} commit{{ commitCount === 1 ? '' : 's' }}</span
+            >
+            <span class="text-muted">&nbsp;to&nbsp;</span>
+          </template>
           <NuxtLink :to="repoTo" class="font-medium text-highlighted hover:text-primary">{{
             e.repo.fullName
           }}</NuxtLink>
@@ -175,7 +179,7 @@ function subEventLabel(ev: ForgeContribution): string {
       </div>
 
       <div v-if="expandable && expanded" class="mt-2 space-y-2 border-l border-default pl-3">
-        <ul v-if="isPush && commits.length" class="space-y-1">
+        <ul v-if="hasCommitDetails" class="space-y-1">
           <li
             v-for="(c, i) in shownCommits"
             :key="c.sha ?? i"
@@ -196,7 +200,7 @@ function subEventLabel(ev: ForgeContribution): string {
           </li>
         </ul>
 
-        <ul v-if="e.events.length > 1" class="space-y-1">
+        <ul v-if="hasSubEvents" class="space-y-1">
           <li
             v-for="ev in e.events"
             :key="ev.id"

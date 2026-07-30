@@ -163,9 +163,8 @@ const friendsGroups = computed(() => groupByDay(aggregateTimeline(friendsItems.v
               <h3 class="px-1 text-xs font-semibold uppercase tracking-wide text-muted">
                 {{ g.label }}
               </h3>
-              <ul class="relative">
-                <div class="absolute top-4 bottom-4 left-[27px] w-px bg-default sm:left-[31px]" />
-                <li v-for="entry in g.entries" :key="entry.key" class="relative">
+              <ul class="divide-y divide-default overflow-hidden rounded-lg border border-default">
+                <li v-for="entry in g.entries" :key="entry.key">
                   <TimelineContributionRow :entry="entry" />
                 </li>
               </ul>
@@ -206,9 +205,8 @@ const friendsGroups = computed(() => groupByDay(aggregateTimeline(friendsItems.v
               <h3 class="px-1 text-xs font-semibold uppercase tracking-wide text-muted">
                 {{ g.label }}
               </h3>
-              <ul class="relative">
-                <div class="absolute top-4 bottom-4 left-[27px] w-px bg-default sm:left-[31px]" />
-                <li v-for="entry in g.entries" :key="entry.key" class="relative">
+              <ul class="divide-y divide-default overflow-hidden rounded-lg border border-default">
+                <li v-for="entry in g.entries" :key="entry.key">
                   <TimelineContributionRow :entry="entry" show-actor />
                 </li>
               </ul>
