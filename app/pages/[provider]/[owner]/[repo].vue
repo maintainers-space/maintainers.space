@@ -29,7 +29,7 @@ const defaultBranch = computed(() => meta.value?.defaultBranch ?? 'main')
 provideRepoContext({ provider, owner, name, forge, locator, meta, defaultBranch })
 
 // Track visits locally so signed-in users get a personal recent/favourite feed.
-const { record } = useRepoVisits()
+const { record, recordSection } = useRepoVisits()
 watch(
   meta,
   (m) => {
@@ -46,6 +46,20 @@ const caps = computed(() => forge.value?.capabilities)
 function startsWith(seg: string): boolean {
   return route.path === `${base.value}/${seg}` || route.path.startsWith(`${base.value}/${seg}/`)
 }
+
+// Track which section of the repo is actually being read (not just the
+// landing page) so "Jump back in" can tell a deep dive from a quick glance.
+const currentSection = computed<string | null>(() => {
+  const rest = route.path.slice(base.value.length).replace(/^\//, '')
+  return rest.split('/')[0] || (route.path === base.value ? 'code' : null)
+})
+watch(
+  [meta, currentSection],
+  ([m, section]) => {
+    if (m && section) recordSection(m, section)
+  },
+  { immediate: true }
+)
 
 const isCode = computed(
   () => route.path === base.value || ['tree', 'blob', 'commits', 'commit'].some(startsWith)

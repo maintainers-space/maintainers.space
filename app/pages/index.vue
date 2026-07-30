@@ -1,11 +1,15 @@
 <script setup lang="ts">
 import { forgeList, getForge } from '~/lib/forges'
+import ConfirmModal from '~/components/ConfirmModal.vue'
+import type { ContributionEntry } from '~/components/home/ContributionList.vue'
 
 const { isAuthenticated, profile } = useAuth()
-const { recent } = useRepoVisits()
+const { jumpBackIn, clear: clearVisits } = useRepoVisits()
 const home = useHomeFeed()
 const following = useExplore()
 const connectBanner = useDismissible('home-connect-account')
+const overlay = useOverlay()
+const confirmClearHistory = overlay.create(ConfirmModal)
 
 const greetingName = computed(() => {
   const p = profile.value
@@ -14,8 +18,50 @@ const greetingName = computed(() => {
   return p.handle?.startsWith('did:') ? shortDid(p.handle) : p.handle
 })
 
-const recentRepos = computed(() => recent.value.slice(0, 3))
+const recentRepos = computed(() => jumpBackIn.value.slice(0, 6))
 const followingRepos = computed(() => following.repos.value.slice(0, 6))
+
+async function onClearHistory(): Promise<void> {
+  const ok = await confirmClearHistory.open({
+    title: 'Clear visit history?',
+    description: 'This removes your locally-tracked repo visits used for "Jump back in".',
+    confirmLabel: 'Clear',
+    color: 'error'
+  }).result
+  if (ok) clearVisits()
+}
+
+// Merge the three "actionable work" buckets into one chronological feed —
+// separate icon + color + label per kind disambiguates without needing three
+// strictly separated boxes, and a small dot flags anything new since the
+// viewer last looked.
+const contributions = computed<ContributionEntry[]>(() => {
+  const entries: ContributionEntry[] = [
+    ...home.myPulls.value.map((item) => ({ kind: 'authored' as const, item })),
+    ...home.reviewRequests.value.map((item) => ({ kind: 'review' as const, item })),
+    ...home.assignedIssues.value.map((item) => ({ kind: 'assigned' as const, item }))
+  ]
+  return entries.sort(
+    (a, b) => new Date(b.item.updatedAt ?? 0).getTime() - new Date(a.item.updatedAt ?? 0).getTime()
+  )
+})
+const contributionsSeen = useSeenItems('home:contributions')
+function contributionId(entry: ContributionEntry): string {
+  return `${entry.kind}:${entry.item.provider}:${entry.item.repo?.fullName}:${entry.item.id}`
+}
+function isNewContribution(entry: ContributionEntry): boolean {
+  return contributionsSeen.isNew(contributionId(entry))
+}
+// Give the viewer a moment to actually see the "new" dots before they're
+// marked seen for next time.
+watch(
+  contributions,
+  (list) => {
+    if (!list.length) return
+    setTimeout(() => contributionsSeen.markSeen(list.map(contributionId)), 4000)
+  },
+  { immediate: true }
+)
 
 // Quick-search: start typing and jump straight into the search page.
 const quickQuery = ref('')
@@ -107,9 +153,19 @@ const examples = [
 
         <!-- Jump back in: locally-tracked recent repos -->
         <section v-if="recentRepos.length" class="space-y-3">
-          <div class="flex items-center gap-2">
-            <UIcon name="i-lucide-history" class="size-4 text-muted" />
-            <h2 class="text-sm font-semibold uppercase tracking-wide text-muted">Jump back in</h2>
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2">
+              <UIcon name="i-lucide-history" class="size-4 text-muted" />
+              <h2 class="text-sm font-semibold uppercase tracking-wide text-muted">Jump back in</h2>
+            </div>
+            <UButton
+              icon="i-lucide-x"
+              color="neutral"
+              variant="ghost"
+              size="xs"
+              label="Clear"
+              @click="onClearHistory"
+            />
           </div>
           <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             <HomeRepoMiniCard
@@ -143,38 +199,30 @@ const examples = [
         </UAlert>
 
         <!-- Actionable feed -->
-        <section v-if="home.connected.value" class="grid gap-4 lg:grid-cols-2">
-          <HomeActionList
-            title="Your pull requests"
-            icon="i-lucide-git-pull-request"
-            :items="home.myPulls.value"
+        <section v-if="home.connected.value" class="space-y-3">
+          <div class="flex items-center gap-2">
+            <UIcon name="i-lucide-inbox" class="size-4 text-muted" />
+            <h2 class="text-sm font-semibold uppercase tracking-wide text-muted">
+              Recent contributions
+            </h2>
+          </div>
+          <p class="-mt-1 text-xs text-muted">
+            Pull requests you've opened, reviews you've been asked for, and issues assigned to you.
+          </p>
+          <HomeContributionList
+            :entries="contributions"
             :loading="home.loading.value"
-            empty-text="No open pull requests authored by you."
-          />
-          <HomeActionList
-            title="Needs your review"
-            icon="i-lucide-eye"
-            :items="home.reviewRequests.value"
-            :loading="home.loading.value"
-            empty-text="No pull requests are waiting on your review."
-          />
-          <HomeActionList
-            title="Assigned to you"
-            icon="i-lucide-circle-dot"
-            :items="home.assignedIssues.value"
-            :loading="home.loading.value"
-            empty-text="No issues are assigned to you."
-            class="lg:col-span-2"
+            :is-new="isNewContribution"
           />
         </section>
 
-        <!-- From people you follow -->
+        <!-- Projects from people you follow -->
         <section v-if="followingRepos.length" class="space-y-3">
           <div class="flex items-center justify-between">
             <div class="flex items-center gap-2">
               <UIcon name="i-lucide-users" class="size-4 text-muted" />
               <h2 class="text-sm font-semibold uppercase tracking-wide text-muted">
-                From people you follow
+                Projects from people you follow
               </h2>
             </div>
             <NuxtLink to="/explore" class="text-xs text-primary hover:underline">Explore</NuxtLink>
