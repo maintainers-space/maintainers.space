@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { createGiteaFamilyMappers } from './mappers'
+import { createGiteaFamilyMappers, parseActivityCommits } from './mappers'
 import type { GfActivityResponse, GfIssueResponse, GfPullResponse, GfRepoResponse } from './types'
 
 const { mapUser, mapRepo, mapIssue, mapPull, mapEvent } = createGiteaFamilyMappers(
@@ -170,13 +170,18 @@ describe('mapEvent', () => {
   const actor = { login: 'someone' }
   const repo = { full_name: 'forgejo/forgejo', owner: { login: 'forgejo' }, name: 'forgejo' }
 
-  it('maps a push activity, parsing sha|message commit lines', () => {
+  it('maps a push activity, parsing the real JSON commit content', () => {
     const raw: GfActivityResponse = {
       id: 1,
       op_type: 'commit_repo',
       act_user: actor,
       repo,
-      content: 'abc123|Fix bug\ndef456|Second fix',
+      content: JSON.stringify({
+        Commits: [
+          { Sha1: 'abc123', Message: 'Fix bug' },
+          { Sha1: 'def456', Message: 'Second fix' }
+        ]
+      }),
       ref_name: 'refs/heads/forgejo',
       created: '2024-01-01T00:00:00Z'
     }
@@ -233,5 +238,44 @@ describe('mapEvent', () => {
       created: '2024-01-01T00:00:00Z'
     }
     expect(mapEvent(raw)?.kind).toBe('other')
+  })
+})
+
+describe('parseActivityCommits', () => {
+  it('returns an empty array for null/undefined/empty content', () => {
+    expect(parseActivityCommits(null)).toEqual([])
+    expect(parseActivityCommits(undefined)).toEqual([])
+    expect(parseActivityCommits('')).toEqual([])
+  })
+
+  it('parses the real JSON content Gitea/Forgejo actually sends, newest-first', () => {
+    const content = JSON.stringify({
+      Commits: [
+        { Sha1: 'newest', Message: 'digest update' },
+        { Sha1: 'older', Message: 'Update dependency\n\nlonger body here' }
+      ]
+    })
+    expect(parseActivityCommits(content)).toEqual([
+      { sha: 'newest', message: 'digest update' },
+      { sha: 'older', message: 'Update dependency' }
+    ])
+  })
+
+  it('drops commits whose message is empty after taking the first line', () => {
+    const content = JSON.stringify({ Commits: [{ Sha1: 'x', Message: '' }] })
+    expect(parseActivityCommits(content)).toEqual([])
+  })
+
+  it('falls back to the legacy "sha|message" line format when content is not JSON', () => {
+    expect(parseActivityCommits('abc123|Fix bug\ndef456|Second fix')).toEqual([
+      { sha: 'abc123', message: 'Fix bug' },
+      { sha: 'def456', message: 'Second fix' }
+    ])
+  })
+
+  it('treats a legacy line with no "|" as a message-only commit', () => {
+    expect(parseActivityCommits('just a message, no separator')).toEqual([
+      { message: 'just a message, no separator' }
+    ])
   })
 })

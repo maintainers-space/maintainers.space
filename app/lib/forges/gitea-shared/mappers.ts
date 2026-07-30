@@ -35,6 +35,7 @@ import type {
 import type {
   GfActionRunJobResponse,
   GfActionRunResponse,
+  GfActivityPushContent,
   GfActivityResponse,
   GfCommentResponse,
   GfCommitActorRaw,
@@ -322,14 +323,32 @@ export function eventKind(op: string): ForgeEventKind {
 }
 
 /**
- * The activity feed's `content` field for a commit_repo action is a
- * newline-separated `sha|message` list (one per commit in the push) — parse
- * it into real commit entries instead of dumping the raw string as a title.
+ * The activity feed's `content` field for a commit_repo action is itself a
+ * JSON-encoded string — `{"Commits":[{"Sha1":...,"Message":...}, ...], ...}`
+ * (verified live against both codeberg.org and gitea.com) — not the plain
+ * `sha|message` lines the field name might suggest. Older/self-hosted
+ * instances may still emit that legacy line format, so fall back to it when
+ * the content isn't valid JSON.
  */
 export function parseActivityCommits(
   content: string | null | undefined
 ): ForgeContributionCommit[] {
   if (!content) return []
+
+  try {
+    const parsed = JSON.parse(content) as GfActivityPushContent
+    if (Array.isArray(parsed.Commits)) {
+      return parsed.Commits.map(
+        (c): ForgeContributionCommit => ({
+          sha: c.Sha1,
+          message: (c.Message ?? '').split('\n')[0] ?? ''
+        })
+      ).filter((c) => c.message)
+    }
+  } catch {
+    // Not JSON — fall through to the legacy line format below.
+  }
+
   return content
     .split('\n')
     .map((line) => line.trim())

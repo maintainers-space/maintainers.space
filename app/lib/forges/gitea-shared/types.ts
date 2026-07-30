@@ -191,6 +191,15 @@ export interface GfActivityResponse {
   created_at?: string
 }
 
+/**
+ * A `commit_repo` activity's `content` field is itself a JSON-encoded string
+ * (not the plain `sha|message` lines the field name might suggest) — this is
+ * its shape once parsed.
+ */
+export interface GfActivityPushContent {
+  Commits?: Array<{ Sha1?: string; Message?: string }>
+}
+
 export interface GfNotificationResponse {
   id: number | string
   subject?: {

@@ -436,7 +436,9 @@ export function mapEvent(e: GhEventResponse): ForgeContribution | null {
     case 'PushEvent': {
       kind = 'push'
       const rawCommits = Array.isArray(p.commits) ? p.commits : []
-      count = p.size ?? rawCommits.length
+      // GitHub's public events API stopped including `size`/`commits` on
+      // PushEvent payloads — leave the count unknown rather than claiming 0.
+      count = p.size ?? (rawCommits.length || undefined)
       const head = rawCommits[rawCommits.length - 1]
       title = head?.message?.split('\n')[0]
       const headSha = p.head ?? head?.sha

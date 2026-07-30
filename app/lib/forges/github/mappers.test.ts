@@ -198,6 +198,23 @@ describe('mapEvent', () => {
     expect(mapped?.impact).toBe(1)
   })
 
+  it('leaves the commit count undefined (not 0) when the payload has no size/commits', () => {
+    // GitHub's public events API no longer includes payload.size or
+    // payload.commits on PushEvent at all (verified live against api.github.com) —
+    // the only fields left are push_id/ref/head/before.
+    const raw: GhEventResponse = {
+      id: '1b',
+      type: 'PushEvent',
+      actor,
+      repo,
+      created_at: '2024-01-01T00:00:00Z',
+      payload: { head: 'def456', ref: 'refs/heads/main' }
+    }
+    const mapped = mapEvent(raw)
+    expect(mapped?.count).toBeUndefined()
+    expect(mapped?.commits).toEqual([])
+  })
+
   it('maps a merged PullRequestEvent', () => {
     const raw: GhEventResponse = {
       id: '2',
