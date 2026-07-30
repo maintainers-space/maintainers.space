@@ -23,7 +23,9 @@
     "format": "oxfmt .",
     "format:check": "oxfmt . --check",
     "typecheck": "nuxt typecheck",
-    "knip": "knip"
+    "knip": "knip",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@atcute/atproto": "^4.0.3",
@@ -54,13 +56,18 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@nuxt/test-utils": "^4.1.0",
     "@tailwindcss/typography": "^0.5.20",
+    "@vue/test-utils": "^2.4.11",
+    "happy-dom": "^20.11.1",
     "knip": "^6.29.0",
     "lint-staged": "^17.2.0",
     "oxfmt": "^0.60.0",
     "oxlint": "^1.76.0",
     "simple-git-hooks": "^2.13.1",
     "typescript": "^6.0.3",
+    "vitest": "^4.1.10",
+    "vitest-environment-nuxt": "^2.0.0",
     "vue-tsc": "^3.3.8"
   },
   "simple-git-hooks": {
