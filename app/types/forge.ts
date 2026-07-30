@@ -494,6 +494,13 @@ export type ForgeEventKind =
   | 'star'
   | 'other'
 
+/** One commit inside a push event, when the forge's events feed exposes the list. */
+export interface ForgeContributionCommit {
+  sha?: string
+  message: string
+  url?: string | null
+}
+
 /** A normalized activity event (GitHub events API, Tangled timeline, ...). */
 export interface ForgeContribution {
   provider: ForgeId
@@ -514,6 +521,8 @@ export interface ForgeContribution {
   refType?: string
   /** Ranking score used by the "friends" feed (higher = more impactful). */
   impact?: number
+  /** Individual commits in a push, when the forge's feed includes them. */
+  commits?: ForgeContributionCommit[]
 }
 
 /** The signed-in viewer's actionable work, used by the home dashboard. */

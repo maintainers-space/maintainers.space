@@ -9,6 +9,7 @@ import type {
   ForgeCommitDetail,
   ForgeComment,
   ForgeContribution,
+  ForgeContributionCommit,
   ForgeEventKind,
   ForgeFileDiff,
   ForgeId,
@@ -862,6 +863,26 @@ export function createGiteaFamilyProvider(config: GiteaFamilyConfig): ForgeProvi
     }
   }
 
+  /**
+   * The activity feed's `content` field for a commit_repo action is a
+   * newline-separated `sha|message` list (one per commit in the push) — parse
+   * it into real commit entries instead of dumping the raw string as a title.
+   */
+  function parseActivityCommits(content: string | null | undefined): ForgeContributionCommit[] {
+    if (!content) return []
+    return content
+      .split('\n')
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .map((line) => {
+        const sep = line.indexOf('|')
+        return sep === -1
+          ? { message: line }
+          : { sha: line.slice(0, sep) || undefined, message: line.slice(sep + 1) }
+      })
+      .filter((c) => c.message)
+  }
+
   function mapEvent(e: GfActivityResponse): ForgeContribution | null {
     const actor = mapUser(e.act_user)
     const repo = repoFromRaw(e.repo)
@@ -869,11 +890,31 @@ export function createGiteaFamilyProvider(config: GiteaFamilyConfig): ForgeProvi
       return null
     }
     const kind = eventKind(String(e.op_type ?? ''))
-    const title = e.content ?? e.ref_name ?? repo.fullName
     const baseUrl = repo.url ?? `${WEB}/${repo.fullName}`
-    const url = e.ref_name
+
+    let title: string | null | undefined
+    let url = e.ref_name
       ? `${baseUrl}/src/branch/${encodeURIComponent(String(e.ref_name))}`
       : baseUrl
+    let count: number | undefined
+    let commits: ForgeContributionCommit[] | undefined
+
+    if (kind === 'push') {
+      commits = parseActivityCommits(e.content).map((c) => ({
+        ...c,
+        url: c.sha ? `${baseUrl}/commit/${c.sha}` : null
+      }))
+      count = commits.length || undefined
+      title = commits[0]?.message
+      if (commits[0]?.sha) url = `${baseUrl}/commit/${commits[0].sha}`
+    } else if (e.ref_name) {
+      title = e.ref_name
+    } else if (e.content) {
+      // Not always a title-shaped string (e.g. issue/PR bodies for some op
+      // types), but a lone free-text line reads better than the repo slug.
+      title = e.content.split('\n')[0]
+    }
+
     return {
       provider: providerId,
       id: String(e.id ?? `${e.op_type}-${e.created}`),
@@ -882,6 +923,8 @@ export function createGiteaFamilyProvider(config: GiteaFamilyConfig): ForgeProvi
       repo,
       title,
       url,
+      count,
+      commits,
       createdAt: String(e.created ?? e.created_at ?? ''),
       refType: e.ref_name ? 'ref' : undefined,
       impact: EVENT_IMPACT[kind]

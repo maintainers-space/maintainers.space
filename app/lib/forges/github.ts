@@ -8,6 +8,7 @@ import type {
   ForgeCommitDetail,
   ForgeComment,
   ForgeContribution,
+  ForgeContributionCommit,
   ForgeDiscussion,
   ForgeDiscussionDetail,
   ForgeEventKind,
@@ -984,18 +985,27 @@ function mapEvent(e: GhEventResponse): ForgeContribution | null {
   let number: number | undefined
   let count: number | undefined
   let refType: string | undefined
+  let commits: ForgeContributionCommit[] | undefined
 
   switch (type) {
     case 'PushEvent': {
       kind = 'push'
-      count = p.size ?? p.commits?.length
-      const commits = Array.isArray(p.commits) ? p.commits : []
-      const head = commits[commits.length - 1]
+      const rawCommits = Array.isArray(p.commits) ? p.commits : []
+      count = p.size ?? rawCommits.length
+      const head = rawCommits[rawCommits.length - 1]
       title = head?.message?.split('\n')[0]
       const headSha = p.head ?? head?.sha
       url = headSha
         ? `https://github.com/${repoFull}/commit/${headSha}`
         : `https://github.com/${repoFull}/commits/${String(p.ref ?? '').replace('refs/heads/', '')}`
+      commits = rawCommits
+        // GitHub lists oldest-first within a push — newest-first reads better.
+        .toReversed()
+        .map((rc) => ({
+          sha: rc.sha,
+          message: (rc.message ?? '').split('\n')[0] ?? '',
+          url: rc.sha ? `https://github.com/${repoFull}/commit/${rc.sha}` : null
+        }))
       break
     }
     case 'PullRequestEvent': {
@@ -1069,7 +1079,7 @@ function mapEvent(e: GhEventResponse): ForgeContribution | null {
       return null
   }
 
-  return { ...base, kind, title, url, number, count, refType, impact: EVENT_IMPACT[kind] }
+  return { ...base, kind, title, url, number, count, refType, commits, impact: EVENT_IMPACT[kind] }
 }
 
 export const githubProvider: ForgeProvider = {

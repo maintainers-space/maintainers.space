@@ -1,12 +1,10 @@
 <script setup lang="ts">
 import type { ForgeContribution, ForgeEventKind } from '~/types/forge'
+import { totalCommitCount, type TimelineEntry } from '~/lib/timeline-aggregate'
 
-const props = withDefaults(
-  defineProps<{ contribution: ForgeContribution; showActor?: boolean }>(),
-  {
-    showActor: false
-  }
-)
+const props = withDefaults(defineProps<{ entry: TimelineEntry; showActor?: boolean }>(), {
+  showActor: false
+})
 
 interface KindStyle {
   icon: string
@@ -51,70 +49,76 @@ const KIND_STYLE: Record<ForgeEventKind, KindStyle> = {
   other: { icon: 'i-lucide-activity', chip: 'bg-elevated text-muted', tone: 'text-muted' }
 }
 
-const c = computed(() => props.contribution)
-const style = computed(() => KIND_STYLE[c.value.kind])
-const repoTo = computed(() =>
-  repoPath({ provider: c.value.provider, owner: c.value.repo.owner, name: c.value.repo.name })
-)
-const actorTo = computed(() => userPath(c.value.actor))
+const VERB: Record<ForgeEventKind, string> = {
+  push: 'pushed',
+  pr_opened: 'opened',
+  pr_merged: 'merged',
+  pr_review: 'reviewed',
+  issue_opened: 'opened',
+  issue_closed: 'closed',
+  comment: 'commented on',
+  create: 'created',
+  release: 'published',
+  fork: 'forked',
+  star: 'starred',
+  other: 'was active in'
+}
 
-// Action word; the subject (PR/issue/release/commit) follows as a deep link.
-const verb = computed(() => {
-  switch (c.value.kind) {
-    case 'push':
-      return 'pushed'
-    case 'pr_opened':
-      return 'opened'
-    case 'pr_merged':
-      return 'merged'
-    case 'pr_review':
-      return 'reviewed'
-    case 'issue_opened':
-      return 'opened'
-    case 'issue_closed':
-      return 'closed'
-    case 'comment':
-      return 'commented on'
-    case 'create':
-      return 'created'
-    case 'release':
-      return 'released'
-    case 'fork':
-      return 'forked'
-    default:
-      return 'was active in'
-  }
-})
+const e = computed(() => props.entry)
+const primary = computed(() => e.value.primary)
+const style = computed(() => KIND_STYLE[primary.value.kind])
+const repoTo = computed(() => repoPath({ provider: e.value.provider, ...e.value.repo }))
+const actorTo = computed(() => userPath(e.value.actor))
+const isPush = computed(() => primary.value.kind === 'push')
+const commitCount = computed(() => totalCommitCount(e.value))
 
-// Subject text: the PR/issue title (+ number), commit message, tag… or the repo
-// itself when the event has no more specific subject.
+// The subject link text: PR/issue title, release/branch name, ... Never the
+// bare repo slug pretending to be a title — when there's nothing more
+// specific, the sentence just ends at the repo mention in the meta line.
 const subject = computed(() => {
-  const x = c.value
-  if (x.title) return x.number ? `#${x.number} ${x.title}` : x.title
-  return x.repo.fullName
+  const x = primary.value
+  if (!x.title) return null
+  return x.number ? `#${x.number} ${x.title}` : x.title
 })
-// Show the repo separately only when the subject isn't already the repo.
-const showRepoMeta = computed(() => !!c.value.title)
+const verb = computed(() => VERB[primary.value.kind])
 // On the "Me" feed there's no actor prefix, so start the sentence capitalized.
 const verbText = computed(() =>
   props.showActor ? verb.value : verb.value.charAt(0).toUpperCase() + verb.value.slice(1)
 )
+
+// Expandable when there's more than the headline to show: a burst of pushes
+// (commit list), or a PR/issue lifecycle with more than one folded event.
+const expandable = computed(() => isPush.value || e.value.events.length > 1)
+const expanded = ref(false)
+
+const commits = computed(() => e.value.events.flatMap((ev) => ev.commits ?? []))
+const MAX_COMMITS_SHOWN = 10
+const shownCommits = computed(() => commits.value.slice(0, MAX_COMMITS_SHOWN))
+const hiddenCommitCount = computed(() =>
+  Math.max(0, commits.value.length - shownCommits.value.length)
+)
+
+function subEventLabel(ev: ForgeContribution): string {
+  return VERB[ev.kind].charAt(0).toUpperCase() + VERB[ev.kind].slice(1)
+}
 </script>
 
 <template>
   <div class="flex items-start gap-3 px-3 py-3 sm:px-4">
-    <!-- Friends: the person's avatar leads (minimalistic). Me: a tinted kind chip. -->
-    <NuxtLink v-if="showActor" :to="actorTo" class="mt-0.5 shrink-0">
+    <!-- Friends: the person's avatar leads (minimalistic). Me: a tinted kind chip.
+         The solid backdrop lets the marker sit on the day's connecting line
+         (drawn behind it by the parent list) like a proper timeline node. -->
+    <NuxtLink v-if="showActor" :to="actorTo" class="z-10 mt-0.5 shrink-0 rounded-full bg-default">
       <UAvatar
-        :src="c.actor.avatarUrl ?? undefined"
-        :alt="userLabel(c.actor)"
+        :src="e.actor.avatarUrl ?? undefined"
+        :alt="userLabel(e.actor)"
         size="md"
         class="ring-1 ring-default"
       />
     </NuxtLink>
     <div
       v-else
-      class="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full"
+      class="z-10 mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full bg-default ring-4 ring-default"
       :class="style.chip"
     >
       <UIcon :name="style.icon" class="size-4" />
@@ -126,26 +130,85 @@ const verbText = computed(() =>
           v-if="showActor"
           :to="actorTo"
           class="font-medium text-highlighted hover:text-primary"
-          >{{ userLabel(c.actor) }}</NuxtLink
+          >{{ userLabel(e.actor) }}</NuxtLink
         >
         <span class="text-muted">{{ showActor ? ' ' : '' }}{{ verbText }}&nbsp;</span>
+        <template v-if="isPush">
+          <span class="font-medium text-highlighted"
+            >{{ commitCount }} commit{{ commitCount === 1 ? '' : 's' }}</span
+          >
+          <span class="text-muted">&nbsp;to&nbsp;</span>
+          <NuxtLink :to="repoTo" class="font-medium text-highlighted hover:text-primary">{{
+            e.repo.fullName
+          }}</NuxtLink>
+        </template>
         <NuxtLink
-          :to="c.url ? c.url : repoTo"
-          :target="c.url ? '_blank' : undefined"
+          v-else-if="subject"
+          :to="primary.url ? primary.url : repoTo"
+          :target="primary.url ? '_blank' : undefined"
           class="font-medium text-highlighted hover:text-primary"
           >{{ subject }}</NuxtLink
         >
+        <NuxtLink v-else :to="repoTo" class="font-medium text-highlighted hover:text-primary">{{
+          e.repo.fullName
+        }}</NuxtLink>
       </p>
       <div class="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted">
         <UIcon v-if="showActor" :name="style.icon" class="size-3.5 shrink-0" :class="style.tone" />
-        <NuxtLink v-if="showRepoMeta" :to="repoTo" class="hover:text-primary">{{
-          c.repo.fullName
+        <NuxtLink v-if="!isPush && subject" :to="repoTo" class="hover:text-primary">{{
+          e.repo.fullName
         }}</NuxtLink>
-        <span v-if="showRepoMeta && c.kind === 'push' && c.count">·</span>
-        <span v-if="c.kind === 'push' && c.count"
-          >{{ c.count }} commit{{ c.count === 1 ? '' : 's' }}</span
+        <span v-if="e.createdAt">· {{ formatRelativeTime(e.createdAt) }}</span>
+        <button
+          v-if="expandable"
+          type="button"
+          class="inline-flex items-center gap-0.5 hover:text-primary"
+          @click="expanded = !expanded"
         >
-        <span v-if="c.createdAt">· {{ formatRelativeTime(c.createdAt) }}</span>
+          · {{ expanded ? 'Hide details' : 'Show details' }}
+          <UIcon
+            name="i-lucide-chevron-down"
+            class="size-3 transition-transform"
+            :class="{ 'rotate-180': expanded }"
+          />
+        </button>
+      </div>
+
+      <div v-if="expandable && expanded" class="mt-2 space-y-2 border-l border-default pl-3">
+        <ul v-if="isPush && commits.length" class="space-y-1">
+          <li
+            v-for="(c, i) in shownCommits"
+            :key="c.sha ?? i"
+            class="flex items-baseline gap-1.5 text-xs"
+          >
+            <span v-if="c.sha" class="shrink-0 font-mono text-muted">{{ c.sha.slice(0, 7) }}</span>
+            <NuxtLink
+              v-if="c.url"
+              :to="c.url"
+              target="_blank"
+              class="min-w-0 truncate text-default hover:text-primary"
+              >{{ c.message }}</NuxtLink
+            >
+            <span v-else class="min-w-0 truncate text-default">{{ c.message }}</span>
+          </li>
+          <li v-if="hiddenCommitCount" class="text-xs text-muted">
+            +{{ hiddenCommitCount }} more commit{{ hiddenCommitCount === 1 ? '' : 's' }}
+          </li>
+        </ul>
+
+        <ul v-if="e.events.length > 1" class="space-y-1">
+          <li
+            v-for="ev in e.events"
+            :key="ev.id"
+            class="flex items-baseline gap-1.5 text-xs text-muted"
+          >
+            <span class="text-default">{{ subEventLabel(ev) }}</span>
+            <NuxtLink v-if="ev.url" :to="ev.url" target="_blank" class="hover:text-primary"
+              >view</NuxtLink
+            >
+            <span>· {{ formatRelativeTime(ev.createdAt) }}</span>
+          </li>
+        </ul>
       </div>
     </div>
   </div>

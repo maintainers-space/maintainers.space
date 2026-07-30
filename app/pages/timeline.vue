@@ -1,6 +1,5 @@
 <script setup lang="ts">
-import type { ForgeContribution } from '~/types/forge'
-import { KIND_FILTER_LABEL } from '~/composables/useTimelineFilters'
+import { aggregateTimeline, type TimelineEntry } from '~/lib/timeline-aggregate'
 
 const { isAuthenticated } = useAuth()
 const {
@@ -34,10 +33,7 @@ function refresh() {
   else loadFriends(true)
 }
 
-const filters = useTimelineFilters()
-
 onMounted(() => {
-  filters.load()
   ensureLoaded(tab.value)
 })
 watch(tab, (t) => ensureLoaded(t))
@@ -47,7 +43,7 @@ const activeLoading = computed(() => (tab.value === 'me' ? meLoading.value : fri
 interface DayGroup {
   key: string
   label: string
-  items: ForgeContribution[]
+  entries: TimelineEntry[]
 }
 
 function dayLabel(d: Date): string {
@@ -59,27 +55,28 @@ function dayLabel(d: Date): string {
   return formatDate(d)
 }
 
-function groupByDay(items: ForgeContribution[]): DayGroup[] {
+function groupByDay(entries: TimelineEntry[]): DayGroup[] {
   const groups: DayGroup[] = []
   let cur: DayGroup | null = null
-  for (const it of items) {
+  for (const it of entries) {
     const d = new Date(it.createdAt)
     const key = Number.isNaN(d.getTime())
       ? 'unknown'
       : `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`
     if (!cur || cur.key !== key) {
-      cur = { key, label: Number.isNaN(d.getTime()) ? 'Earlier' : dayLabel(d), items: [] }
+      cur = { key, label: Number.isNaN(d.getTime()) ? 'Earlier' : dayLabel(d), entries: [] }
       groups.push(cur)
     }
-    cur.items.push(it)
+    cur.entries.push(it)
   }
   return groups
 }
 
-const meGroups = computed(() => groupByDay(meItems.value.filter((c) => filters.isEnabled(c.kind))))
-const friendsGroups = computed(() =>
-  groupByDay(friendsItems.value.filter((c) => filters.isEnabled(c.kind)))
-)
+// Cache the aggregation itself (not just the raw fetch) — folding a burst of
+// events into one entry is cheap per item but the list can be a few hundred
+// long, so avoid redoing it on every unrelated reactive update.
+const meGroups = computed(() => groupByDay(aggregateTimeline(meItems.value)))
+const friendsGroups = computed(() => groupByDay(aggregateTimeline(friendsItems.value)))
 </script>
 
 <template>
@@ -123,23 +120,14 @@ const friendsGroups = computed(() =>
 
           <p class="text-xs text-muted">
             <template v-if="tab === 'me'">
-              Your recent contributions across every connected forge, newest first.
+              Your recent contributions across every connected forge, newest first. Related events
+              (like a PR's opens, reviews and merge, or a run of pushes) are folded together — open
+              one to see the details.
             </template>
-            <template v-else> Recent activity from the people you follow, newest first. </template>
+            <template v-else>
+              Recent activity from the people you follow, newest first, folded the same way.
+            </template>
           </p>
-
-          <!-- Persisted event-type filter -->
-          <div class="flex flex-wrap gap-1.5">
-            <UButton
-              v-for="kind in filters.kinds"
-              :key="kind"
-              size="xs"
-              :color="filters.isEnabled(kind) ? 'primary' : 'neutral'"
-              :variant="filters.isEnabled(kind) ? 'subtle' : 'ghost'"
-              :label="KIND_FILTER_LABEL[kind]"
-              @click="filters.toggle(kind)"
-            />
-          </div>
 
           <!-- Me -->
           <div v-show="tab === 'me'" class="space-y-6">
@@ -175,9 +163,10 @@ const friendsGroups = computed(() =>
               <h3 class="px-1 text-xs font-semibold uppercase tracking-wide text-muted">
                 {{ g.label }}
               </h3>
-              <ul class="divide-y divide-default overflow-hidden rounded-lg border border-default">
-                <li v-for="c in g.items" :key="`${c.provider}:${c.id}`">
-                  <TimelineContributionRow :contribution="c" />
+              <ul class="relative">
+                <div class="absolute top-4 bottom-4 left-[27px] w-px bg-default sm:left-[31px]" />
+                <li v-for="entry in g.entries" :key="entry.key" class="relative">
+                  <TimelineContributionRow :entry="entry" />
                 </li>
               </ul>
             </section>
@@ -217,9 +206,10 @@ const friendsGroups = computed(() =>
               <h3 class="px-1 text-xs font-semibold uppercase tracking-wide text-muted">
                 {{ g.label }}
               </h3>
-              <ul class="divide-y divide-default overflow-hidden rounded-lg border border-default">
-                <li v-for="c in g.items" :key="`${c.provider}:${c.id}`">
-                  <TimelineContributionRow :contribution="c" show-actor />
+              <ul class="relative">
+                <div class="absolute top-4 bottom-4 left-[27px] w-px bg-default sm:left-[31px]" />
+                <li v-for="entry in g.entries" :key="entry.key" class="relative">
+                  <TimelineContributionRow :entry="entry" show-actor />
                 </li>
               </ul>
             </section>
