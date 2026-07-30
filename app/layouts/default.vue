@@ -106,7 +106,14 @@ const nav = computed<NavigationMenuItem[]>(() => {
       </template>
 
       <template #footer="{ collapsed }">
-        <UserMenu :collapsed="collapsed" />
+        <div class="w-full space-y-2">
+          <UserMenu :collapsed="collapsed" />
+          <div v-if="!collapsed" class="flex items-center justify-center gap-2 text-xs text-dimmed">
+            <NuxtLink to="/privacy" class="hover:text-muted hover:underline">Privacy</NuxtLink>
+            <span aria-hidden="true">·</span>
+            <NuxtLink to="/terms" class="hover:text-muted hover:underline">Terms</NuxtLink>
+          </div>
+        </div>
       </template>
     </UDashboardSidebar>
 
