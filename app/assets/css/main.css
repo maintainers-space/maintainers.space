@@ -23,3 +23,21 @@
 :root {
   --ui-radius: 0.5rem;
 }
+
+/*
+ * Badge rows in rendered markdown (shields.io-style status badges: a link
+ * wrapping nothing but an image). Typography's default `.prose img` styling
+ * treats every image as a full-width illustration — block-level with large
+ * vertical margins — which is right for content screenshots but stacks a run
+ * of small badges one per line instead of side by side like they're meant to
+ * read.
+ */
+.prose :where(a):has(> img:only-child) {
+  display: inline-flex;
+  margin: 0.2em 0.3em 0.2em 0;
+  vertical-align: middle;
+}
+.prose :where(a):has(> img:only-child) img {
+  display: inline;
+  margin: 0;
+}

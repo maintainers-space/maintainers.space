@@ -78,6 +78,7 @@ watch(active, (p) => ensure(p), { immediate: true })
       <MarkdownBody
         v-else-if="isMarkdown"
         :content="current?.content"
+        :breaks="false"
         empty="This file is empty."
       />
 
