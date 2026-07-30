@@ -50,8 +50,9 @@ export const proxiedFetch: typeof fetch = async (input, init) => {
 
   let host = ''
   try {
-    const base = typeof location !== 'undefined' ? location.origin : undefined
-    host = new URL(target, base).host
+    // The app is ssr: false, so this always runs client-side — `location` is
+    // always defined here.
+    host = new URL(target, location.origin).host
   } catch {
     /* non-absolute or opaque target — nothing to proxy */
   }
