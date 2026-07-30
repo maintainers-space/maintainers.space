@@ -27,24 +27,46 @@ async function loadRepos(): Promise<void> {
           .catch(() => [] as ForgeRepo[])
       : []
   loadingRepos.value = false
+  nextTick(place)
 }
 
 watch(() => props.node.id, loadRepos, { immediate: true })
 
-// Positioned relative to the same wrapper the graph canvas fills; flips to
-// the left of the node when it would otherwise overflow the right edge.
-const style = computed(() => {
-  const flip = import.meta.client && props.screen.x + 16 + 288 > window.innerWidth
-  return {
-    left: flip ? `${Math.max(8, props.screen.x - 288 - 16)}px` : `${props.screen.x + 16}px`,
-    top: `${props.screen.y}px`
-  }
+// Positioned relative to the same wrapper the graph canvas fills, flipping to
+// whichever side/edge keeps it fully on-screen — clamped against the card's
+// own measured size rather than a guessed constant, since its height varies
+// with how many repos loaded in.
+const cardEl = useTemplateRef<HTMLDivElement>('cardEl')
+const style = ref<{ left: string; top: string }>({
+  left: `${props.screen.x}px`,
+  top: `${props.screen.y}px`
 })
+
+function place(): void {
+  if (!import.meta.client) return
+  const margin = 12
+  const width = cardEl.value?.offsetWidth ?? 288
+  const height = cardEl.value?.offsetHeight ?? 200
+  const flip = props.screen.x + 16 + width > window.innerWidth
+  const left = flip ? props.screen.x - width - 16 : props.screen.x + 16
+  const top = props.screen.y - height / 2
+  style.value = {
+    left: `${Math.min(Math.max(left, margin), window.innerWidth - width - margin)}px`,
+    top: `${Math.min(Math.max(top, margin), window.innerHeight - height - margin)}px`
+  }
+}
+
+watch(
+  () => [props.screen.x, props.screen.y, props.node.id],
+  () => nextTick(place),
+  { immediate: true }
+)
 </script>
 
 <template>
   <div
-    class="pointer-events-auto absolute z-20 w-72 -translate-y-1/2 rounded-lg border border-default bg-default p-4 shadow-xl"
+    ref="cardEl"
+    class="pointer-events-auto absolute z-20 w-72 rounded-lg border border-default bg-default p-4 shadow-xl"
     :style="style"
   >
     <div class="flex items-start justify-between gap-2">

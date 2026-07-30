@@ -15,6 +15,14 @@ const emit = defineEmits<{
 const containerEl = ref<HTMLDivElement | null>(null)
 let graph: InstanceType<typeof ForceGraph> | null = null
 let selectedId: string | null = null
+// zoomToFit needs real, settled node positions to compute a sane bounding
+// box — calling it right after graphData() (before the simulation has had a
+// chance to spread nodes out from their initial spawn point) fits the view to
+// a near-zero-area box, which is what made the graph look "stuck" in a
+// corner with nodes then appearing to rocket away as the simulation actually
+// ran. Only fit once, when the engine settles after a genuine data load —
+// not after every drag-triggered reheat.
+let pendingFit = false
 
 const imageCache = new Map<string, HTMLImageElement>()
 function imageFor(url: string): HTMLImageElement {
@@ -128,6 +136,7 @@ function selectNode(node: GraphNode | null): void {
 
 function build(): void {
   if (!containerEl.value) return
+  pendingFit = true
   graph = new ForceGraph(containerEl.value)
     .graphData({
       nodes: props.nodes as unknown as object[],
@@ -163,6 +172,11 @@ function build(): void {
       const node = props.nodes.find((n) => n.id === selectedId)
       if (node) updateSelectionScreenPos(node)
     })
+    .onEngineStop(() => {
+      if (!pendingFit) return
+      pendingFit = false
+      graph?.zoomToFit(400, 60)
+    })
 
   const chargeForce = graph.d3Force('charge') as { strength?: (v: number) => void } | undefined
   chargeForce?.strength?.(-140)
@@ -188,6 +202,7 @@ onBeforeUnmount(() => {
 watch(
   () => [props.nodes, props.links],
   () => {
+    pendingFit = true
     graph?.graphData({
       nodes: props.nodes as unknown as object[],
       links: props.links as unknown as object[]

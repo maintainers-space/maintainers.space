@@ -23,6 +23,25 @@ const MAX_PROJECT_SOURCES = 8
 const MAX_PROJECTS_PER_PERSON = 3
 const MAX_CONTRIBUTORS_PER_PROJECT = 8
 
+/**
+ * Alternate between two already-ranked lists instead of concatenating them, so
+ * a capped `.slice(0, n)` downstream draws fairly from both rather than the
+ * first list crowding the second out entirely. Atproto follows tend to badly
+ * outnumber forge-native follows, and only forge-native accounts reliably
+ * have real repos to surface as project nodes — a straight concatenation left
+ * "friends of friends" expansion and project loading almost entirely fed by
+ * people with no forge repos to show.
+ */
+function interleave<T>(a: T[], b: T[]): T[] {
+  const out: T[] = []
+  const max = Math.max(a.length, b.length)
+  for (let i = 0; i < max; i++) {
+    if (i < a.length) out.push(a[i]!)
+    if (i < b.length) out.push(b[i]!)
+  }
+  return out
+}
+
 export interface GraphAccountRef {
   provider: ForgeId
   login: string
@@ -268,7 +287,7 @@ export function useSocialGraph() {
         }
       }
 
-      const depth1People = [...atDepth1, ...forgeNativeDepth1]
+      const depth1People = interleave(atDepth1, forgeNativeDepth1)
 
       // --- Depth 2: friends of a capped subset of friends.
       let depth2Added = 0
@@ -345,8 +364,13 @@ export function useSocialGraph() {
         })
       )
 
-      nodes.value = [...nodesById.values()]
-      links.value = linkList
+      // markRaw: force-graph mutates x/y/vx/vy on these objects every
+      // simulation tick (dozens of times a second). None of that needs to be
+      // (or should be) reactive at the property level — Vue's proxy overhead
+      // on every tick is wasted work at best, and fights the simulation at
+      // worst.
+      nodes.value = markRaw([...nodesById.values()])
+      links.value = markRaw(linkList)
     } catch (e) {
       error.value = e instanceof Error ? e.message : 'Could not build the graph.'
     } finally {

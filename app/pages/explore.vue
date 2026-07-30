@@ -3,8 +3,8 @@ import type { GraphNode, GraphPersonNode } from '~/composables/useSocialGraph'
 
 const { isAuthenticated } = useAuth()
 const { nodes, links, loading, error, load } = useSocialGraph()
+const intro = useDismissible('explore-graph-intro')
 
-const graphEl = ref<{ zoomToFit: () => void } | null>(null)
 const selected = ref<GraphPersonNode | null>(null)
 const selectedScreen = ref<{ x: number; y: number } | null>(null)
 
@@ -19,8 +19,10 @@ function onSelect(node: GraphNode | null, screen: { x: number; y: number } | nul
 }
 
 async function reload(): Promise<void> {
+  // The graph fits itself once the simulation settles after the new data
+  // lands (see SocialGraph's onEngineStop) — fitting any earlier would frame
+  // nodes before they've spread out from their spawn point.
   await load()
-  nextTick(() => graphEl.value?.zoomToFit())
 }
 
 onMounted(() => {
@@ -60,8 +62,8 @@ watch(isAuthenticated, (v) => {
         <div>
           <UIcon name="i-lucide-share-2" class="mx-auto size-8 text-muted" />
           <p class="mt-3 text-sm text-muted">
-            Sign in to explore your cross-forge social graph — friends, friends of friends, and the
-            projects that connect you.
+            Sign in to see who you follow — on Bluesky and on every linked forge — laid out as an
+            interactive map, with the repositories they work on connected in.
           </p>
         </div>
       </div>
@@ -88,7 +90,18 @@ watch(isAuthenticated, (v) => {
         </div>
 
         <template v-else>
-          <ExploreSocialGraph ref="graphEl" :nodes="nodes" :links="links" @select="onSelect" />
+          <UAlert
+            v-if="!intro.dismissed.value"
+            color="neutral"
+            variant="subtle"
+            icon="i-lucide-info"
+            title="What is this?"
+            description="Every person you follow — on Bluesky and on any forge account you've linked — plotted as a node, with a second ring of the people they follow, and the repositories that connect you all. Drag nodes to rearrange, scroll to zoom, click a person for their profile or a project to open it."
+            close
+            class="absolute top-3 left-1/2 z-10 w-auto max-w-lg -translate-x-1/2"
+            @update:open="intro.dismiss()"
+          />
+          <ExploreSocialGraph :nodes="nodes" :links="links" @select="onSelect" />
           <ExplorePersonCard
             v-if="selected && selectedScreen"
             :node="selected"
@@ -107,16 +120,16 @@ watch(isAuthenticated, (v) => {
         />
 
         <div
-          class="pointer-events-none absolute bottom-4 left-4 flex flex-wrap gap-3 rounded-lg border border-default bg-default/80 px-3 py-1.5 text-xs text-muted backdrop-blur"
+          class="pointer-events-none absolute bottom-4 left-4 flex flex-wrap items-center gap-3 rounded-lg border border-default bg-default/80 px-3 py-1.5 text-xs text-muted backdrop-blur"
         >
           <span class="inline-flex items-center gap-1.5"
             ><span class="size-2 rounded-full bg-[#eab308]" />You</span
           >
           <span class="inline-flex items-center gap-1.5"
-            ><span class="size-2 rounded-full bg-[#3b82f6]" />Friends</span
+            ><span class="size-2 rounded-full bg-[#3b82f6]" />Follows</span
           >
           <span class="inline-flex items-center gap-1.5"
-            ><span class="size-2 rounded-full bg-[#8b5cf6]" />Friends of friends</span
+            ><span class="size-2 rounded-full bg-[#8b5cf6]" />Second-degree</span
           >
           <span class="inline-flex items-center gap-1.5"
             ><span class="size-2 bg-neutral-500" />Projects</span
