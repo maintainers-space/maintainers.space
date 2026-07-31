@@ -10,7 +10,7 @@ const base = computed(() =>
 )
 const id = computed(() => String(route.params.id))
 
-const { data, pending, error } = useAsyncData<ForgeDiscussionDetail | null>(
+const { data, pending, error } = useLiveAsyncData<ForgeDiscussionDetail | null>(
   () => `discussion:${provider.value}:${owner.value}:${name.value}:${id.value}`,
   async () => {
     if (!forge.value?.getDiscussion) return null

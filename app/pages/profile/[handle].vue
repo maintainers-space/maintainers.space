@@ -12,11 +12,11 @@ const {
   data: profile,
   pending: profilePending,
   error: profileError
-} = useAsyncData(`profile:${handle.value}`, () => fetchPublicProfile(handle.value), {
+} = useLiveAsyncData(`profile:${handle.value}`, () => fetchPublicProfile(handle.value), {
   watch: [handle]
 })
 
-const { data: publicAccounts } = useAsyncData(
+const { data: publicAccounts } = useLiveAsyncData(
   `profile-accounts:${handle.value}`,
   async () => {
     const recs = await listPublicRecords<ForgeAccountRecord>(handle.value, FORGE_ACCOUNT_COLLECTION)
@@ -119,7 +119,7 @@ const linkedAccounts = computed<LinkedAccountView[]>(() => {
 
 // Repos from the Tangled identity and every linked forge are pooled and sorted
 // together so the grid never separates one provider from another.
-const { data: repos, pending: reposPending } = useAsyncData(
+const { data: repos, pending: reposPending } = useLiveAsyncData(
   `profile-repos:${handle.value}`,
   async () => {
     const tangled = getForge('tangled')
@@ -146,7 +146,7 @@ const { data: repos, pending: reposPending } = useAsyncData(
 )
 
 // Issues/PRs authored and commented on across every forge, pooled and mixed.
-const { data: activity, pending: activityPending } = useAsyncData(
+const { data: activity, pending: activityPending } = useLiveAsyncData(
   `profile-activity:${handle.value}`,
   async (): Promise<{ authored: ForgeIssue[]; commented: ForgeIssue[] }> => {
     const authoredJobs: Promise<ForgeIssue[]>[] = []

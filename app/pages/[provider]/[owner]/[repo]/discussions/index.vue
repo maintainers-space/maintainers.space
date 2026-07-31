@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { ForgeDiscussion } from '~/types/forge'
 import { useRepoContext } from '~/composables/useRepoContext'
+import { cached, TTL } from '~/lib/cache'
 
 const { provider, owner, name, forge, locator } = useRepoContext()
 const { get: getToken } = useForgeTokens()
@@ -33,13 +34,17 @@ const filtered = computed(() => {
 })
 
 async function load(): Promise<void> {
-  if (!forge.value?.listDiscussions) return
+  const f = forge.value
+  if (!f?.listDiscussions) return
   const token = getToken(provider.value)
   needsToken.value = !token
   loading.value = true
   error.value = null
   try {
-    const page = await forge.value.listDiscussions(locator.value, { token, limit: 30 })
+    const key = `discussions:${provider.value}:${owner.value}:${name.value}:${token ? 'auth' : 'anon'}`
+    const page = await cached(key, () => f.listDiscussions!(locator.value, { token, limit: 30 }), {
+      ttl: TTL.SHORT
+    })
     items.value = page.items
     if (page.incomplete && !token) needsToken.value = true
   } catch (e) {

@@ -3,6 +3,14 @@
 // fresh window a request is served from memory; within the stale window the
 // cached value is returned instantly while a fresh copy is fetched in the
 // background. A `force` flag bypasses the cache — that is what "reload" uses.
+//
+// Every entry is also written through to IndexedDB (~/lib/idb-store), so the
+// last known-good value survives a full reload — closing the PWA, losing
+// connectivity, reopening later — not just in-memory navigation. When the
+// device is offline, `cached()` never attempts the network at all: it serves
+// whatever it has (memory, or IndexedDB on a cold start) instead of failing.
+
+import { idbClear, idbDelete, idbDeletePrefix, idbGet, idbSet } from '~/lib/idb-store'
 
 export const TTL = {
   /** ~1 minute — PR status, notifications, CI. */
@@ -17,11 +25,20 @@ interface Entry<T> {
   fresh: number
   /** Timestamp after which the value must not be served at all. */
   dead: number
-  /** In-flight fetch, so concurrent callers share one request. */
+  /** In-flight fetch, so concurrent callers share one request. Never persisted. */
   pending?: Promise<T>
 }
 
 const store = new Map<string, Entry<unknown>>()
+
+function isOffline(): boolean {
+  return import.meta.client && typeof navigator !== 'undefined' && navigator.onLine === false
+}
+
+/** Strip the in-flight promise before writing to IndexedDB — it isn't cloneable. */
+function persistable<T>(entry: Entry<T>): Omit<Entry<T>, 'pending'> {
+  return { value: entry.value, fresh: entry.fresh, dead: entry.dead }
+}
 
 export interface CacheOptions<T> {
   /** Fresh window in ms (default {@link TTL.MEDIUM}). */
@@ -40,9 +57,10 @@ export interface CacheOptions<T> {
 /**
  * Run `fetcher` behind a stale-while-revalidate cache keyed by `key`.
  * Returns fresh or stale-but-valid data immediately; refetches in the
- * background when stale. Rejections are never cached.
+ * background when stale. Rejections are never cached. While offline, always
+ * serves whatever is known (memory or IndexedDB) and never touches the network.
  */
-export function cached<T>(
+export async function cached<T>(
   key: string,
   fetcher: () => Promise<T>,
   opts: CacheOptions<T> = {}
@@ -50,12 +68,30 @@ export function cached<T>(
   const ttl = opts.ttl ?? TTL.MEDIUM
   const swr = opts.swr ?? ttl
   const now = Date.now()
-  const existing = store.get(key) as Entry<T> | undefined
+  let existing = store.get(key) as Entry<T> | undefined
+
+  // Cold start (nothing in memory yet this session): hydrate from IndexedDB
+  // before deciding whether to hit the network.
+  if (!existing) {
+    const persisted = await idbGet<Omit<Entry<T>, 'pending'>>(key)
+    if (persisted) {
+      existing = persisted
+      store.set(key, persisted)
+    }
+  }
+
+  if (isOffline()) {
+    if (existing?.pending) return existing.pending
+    if (existing) return existing.value
+    throw new Error('You appear to be offline, and there is no cached data for this yet.')
+  }
 
   const runFetch = (): Promise<T> => {
     const p = fetcher()
       .then((value) => {
-        store.set(key, { value, fresh: Date.now() + ttl, dead: Date.now() + ttl + swr })
+        const entry: Entry<T> = { value, fresh: Date.now() + ttl, dead: Date.now() + ttl + swr }
+        store.set(key, entry)
+        void idbSet(key, persistable(entry))
         return value
       })
       .catch((err) => {
@@ -93,14 +129,17 @@ export function cached<T>(
 export function invalidate(key: string, prefix = false): void {
   if (!prefix) {
     store.delete(key)
+    void idbDelete(key)
     return
   }
   for (const k of store.keys()) {
     if (k.startsWith(key)) store.delete(k)
   }
+  void idbDeletePrefix(key)
 }
 
 /** Clear the entire cache (e.g. on sign-out, so another account can't read it). */
 export function clearCache(): void {
   store.clear()
+  void idbClear()
 }

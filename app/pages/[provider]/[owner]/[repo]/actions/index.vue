@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { ForgeActionRun } from '~/types/forge'
 import { useRepoContext } from '~/composables/useRepoContext'
+import { cached, TTL } from '~/lib/cache'
 
 const { provider, owner, name, forge, locator } = useRepoContext()
 const base = computed(() =>
@@ -12,11 +13,15 @@ const loading = ref(false)
 const error = ref<string | null>(null)
 
 async function load(): Promise<void> {
-  if (!forge.value?.listActionRuns) return
+  const f = forge.value
+  if (!f?.listActionRuns) return
   loading.value = true
   error.value = null
   try {
-    const page = await forge.value.listActionRuns(locator.value, { limit: 30 })
+    const key = `actions:${provider.value}:${owner.value}:${name.value}`
+    const page = await cached(key, () => f.listActionRuns!(locator.value, { limit: 30 }), {
+      ttl: TTL.SHORT
+    })
     items.value = page.items
   } catch (e) {
     error.value = e instanceof Error ? e.message : 'Failed to load workflow runs.'

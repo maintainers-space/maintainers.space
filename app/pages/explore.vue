@@ -18,11 +18,11 @@ function onSelect(node: GraphNode | null, screen: { x: number; y: number } | nul
   selectedScreen.value = screen
 }
 
-async function reload(): Promise<void> {
+async function reload(force = false): Promise<void> {
   // The graph fits itself once the simulation settles after the new data
   // lands (see SocialGraph's onEngineStop) — fitting any earlier would frame
   // nodes before they've spread out from their spawn point.
-  await load()
+  await load(force)
 }
 
 onMounted(() => {
@@ -48,7 +48,7 @@ watch(isAuthenticated, (v) => {
             size="sm"
             :loading="loading"
             aria-label="Refresh"
-            @click="reload"
+            @click="reload(true)"
           />
         </template>
       </UDashboardNavbar>

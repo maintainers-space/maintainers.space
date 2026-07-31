@@ -58,6 +58,7 @@
   "devDependencies": {
     "@nuxt/test-utils": "^4.1.0",
     "@tailwindcss/typography": "^0.5.20",
+    "@vite-pwa/nuxt": "^1.1.1",
     "@vue/test-utils": "^2.4.11",
     "happy-dom": "^20.11.1",
     "knip": "^6.29.0",
