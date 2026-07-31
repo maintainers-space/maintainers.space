@@ -4,6 +4,7 @@
 // across every render in this server process — unlike the auth-related
 // composables elsewhere in this app, this is safe to share across requests.
 import { Renderer, type Node } from '@takumi-rs/core'
+import { prepareImages } from '@takumi-rs/helpers'
 
 const OG_WIDTH = 1200
 const OG_HEIGHT = 630
@@ -23,8 +24,14 @@ async function getRenderer(): Promise<Renderer> {
   return rendererPromise
 }
 
-/** Render a Takumi node tree to a 1200x630 PNG buffer — the standard OG image size. */
+/**
+ * Render a Takumi node tree to a 1200x630 PNG buffer — the standard OG image
+ * size. Any `image()` node in the tree that references a remote URL (an
+ * avatar, say) rather than a data URI or raw bytes is fetched first — a
+ * failed fetch just drops that one image rather than failing the render.
+ */
 export async function renderOgImage(node: Node): Promise<Buffer> {
   const renderer = await getRenderer()
-  return renderer.render(node, { width: OG_WIDTH, height: OG_HEIGHT, format: 'png' })
+  const images = await prepareImages({ node, throwOnError: false })
+  return renderer.render(node, { width: OG_WIDTH, height: OG_HEIGHT, format: 'png', images })
 }

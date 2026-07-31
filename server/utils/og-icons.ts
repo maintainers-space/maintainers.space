@@ -35,3 +35,13 @@ function iconDataUri(name: OgIconName, color: string): string {
 export function ogIcon(name: OgIconName, size = 22, color = 'white'): Node {
   return image({ src: iconDataUri(name, color), width: size, height: size })
 }
+
+/** Display label for a forge id, e.g. `github` -> `GitHub`. */
+export const FORGE_LABEL: Record<string, string> = {
+  github: 'GitHub',
+  gitlab: 'GitLab',
+  tangled: 'Tangled',
+  codeberg: 'Codeberg',
+  gitea: 'Gitea',
+  bitbucket: 'Bitbucket'
+}

@@ -8,21 +8,12 @@ import { formatCompactNumber, formatRelativeTime } from '~/utils'
 import type { OgRepoData } from './og-data'
 import { ogBrand } from './og-brand'
 import { ogFrame } from './og-frame'
-import { ogIcon, type OgIconName } from './og-icons'
+import { FORGE_LABEL, ogIcon, type OgIconName } from './og-icons'
 import { languageColor } from './og-language-colors'
 import { buildLanguageRing, ringConicGradient } from './og-language-ring'
 import { OG_FONT_FAMILY } from './og-render'
 
 const DARK_BG = '#1b1718'
-
-const FORGE_LABEL: Record<string, string> = {
-  github: 'GitHub',
-  gitlab: 'GitLab',
-  tangled: 'Tangled',
-  codeberg: 'Codeberg',
-  gitea: 'Gitea',
-  bitbucket: 'Bitbucket'
-}
 
 function truncate(value: string, max: number): string {
   if (value.length <= max) return value
