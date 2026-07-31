@@ -21,7 +21,7 @@ import { DEFAULT_TITLE, SITE_TITLE, TAGLINE, titleForPath } from '../utils/og-te
 import { canonicalOgPath, resolveOgTarget, type OgTarget } from '../utils/og-target'
 
 const BOT_USER_AGENT =
-  /Slackbot|Twitterbot|Discordbot|facebookexternalhit|LinkedInBot|TelegramBot|WhatsApp|Googlebot|Applebot|redditbot|Pinterest|SkypeUriPreview/i
+  /Slackbot|Twitterbot|Discordbot|facebookexternalhit|LinkedInBot|TelegramBot|WhatsApp|Googlebot|Applebot|redditbot|Pinterest|SkypeUriPreview|Bluesky|Cardyb/i
 
 interface OgMeta {
   title: string
