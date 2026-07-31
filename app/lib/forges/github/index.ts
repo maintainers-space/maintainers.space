@@ -291,6 +291,13 @@ export const githubProvider: ForgeProvider = {
     )
   },
 
+  async getLanguages(owner, repo, opts) {
+    return $fetch<Record<string, number>>(`${API}/repos/${owner}/${repo}/languages`, {
+      headers: ghHeaders(opts),
+      signal: opts?.signal
+    }).catch(() => undefined)
+  },
+
   async getOverview(owner, repo, opts) {
     const meta = mapRepo(
       await $fetch<GhRepoResponse>(`${API}/repos/${owner}/${repo}`, {

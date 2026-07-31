@@ -617,6 +617,12 @@ export interface ForgeProvider {
     sha: string,
     opts?: ForgeReadOptions
   ) => Promise<ForgeCommitDetail>
+  /** Byte-count breakdown per language, when the forge reports one (e.g. GitHub/GitLab/Gitea `/languages`). */
+  getLanguages?: (
+    owner: string,
+    repo: string,
+    opts?: ForgeReadOptions
+  ) => Promise<Record<string, number> | undefined>
 
   // Issues ---------------------------------------------------------------
   listIssues?: (repo: RepoLocator, opts?: IssueListOptions) => Promise<Paginated<ForgeIssue>>

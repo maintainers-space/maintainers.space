@@ -275,6 +275,14 @@ export function createGiteaFamilyProvider(config: GiteaFamilyConfig): ForgeProvi
       return mapped
     },
 
+    async getLanguages(owner, repo, opts) {
+      return gfFetch<Record<string, number>>(
+        `/repos/${owner}/${repo}/languages`,
+        undefined,
+        opts
+      ).catch(() => undefined)
+    },
+
     async getOverview(owner, repo, opts) {
       const meta = await provider.getRepo!(owner, repo, opts)
       const entries = await getRootTree(owner, repo, meta.defaultBranch, opts).catch(

@@ -244,6 +244,14 @@ export const gitlabProvider: ForgeProvider = {
     )
   },
 
+  async getLanguages(owner, repo, opts) {
+    return glFetch<Record<string, number>>(
+      `/projects/${enc(`${owner}/${repo}`)}/languages`,
+      undefined,
+      opts
+    ).catch(() => undefined)
+  },
+
   async getOverview(owner, repo, opts) {
     const meta = mapRepo(
       await glFetch<GlProjectResponse>(
