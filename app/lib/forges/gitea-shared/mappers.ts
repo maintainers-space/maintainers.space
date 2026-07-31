@@ -50,6 +50,7 @@ import type {
   GfSearchIssueResponse,
   GfUserResponse
 } from './types'
+import { issuePath } from '~/utils'
 
 export function loginOf(u: GfUserResponse | null | undefined): string {
   return String(u?.login ?? u?.username ?? '')
