@@ -39,14 +39,3 @@ export function buildLanguageRing(bytes: Record<string, number>): LanguageRingSe
 
   return segments
 }
-
-/** A `conic-gradient()` value drawing each segment as a ring wedge, in order. */
-export function ringConicGradient(segments: LanguageRingSegment[]): string {
-  let cursor = 0
-  const stops = segments.map((s) => {
-    const from = cursor
-    cursor += s.percent
-    return `${s.color} ${from}% ${cursor}%`
-  })
-  return `conic-gradient(${stops.join(', ')})`
-}

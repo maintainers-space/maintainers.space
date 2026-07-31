@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildLanguageRing, ringConicGradient } from './og-language-ring'
+import { buildLanguageRing } from './og-language-ring'
 
 describe('buildLanguageRing', () => {
   it('returns an empty array for no bytes', () => {
@@ -50,19 +50,5 @@ describe('buildLanguageRing', () => {
   it('does not add an Other segment when there is no long tail', () => {
     const segments = buildLanguageRing({ A: 1, B: 1, C: 1 })
     expect(segments.some((s) => s.name === 'Other')).toBe(false)
-  })
-})
-
-describe('ringConicGradient', () => {
-  it('builds a conic-gradient string with accumulating percentage stops', () => {
-    const gradient = ringConicGradient([
-      { name: 'A', color: '#111111', percent: 60 },
-      { name: 'B', color: '#222222', percent: 40 }
-    ])
-    expect(gradient).toBe('conic-gradient(#111111 0% 60%, #222222 60% 100%)')
-  })
-
-  it('returns an empty conic-gradient for no segments', () => {
-    expect(ringConicGradient([])).toBe('conic-gradient()')
   })
 })

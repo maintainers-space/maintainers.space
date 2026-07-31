@@ -1,7 +1,7 @@
 // The flagship OG image: forge badge, owner/repo title, description, topic
-// pills and a GitHub-style stat row on the left; a tangled.org-style circular
-// per-language distribution ring (or a single color dot + name when the forge
-// only reports one top language) on the right.
+// pills, a GitHub-style segmented language bar with a legend (or a single
+// color dot + name when the forge only reports one top language), and a
+// stat row, all in one column with the brand mark tucked into its corner.
 import { container, text } from '@takumi-rs/helpers'
 import type { Node } from '@takumi-rs/core'
 import { formatCompactNumber, formatRelativeTime } from '~/utils'
@@ -10,10 +10,8 @@ import { ogBrand } from './og-brand'
 import { ogFrame } from './og-frame'
 import { FORGE_LABEL, ogIcon, type OgIconName } from './og-icons'
 import { languageColor } from './og-language-colors'
-import { buildLanguageRing, ringConicGradient } from './og-language-ring'
+import { buildLanguageRing, type LanguageRingSegment } from './og-language-ring'
 import { OG_FONT_FAMILY } from './og-render'
-
-const DARK_BG = '#1b1718'
 
 function truncate(value: string, max: number): string {
   if (value.length <= max) return value
@@ -31,7 +29,51 @@ function statItem(icon: OgIconName, label: string): Node {
   })
 }
 
-/** The tangled.org-style ring, or a single color dot + name when only one top language is known. */
+/** A thin segmented bar, each language's width proportional to its share — mirrors GitHub's own repo language bar. */
+function languageBar(segments: LanguageRingSegment[]): Node {
+  return container({
+    tw: 'flex flex-row overflow-hidden rounded-full',
+    style: { width: '100%', height: '14px' },
+    children: segments.map((s) =>
+      container({
+        tw: 'flex',
+        style: { flexGrow: s.percent, flexBasis: '0%', height: '100%', backgroundColor: s.color },
+        children: []
+      })
+    )
+  })
+}
+
+function languageLegend(segments: LanguageRingSegment[]): Node {
+  // Segments rounding to 0% just add noise to the legend (the bar itself
+  // still shows their sliver) — always keep at least the top one though, so
+  // an unusually even split never empties the legend out entirely.
+  const shown = segments.filter((s, i) => i === 0 || s.percent >= 1)
+  return container({
+    tw: 'flex flex-row flex-wrap items-center',
+    style: { gap: '22px' },
+    children: shown.map((s) =>
+      container({
+        tw: 'flex items-center',
+        style: { gap: '9px' },
+        children: [
+          container({
+            tw: 'rounded-full',
+            style: { width: '13px', height: '13px', backgroundColor: s.color },
+            children: []
+          }),
+          text(`${s.name} ${Math.round(s.percent)}%`, {
+            fontFamily: OG_FONT_FAMILY,
+            fontSize: 21,
+            color: 'rgba(255,255,255,0.7)'
+          })
+        ]
+      })
+    )
+  })
+}
+
+/** The GitHub-style language bar + legend, or a single color dot + name when only one top language is known. */
 function languageVisual(
   languages: Record<string, number> | undefined,
   fallbackLanguage?: string | null
@@ -46,59 +88,28 @@ function languageVisual(
         container({
           tw: 'rounded-full',
           style: {
-            width: '18px',
-            height: '18px',
+            width: '16px',
+            height: '16px',
             backgroundColor: languageColor(fallbackLanguage)
           },
           children: []
         }),
-        text(fallbackLanguage, { fontFamily: OG_FONT_FAMILY, fontSize: 28, color: 'white' })
+        text(fallbackLanguage, { fontFamily: OG_FONT_FAMILY, fontSize: 26, color: 'white' })
       ]
     })
   }
 
-  const top = segments[0]!
-  const size = 220
-  const hole = 132
   return container({
-    tw: 'flex items-center justify-center',
-    style: {
-      width: `${size}px`,
-      height: `${size}px`,
-      borderRadius: '50%',
-      backgroundImage: ringConicGradient(segments)
-    },
-    children: [
-      container({
-        tw: 'flex flex-col items-center justify-center',
-        style: {
-          width: `${hole}px`,
-          height: `${hole}px`,
-          borderRadius: '50%',
-          backgroundColor: DARK_BG
-        },
-        children: [
-          text(top.name, {
-            fontFamily: OG_FONT_FAMILY,
-            fontSize: 24,
-            fontWeight: 600,
-            color: 'white'
-          }),
-          text(`${Math.round(top.percent)}%`, {
-            fontFamily: OG_FONT_FAMILY,
-            fontSize: 19,
-            color: 'rgba(255,255,255,0.6)'
-          })
-        ]
-      })
-    ]
+    tw: 'flex flex-col',
+    style: { gap: '16px' },
+    children: [languageBar(segments), languageLegend(segments)]
   })
 }
 
 export function ogRepoTemplate({ repo, languages }: OgRepoData): Node {
   const forgeLabel = FORGE_LABEL[repo.provider] ?? repo.provider
 
-  const topLeft: Node[] = [
+  const content: Node[] = [
     container({
       tw: 'flex items-center rounded-full',
       style: {
@@ -141,8 +152,8 @@ export function ogRepoTemplate({ repo, languages }: OgRepoData): Node {
     })
   ]
   if (repo.description) {
-    topLeft.push(
-      text(truncate(repo.description, 130), {
+    content.push(
+      text(truncate(repo.description, 170), {
         fontFamily: OG_FONT_FAMILY,
         fontSize: 30,
         color: 'rgba(255,255,255,0.7)'
@@ -151,7 +162,7 @@ export function ogRepoTemplate({ repo, languages }: OgRepoData): Node {
   }
   const topics = (repo.topics ?? []).slice(0, 4)
   if (topics.length) {
-    topLeft.push(
+    content.push(
       container({
         tw: 'flex flex-row flex-wrap',
         style: { gap: '10px' },
@@ -165,6 +176,8 @@ export function ogRepoTemplate({ repo, languages }: OgRepoData): Node {
       })
     )
   }
+  const visual = languageVisual(languages, repo.language)
+  if (visual) content.push(visual)
 
   const stats = [
     repo.stars !== undefined ? statItem('star', formatCompactNumber(repo.stars)) : null,
@@ -173,28 +186,23 @@ export function ogRepoTemplate({ repo, languages }: OgRepoData): Node {
     repo.updatedAt ? statItem('calendar', formatRelativeTime(repo.updatedAt)) : null
   ].filter((n): n is Node => n !== null)
 
-  const right: Node[] = []
-  const visual = languageVisual(languages, repo.language)
-  if (visual) right.push(visual)
-  right.push(ogBrand({ size: 34 }))
-
   return ogFrame([
     container({
-      tw: 'flex h-full w-full flex-row items-stretch justify-between p-16',
+      tw: 'flex h-full w-full flex-col justify-between p-16',
       style: {},
       children: [
+        container({ tw: 'flex flex-col', style: { gap: '24px' }, children: content }),
         container({
-          tw: 'flex flex-1 flex-col justify-between',
+          tw: 'flex flex-row items-center justify-between',
           style: {},
           children: [
-            container({ tw: 'flex flex-col', style: { gap: '22px' }, children: topLeft }),
-            container({ tw: 'flex flex-row items-center', style: { gap: '36px' }, children: stats })
+            container({
+              tw: 'flex flex-row items-center',
+              style: { gap: '36px' },
+              children: stats
+            }),
+            ogBrand({ size: 34 })
           ]
-        }),
-        container({
-          tw: 'flex flex-col items-center justify-center',
-          style: { width: '320px', gap: '36px' },
-          children: right
         })
       ]
     })
