@@ -60,7 +60,6 @@
     "@tailwindcss/typography": "^0.5.20",
     "@takumi-rs/core": "^2.5.4",
     "@takumi-rs/helpers": "^2.5.4",
-    "@takumi-rs/wasm": "^2.5.4",
     "@vite-pwa/nuxt": "^1.1.1",
     "@vue/test-utils": "^2.4.11",
     "happy-dom": "^20.11.1",

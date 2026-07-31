@@ -99,9 +99,6 @@ importers:
       '@takumi-rs/helpers':
         specifier: ^2.5.4
         version: 2.5.4(preact@10.29.7)
-      '@takumi-rs/wasm':
-        specifier: ^2.5.4
-        version: 2.5.4(csstype@3.2.3)(preact@10.29.7)
       '@vite-pwa/nuxt':
         specifier: ^1.1.1
         version: 1.1.1(magicast@0.5.3)(vite@8.1.5(@types/node@26.1.2)(esbuild@0.28.0)(jiti@2.7.0)(terser@5.47.1)(yaml@2.9.0))(workbox-build@7.4.1)(workbox-window@7.4.1)
@@ -2747,15 +2744,6 @@ packages:
       preact:
         optional: true
       react:
-        optional: true
-
-  '@takumi-rs/wasm@2.5.4':
-    resolution: {integrity: sha512-Uae6J+SglHS2sl0hqXLGuw5nUEy/scyYOJzbGFfN79EGm+Oy5f5SkizlNKo+6H0HzWoXCNdWCvXq/Yl8stRylA==}
-    engines: {node: '>=18'}
-    peerDependencies:
-      csstype: '*'
-    peerDependenciesMeta:
-      csstype:
         optional: true
 
   '@tanstack/table-core@8.21.3':
@@ -9763,15 +9751,6 @@ snapshots:
   '@takumi-rs/helpers@2.5.4(preact@10.29.7)':
     optionalDependencies:
       preact: 10.29.7
-
-  '@takumi-rs/wasm@2.5.4(csstype@3.2.3)(preact@10.29.7)':
-    dependencies:
-      '@takumi-rs/helpers': 2.5.4(preact@10.29.7)
-    optionalDependencies:
-      csstype: 3.2.3
-    transitivePeerDependencies:
-      - preact
-      - react
 
   '@tanstack/table-core@8.21.3': {}
 
