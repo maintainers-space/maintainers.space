@@ -21,6 +21,9 @@ const LUCIDE_ICONS = {
     '<circle cx="6" cy="6" r="3"/><path d="M6 9v12M21 3l-6 6m6 0l-6-6m3 8.5V15"/><circle cx="18" cy="18" r="3"/>',
   'git-merge':
     '<circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M6 21V9a9 9 0 0 0 9 9"/>',
+  'git-pull-request-draft':
+    '<circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M18 6V5m0 6v-1M6 9v12"/>',
+  'circle-slash': '<circle cx="12" cy="12" r="10"/><path d="m9 15l6-6"/>',
   clock: '<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>'
 } as const
 
