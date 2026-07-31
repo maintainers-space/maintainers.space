@@ -22,20 +22,20 @@ export interface OgMeta {
 }
 
 /**
- * The site's canonical origin, preferring the configured `NUXT_PUBLIC_APP_URL`
+ * The site's canonical origin, preferring the configured `NUXT_PUBLIC_SITE_URL`
  * over the request's own origin. This matters specifically for `/`, which is
  * prerendered to a static file at build time for the PWA's offline shell —
  * that build-time pass has no real request to read an origin from (Nitro's
  * prerender crawler synthesizes one, e.g. `http://localhost`), so without a
- * configured `appUrl` its baked-in `og:image`/`og:url` would point at a
+ * configured `siteUrl` its baked-in `og:image`/`og:url` would point at a
  * placeholder host instead of the real deployment. Every other route always
  * has a real request to fall back to. Mirrors the same preference order
  * `app/lib/atproto/attestation.ts` uses for its own trusted-origin check.
  */
-export function resolveOgOrigin(appUrl: string, requestOrigin: string): string {
-  if (appUrl) {
+export function resolveOgOrigin(siteUrl: string, requestOrigin: string): string {
+  if (siteUrl) {
     try {
-      return new URL(appUrl).origin
+      return new URL(siteUrl).origin
     } catch {
       /* ignore malformed config */
     }

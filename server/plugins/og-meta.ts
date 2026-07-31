@@ -24,7 +24,7 @@ export default defineNitroPlugin((nitroApp) => {
     if (target.kind === 'page' && /\.[^/]+$/.test(url.pathname)) return
 
     const meta = await resolveOgMeta(target)
-    const origin = resolveOgOrigin(useRuntimeConfig(event).public.appUrl, url.origin)
+    const origin = resolveOgOrigin(useRuntimeConfig(event).public.siteUrl, url.origin)
     const pageUrl = `${origin}${url.pathname}${url.search}`
     const tags = ogMetaTags(target, meta, origin, pageUrl)
     response.body = response.body.replace('</head>', `${tags}\n</head>`)
