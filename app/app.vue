@@ -11,7 +11,10 @@ useHead({
     { name: 'viewport', content: 'width=device-width, initial-scale=1' },
     { key: 'theme-color', name: 'theme-color', content: color }
   ],
-  link: [{ rel: 'icon', href: favicon }],
+  link: [
+    { rel: 'icon', href: favicon },
+    { rel: 'apple-touch-icon', href: '/apple-touch-icon.png' }
+  ],
   htmlAttrs: {
     lang: 'en'
   }
@@ -34,7 +37,9 @@ useSeoMeta({
 
 <template>
   <UApp :toaster="{ disableSwipe: true }">
+    <VitePwaManifest />
     <NuxtLoadingIndicator />
+    <CommonOfflineBanner />
 
     <NuxtLayout>
       <NuxtPage />

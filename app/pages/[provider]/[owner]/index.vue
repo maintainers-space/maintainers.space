@@ -7,8 +7,8 @@ const owner = computed(() => String(route.params.owner))
 
 const forge = computed(() => getForge(provider.value))
 
-const { data, pending, error, refresh } = useAsyncData(
-  'owner-repos',
+const { data, pending, error, refresh } = useLiveAsyncData(
+  () => `owner-repos:${provider.value}:${owner.value}`,
   async () => {
     const f = getForge(provider.value)
     if (!f?.listRepos) {

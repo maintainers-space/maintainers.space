@@ -21,7 +21,7 @@ const parentDir = computed(() => {
   return `${base.value}/tree/${encodeURIComponent(gitRef.value)}${p ? '/' + encodePathSegments(p) : ''}`
 })
 
-const { data, pending, error } = useAsyncData<ForgeBlob | null>(
+const { data, pending, error } = useLiveAsyncData<ForgeBlob | null>(
   () => `blob:${provider.value}:${owner.value}:${name.value}:${gitRef.value}:${path.value}`,
   async () => {
     if (!forge.value?.getBlob) return null

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { ForgeIssue, ForgeIssueState } from '~/types/forge'
 import { useRepoContext } from '~/composables/useRepoContext'
+import { cached, TTL } from '~/lib/cache'
 
 const { provider, owner, name, forge, locator } = useRepoContext()
 const base = computed(() =>
@@ -25,11 +26,19 @@ const filtered = computed(() => {
 })
 
 async function load(): Promise<void> {
-  if (!forge.value?.listIssues) return
+  const f = forge.value
+  if (!f?.listIssues) return
   loading.value = true
   error.value = null
   try {
-    const page = await forge.value.listIssues(locator.value, { state: state.value, limit: 30 })
+    const key = `issues:${provider.value}:${owner.value}:${name.value}:${state.value}`
+    const page = await cached(
+      key,
+      () => f.listIssues!(locator.value, { state: state.value, limit: 30 }),
+      {
+        ttl: TTL.SHORT
+      }
+    )
     items.value = page.items
   } catch (e) {
     error.value = e instanceof Error ? e.message : 'Failed to load issues.'

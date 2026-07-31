@@ -16,7 +16,7 @@ const parts = computed(() => {
 const gitRef = computed(() => parts.value[0] ?? defaultBranch.value)
 const path = computed(() => parts.value.slice(1).join('/'))
 
-const { data, pending, error } = useAsyncData<ForgeTreeEntry[]>(
+const { data, pending, error } = useLiveAsyncData<ForgeTreeEntry[]>(
   () => `tree:${provider.value}:${owner.value}:${name.value}:${gitRef.value}:${path.value}`,
   async () => {
     if (!forge.value?.getTree) return []

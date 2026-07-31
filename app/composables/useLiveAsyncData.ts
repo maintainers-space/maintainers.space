@@ -1,5 +1,19 @@
 import type { AsyncData, AsyncDataOptions, NuxtError } from '#app'
-import { TTL } from '~/lib/cache'
+import type { Ref } from 'vue'
+import { cached, TTL } from '~/lib/cache'
+
+// Nuxt's own `AsyncDataOptions<ResT, DataT, PickKeys, DefaultT>` defaults
+// `DefaultT` to `undefined`, not `ResT` — fine for `useAsyncData` itself
+// (its overloads infer `DefaultT` straight from the `default` literal at each
+// call site), but a plain single-argument `AsyncDataOptions<T>` annotation
+// fixes `default`'s type to `() => undefined`. Every call site here passes an
+// explicit `T` anyway (matching the existing convention for detail pages), so
+// a second inferred generic wouldn't help — TypeScript doesn't do partial
+// inference when some type arguments are given explicitly. Instead, type
+// `default` against `T` itself: callers that use it always return a `T`.
+type LiveAsyncDataOptions<T> = Omit<AsyncDataOptions<T>, 'default'> & {
+  default?: () => T | Ref<T>
+}
 
 interface LiveOptions {
   /**
@@ -16,14 +30,21 @@ interface LiveOptions {
  * pipeline run) are frequently left open while the user acts on the upstream
  * forge; without this they would show whatever was fetched when first opened.
  * The refetch is throttled so quickly toggling tabs never spams the provider.
+ *
+ * The handler is also routed through the persisted, offline-aware cache
+ * (~/lib/cache), so every page built on this composable (repo metadata,
+ * issues/PRs/discussions/commits/blobs, owner and profile pages) survives a
+ * full reload and keeps showing its last known data with no network at all.
  */
 export function useLiveAsyncData<T>(
   key: string | (() => string),
   handler: () => Promise<T>,
-  options: AsyncDataOptions<T> & LiveOptions = {}
+  options: LiveAsyncDataOptions<T> & LiveOptions = {}
 ): AsyncData<T | undefined, NuxtError> {
   const { staleAfter = TTL.SHORT, ...asyncOptions } = options
-  const result = useAsyncData<T>(key, handler, asyncOptions)
+  const keyOf = typeof key === 'function' ? key : () => key
+  const wrappedHandler = (): Promise<T> => cached(keyOf(), handler)
+  const result = useAsyncData<T>(key, wrappedHandler, asyncOptions)
 
   if (import.meta.client) {
     let lastFetch = Date.now()

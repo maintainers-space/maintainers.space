@@ -1,6 +1,7 @@
 import { ok } from '@atcute/client'
 import type {} from '@atcute/atproto'
 import type { Did, Nsid } from '@atcute/lexicons'
+import { cached, TTL } from '~/lib/cache'
 
 export const FORGE_ACCOUNT_COLLECTION = 'space.maintainers.forgeAccount'
 const COLLECTION = FORGE_ACCOUNT_COLLECTION as Nsid
@@ -53,7 +54,11 @@ const _loaded = ref(false)
 export function useForgeAccounts() {
   const { runAuthed, did } = useAuth()
 
-  async function refresh(): Promise<void> {
+  /**
+   * `force` bypasses the cache — used right after `link`/`unlink` so the list
+   * reflects the write immediately instead of a stale ~5-minute-old read.
+   */
+  async function refresh(force = false): Promise<void> {
     if (!did.value) {
       _accounts.value = []
       _loaded.value = true
@@ -61,20 +66,27 @@ export function useForgeAccounts() {
     }
     _pending.value = true
     try {
-      const data = await runAuthed((rpc) =>
-        ok(
-          rpc.get('com.atproto.repo.listRecords', {
-            params: { repo: did.value as Did, collection: COLLECTION, limit: 100 }
-          })
-        )
+      const viewerDid = did.value
+      _accounts.value = await cached(
+        `forge-accounts:${viewerDid}`,
+        async () => {
+          const data = await runAuthed((rpc) =>
+            ok(
+              rpc.get('com.atproto.repo.listRecords', {
+                params: { repo: viewerDid as Did, collection: COLLECTION, limit: 100 }
+              })
+            )
+          )
+          const records = (data.records ?? []) as unknown as Array<{
+            uri: string
+            value: ForgeAccountRecord
+          }>
+          return records
+            .map((r) => ({ uri: r.uri, rkey: rkeyFromUri(r.uri), ...r.value }))
+            .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))
+        },
+        { ttl: TTL.MEDIUM, force }
       )
-      const records = (data.records ?? []) as unknown as Array<{
-        uri: string
-        value: ForgeAccountRecord
-      }>
-      _accounts.value = records
-        .map((r) => ({ uri: r.uri, rkey: rkeyFromUri(r.uri), ...r.value }))
-        .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))
     } finally {
       _pending.value = false
       _loaded.value = true
@@ -117,7 +129,7 @@ export function useForgeAccounts() {
         })
       )
     )
-    await refresh()
+    await refresh(true)
   }
 
   async function unlink(rkey: string): Promise<void> {
@@ -128,7 +140,7 @@ export function useForgeAccounts() {
         as: null
       })
     )
-    await refresh()
+    await refresh(true)
   }
 
   return {

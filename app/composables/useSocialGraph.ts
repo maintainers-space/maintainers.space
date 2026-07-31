@@ -1,4 +1,5 @@
 import { forgeList, getForge } from '~/lib/forges'
+import { cached, TTL } from '~/lib/cache'
 import type { ForgeId, ForgeRepo, ForgeUser } from '~/types/forge'
 
 // Builds the Explore page's cross-forge social graph: the viewer at the
@@ -93,6 +94,11 @@ interface GraphFollow {
   avatar?: string
 }
 
+interface GraphResult {
+  nodes: GraphNode[]
+  links: GraphLink[]
+}
+
 export function useSocialGraph() {
   const { did, profile } = useAuth()
   const { get: getToken } = useForgeTokens()
@@ -103,17 +109,8 @@ export function useSocialGraph() {
   const loading = ref(false)
   const error = ref<string | null>(null)
 
-  async function load(): Promise<void> {
-    const viewerDid = did.value
-    if (!viewerDid) {
-      nodes.value = []
-      links.value = []
-      return
-    }
-
-    loading.value = true
-    error.value = null
-
+  /** Fetch every layer and assemble the graph. Cached by `cached()` below. */
+  async function build(viewerDid: string): Promise<GraphResult> {
     const nodesById = new Map<string, GraphNode>()
     // "provider:login" (lowercase) -> did, so a forge-native discovery can
     // merge into an already-resolved multi-provider person for free.
@@ -234,143 +231,165 @@ export function useSocialGraph() {
       return node
     }
 
-    try {
-      // --- Depth 0: the viewer, from live linked accounts (never the long-
-      // cached graph endpoint — a freshly-linked account should show up now).
-      if (!accountsLoaded.value) await refreshAccounts()
-      for (const a of accounts.value)
-        identityMap.set(`${a.provider}:${a.username.toLowerCase()}`, viewerDid)
-      const viewerNode: GraphPersonNode = {
-        kind: 'person',
-        id: viewerDid,
-        depth: 0,
-        label: profile.value?.displayName || profile.value?.handle || shortDid(viewerDid),
-        avatarUrl: profile.value?.avatar ?? null,
-        profileUrl: `/profile/${profile.value?.handle || viewerDid}`,
-        accounts: accounts.value.map((a) => ({
-          provider: a.provider as ForgeId,
-          login: a.username,
-          url: a.profileUrl
-        })),
-        did: viewerDid
-      }
-      nodesById.set(viewerDid, viewerNode)
+    // --- Depth 0: the viewer, from live linked accounts (never the long-
+    // cached graph endpoint — a freshly-linked account should show up now).
+    if (!accountsLoaded.value) await refreshAccounts()
+    for (const a of accounts.value)
+      identityMap.set(`${a.provider}:${a.username.toLowerCase()}`, viewerDid)
+    const viewerNode: GraphPersonNode = {
+      kind: 'person',
+      id: viewerDid,
+      depth: 0,
+      label: profile.value?.displayName || profile.value?.handle || shortDid(viewerDid),
+      avatarUrl: profile.value?.avatar ?? null,
+      profileUrl: `/profile/${profile.value?.handle || viewerDid}`,
+      accounts: accounts.value.map((a) => ({
+        provider: a.provider as ForgeId,
+        login: a.username,
+        url: a.profileUrl
+      })),
+      did: viewerDid
+    }
+    nodesById.set(viewerDid, viewerNode)
 
-      // --- Depth 1: atproto follows (fully DID-resolved).
-      const atFollows = await $fetch<GraphFollow[]>('/api/graph/atproto-follows', {
-        query: { did: viewerDid, limit: MAX_DEPTH1 }
-      }).catch(() => [] as GraphFollow[])
-      const atDepth1 = await Promise.all(
-        atFollows.slice(0, MAX_DEPTH1).map(async (f) => {
-          const node = await upsertDidPerson(f.did, 1, {
-            handle: f.handle,
-            displayName: f.displayName,
-            avatar: f.avatar
-          })
-          addLink(viewerDid, node.id, 'follows')
-          return node
+    // --- Depth 1: atproto follows (fully DID-resolved).
+    const atFollows = await $fetch<GraphFollow[]>('/api/graph/atproto-follows', {
+      query: { did: viewerDid, limit: MAX_DEPTH1 }
+    }).catch(() => [] as GraphFollow[])
+    const atDepth1 = await Promise.all(
+      atFollows.slice(0, MAX_DEPTH1).map(async (f) => {
+        const node = await upsertDidPerson(f.did, 1, {
+          handle: f.handle,
+          displayName: f.displayName,
+          avatar: f.avatar
         })
-      )
+        addLink(viewerDid, node.id, 'follows')
+        return node
+      })
+    )
 
-      // --- Depth 1: each linked forge's own following list (viewer's own token).
-      const forgeNativeDepth1: GraphPersonNode[] = []
-      for (const forge of forgeList) {
-        if (!forge.listFollowing) continue
-        const token = getToken(forge.id)
-        if (!token) continue
-        const list = await forge.listFollowing({ token, limit: 30 }).catch(() => [] as ForgeUser[])
-        for (const u of list) {
-          const node = upsertForgeNativePerson(forge.id, u, 1)
-          if (!node) continue
-          addLink(viewerDid, node.id, 'follows')
-          forgeNativeDepth1.push(node)
-        }
+    // --- Depth 1: each linked forge's own following list (viewer's own token).
+    const forgeNativeDepth1: GraphPersonNode[] = []
+    for (const forge of forgeList) {
+      if (!forge.listFollowing) continue
+      const token = getToken(forge.id)
+      if (!token) continue
+      const list = await forge.listFollowing({ token, limit: 30 }).catch(() => [] as ForgeUser[])
+      for (const u of list) {
+        const node = upsertForgeNativePerson(forge.id, u, 1)
+        if (!node) continue
+        addLink(viewerDid, node.id, 'follows')
+        forgeNativeDepth1.push(node)
       }
+    }
 
-      const depth1People = interleave(atDepth1, forgeNativeDepth1)
+    const depth1People = interleave(atDepth1, forgeNativeDepth1)
 
-      // --- Depth 2: friends of a capped subset of friends.
-      let depth2Added = 0
-      const expandSubset = depth1People.slice(0, MAX_DEPTH2_EXPAND_PEOPLE)
-      await Promise.all(
-        expandSubset.map(async (p) => {
-          if (depth2Added >= MAX_DEPTH2_TOTAL) return
-          if (p.did) {
-            const follows = await $fetch<GraphFollow[]>('/api/graph/atproto-follows', {
-              query: { did: p.did, limit: MAX_DEPTH2_PER_PERSON }
-            }).catch(() => [] as GraphFollow[])
-            for (const f of follows) {
-              if (depth2Added >= MAX_DEPTH2_TOTAL) break
-              const node = await upsertDidPerson(f.did, 2, {
-                handle: f.handle,
-                displayName: f.displayName,
-                avatar: f.avatar
-              })
-              addLink(p.id, node.id, 'follows')
-              if (node.depth === 2) depth2Added++
-            }
-            return
-          }
-          const acct = p.accounts[0]
-          if (!acct) return
-          const forge = getForge(acct.provider)
-          if (!forge?.listUserFollowing) return
-          const following = await forge
-            .listUserFollowing(acct.login, {
-              limit: MAX_DEPTH2_PER_PERSON,
-              token: getToken(acct.provider)
-            })
-            .catch(() => [] as ForgeUser[])
-          for (const u of following) {
+    // --- Depth 2: friends of a capped subset of friends.
+    let depth2Added = 0
+    const expandSubset = depth1People.slice(0, MAX_DEPTH2_EXPAND_PEOPLE)
+    await Promise.all(
+      expandSubset.map(async (p) => {
+        if (depth2Added >= MAX_DEPTH2_TOTAL) return
+        if (p.did) {
+          const follows = await $fetch<GraphFollow[]>('/api/graph/atproto-follows', {
+            query: { did: p.did, limit: MAX_DEPTH2_PER_PERSON }
+          }).catch(() => [] as GraphFollow[])
+          for (const f of follows) {
             if (depth2Added >= MAX_DEPTH2_TOTAL) break
-            const node = upsertForgeNativePerson(acct.provider, u, 2)
-            if (!node) continue
+            const node = await upsertDidPerson(f.did, 2, {
+              handle: f.handle,
+              displayName: f.displayName,
+              avatar: f.avatar
+            })
             addLink(p.id, node.id, 'follows')
             if (node.depth === 2) depth2Added++
           }
-        })
-      )
+          return
+        }
+        const acct = p.accounts[0]
+        if (!acct) return
+        const forge = getForge(acct.provider)
+        if (!forge?.listUserFollowing) return
+        const following = await forge
+          .listUserFollowing(acct.login, {
+            limit: MAX_DEPTH2_PER_PERSON,
+            token: getToken(acct.provider)
+          })
+          .catch(() => [] as ForgeUser[])
+        for (const u of following) {
+          if (depth2Added >= MAX_DEPTH2_TOTAL) break
+          const node = upsertForgeNativePerson(acct.provider, u, 2)
+          if (!node) continue
+          addLink(p.id, node.id, 'follows')
+          if (node.depth === 2) depth2Added++
+        }
+      })
+    )
 
-      // --- Project nodes: the viewer + a subset of depth-1 people's own
-      // repos, each connected to a few of its contributors.
-      const projectSources: GraphPersonNode[] = [
-        viewerNode,
-        ...depth1People.slice(0, MAX_PROJECT_SOURCES)
-      ]
-      await Promise.all(
-        projectSources.map(async (person) => {
-          const acct = person.accounts[0]
-          if (!acct) return
-          const forge = getForge(acct.provider)
-          if (!forge?.listRepos) return
-          const repos = await forge
-            .listRepos(acct.login, { token: getToken(acct.provider) })
-            .catch(() => [] as ForgeRepo[])
-          for (const repo of repos.slice(0, MAX_PROJECTS_PER_PERSON)) {
-            const projectNode = upsertProject(repo)
-            addLink(person.id, projectNode.id, 'contributes')
-            if (!forge.listContributors) continue
-            const contributors = await forge
-              .listContributors(repo, {
-                limit: MAX_CONTRIBUTORS_PER_PROJECT,
-                token: getToken(acct.provider)
-              })
-              .catch(() => [] as ForgeUser[])
-            for (const c of contributors) {
-              const node = upsertForgeNativePerson(repo.provider, c, 2)
-              if (node) addLink(projectNode.id, node.id, 'contributes')
-            }
+    // --- Project nodes: the viewer + a subset of depth-1 people's own
+    // repos, each connected to a few of its contributors.
+    const projectSources: GraphPersonNode[] = [
+      viewerNode,
+      ...depth1People.slice(0, MAX_PROJECT_SOURCES)
+    ]
+    await Promise.all(
+      projectSources.map(async (person) => {
+        const acct = person.accounts[0]
+        if (!acct) return
+        const forge = getForge(acct.provider)
+        if (!forge?.listRepos) return
+        const repos = await forge
+          .listRepos(acct.login, { token: getToken(acct.provider) })
+          .catch(() => [] as ForgeRepo[])
+        for (const repo of repos.slice(0, MAX_PROJECTS_PER_PERSON)) {
+          const projectNode = upsertProject(repo)
+          addLink(person.id, projectNode.id, 'contributes')
+          if (!forge.listContributors) continue
+          const contributors = await forge
+            .listContributors(repo, {
+              limit: MAX_CONTRIBUTORS_PER_PROJECT,
+              token: getToken(acct.provider)
+            })
+            .catch(() => [] as ForgeUser[])
+          for (const c of contributors) {
+            const node = upsertForgeNativePerson(repo.provider, c, 2)
+            if (node) addLink(projectNode.id, node.id, 'contributes')
           }
-        })
-      )
+        }
+      })
+    )
 
+    return { nodes: [...nodesById.values()], links: linkList }
+  }
+
+  /**
+   * `force` bypasses the cache (used by the Explore page's refresh button);
+   * the initial load on mount/sign-in leaves it off so a recent graph is
+   * served instantly — including with no network at all.
+   */
+  async function load(force = false): Promise<void> {
+    const viewerDid = did.value
+    if (!viewerDid) {
+      nodes.value = []
+      links.value = []
+      return
+    }
+
+    loading.value = true
+    error.value = null
+    try {
+      const result = await cached(`social-graph:${viewerDid}`, () => build(viewerDid), {
+        ttl: TTL.MEDIUM,
+        force
+      })
       // markRaw: force-graph mutates x/y/vx/vy on these objects every
       // simulation tick (dozens of times a second). None of that needs to be
       // (or should be) reactive at the property level — Vue's proxy overhead
       // on every tick is wasted work at best, and fights the simulation at
       // worst.
-      nodes.value = markRaw([...nodesById.values()])
-      links.value = markRaw(linkList)
+      nodes.value = markRaw(result.nodes)
+      links.value = markRaw(result.links)
     } catch (e) {
       error.value = e instanceof Error ? e.message : 'Could not build the graph.'
     } finally {

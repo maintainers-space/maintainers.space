@@ -33,7 +33,7 @@ function healthKey(fileName: string): string | null {
   return null
 }
 
-const { data, pending, error, refresh } = useAsyncData(
+const { data, pending, error, refresh } = useLiveAsyncData(
   () => `repo-code:${provider.value}:${owner.value}:${name.value}`,
   async () => {
     const f = forge.value

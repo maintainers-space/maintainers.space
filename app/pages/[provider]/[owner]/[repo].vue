@@ -11,7 +11,7 @@ const {
   pending,
   error,
   refresh
-} = useAsyncData<ForgeRepo | null>(
+} = useLiveAsyncData<ForgeRepo | null>(
   () => `repo-meta:${provider.value}:${owner.value}:${name.value}`,
   async () => {
     const f = getForge(provider.value)

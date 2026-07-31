@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { ForgeCommit } from '~/types/forge'
 import { useRepoContext } from '~/composables/useRepoContext'
+import { cached, TTL } from '~/lib/cache'
 
 const { provider, owner, name, forge, locator, defaultBranch } = useRepoContext()
 
@@ -11,14 +12,23 @@ const error = ref<string | null>(null)
 const done = ref(false)
 
 async function loadMore(reset = false): Promise<void> {
-  if (loading.value || !forge.value?.listCommits) return
+  const f = forge.value
+  if (loading.value || !f?.listCommits) return
   loading.value = true
   error.value = null
   try {
-    const page = await forge.value.listCommits(locator.value, defaultBranch.value, {
-      cursor: reset ? undefined : cursor.value,
-      limit: 30
-    })
+    // Only the first page is persisted/offline-cached — pagination cursors
+    // are inherently online-only, and offline users just can't "load more".
+    const page = reset
+      ? await cached(
+          `commits:${provider.value}:${owner.value}:${name.value}:${defaultBranch.value}`,
+          () => f.listCommits!(locator.value, defaultBranch.value, { limit: 30 }),
+          { ttl: TTL.SHORT }
+        )
+      : await f.listCommits(locator.value, defaultBranch.value, {
+          cursor: cursor.value,
+          limit: 30
+        })
     if (reset) commits.value = []
     commits.value.push(...page.items)
     cursor.value = page.cursor

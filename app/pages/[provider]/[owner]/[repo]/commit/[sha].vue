@@ -6,7 +6,7 @@ const route = useRoute()
 const { provider, owner, name, forge, locator } = useRepoContext()
 const sha = computed(() => String(route.params.sha))
 
-const { data, pending, error } = useAsyncData<ForgeCommitDetail | null>(
+const { data, pending, error } = useLiveAsyncData<ForgeCommitDetail | null>(
   () => `commit:${provider.value}:${owner.value}:${name.value}:${sha.value}`,
   async () => {
     if (!forge.value?.getCommit) return null

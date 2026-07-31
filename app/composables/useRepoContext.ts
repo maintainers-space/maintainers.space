@@ -8,7 +8,7 @@ export interface RepoContext {
   name: ComputedRef<string>
   forge: ComputedRef<ForgeProvider | undefined>
   locator: ComputedRef<RepoLocator>
-  meta: Ref<ForgeRepo | null>
+  meta: Ref<ForgeRepo | null | undefined>
   defaultBranch: ComputedRef<string>
 }
 
