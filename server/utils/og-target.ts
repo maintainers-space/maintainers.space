@@ -46,3 +46,34 @@ export function resolveOgTarget(path: string): OgTarget {
 
   return { kind: 'page', path }
 }
+
+const ISSUE_LIKE_SEGMENT: Record<'issue' | 'pull' | 'discussion', string> = {
+  issue: 'issues',
+  pull: 'pulls',
+  discussion: 'discussions'
+}
+
+/**
+ * The canonical path for a target's OG image, collapsing every route that
+ * resolves to the same target (e.g. every file under a repo's `blob/`) onto
+ * one image URL so they share a single cache entry instead of each busting
+ * their own.
+ */
+export function canonicalOgPath(target: OgTarget): string {
+  switch (target.kind) {
+    case 'repo':
+      return `/${target.provider}/${target.owner}/${target.repo}`
+    case 'owner':
+      return `/${target.provider}/${target.owner}`
+    case 'profile':
+      return `/profile/${target.handle}`
+    case 'issue':
+    case 'pull':
+    case 'discussion':
+      return `/${target.provider}/${target.owner}/${target.repo}/${ISSUE_LIKE_SEGMENT[target.kind]}/${target.id}`
+    case 'page': {
+      const first = target.path.split('/').filter(Boolean)[0]
+      return first ? `/${first}` : '/'
+    }
+  }
+}

@@ -7,7 +7,7 @@ import { ogBrand } from './og-brand'
 import { ogFrame } from './og-frame'
 import { OG_FONT_FAMILY } from './og-render'
 
-const SECTION_TITLE: Record<string, string> = {
+export const SECTION_TITLE: Record<string, string> = {
   explore: 'Explore',
   search: 'Search',
   timeline: 'Timeline',
@@ -18,11 +18,13 @@ const SECTION_TITLE: Record<string, string> = {
   terms: 'Terms of Service'
 }
 
-const DEFAULT_TITLE = 'maintainers.space'
-const TAGLINE =
+export const DEFAULT_TITLE = 'maintainers.space'
+/** Matches `app/app.vue`'s own `title`/`description` — the real site's canonical pair. */
+export const SITE_TITLE = 'maintainers.space — one place for every forge'
+export const TAGLINE =
   'Browse repositories across GitHub and Tangled, and link your forge accounts to your AT Protocol identity.'
 
-function titleForPath(path: string): string {
+export function titleForPath(path: string): string {
   const first = path.split('/').filter(Boolean)[0]
   return (first && SECTION_TITLE[first]) || DEFAULT_TITLE
 }
