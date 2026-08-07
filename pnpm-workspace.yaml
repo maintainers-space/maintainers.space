@@ -1,8 +1,23 @@
 allowBuilds:
   '@parcel/watcher': false
   '@tailwindcss/oxide': false
+  core-js: false
   esbuild: false
   maplibre-gl: false
   simple-git-hooks: true
   unrs-resolver: false
   vue-demi: false
+overrides:
+  # The chat embed takes an @atproto/api Agent instance we construct, so both
+  # sides have to be the same class. @colibri-social/client's own range allows
+  # this version, but its resolution is pinned separately, which leaves two
+  # copies whose Agent types are not assignable to each other.
+  '@atproto/api': ^0.20.38
+minimumReleaseAgeExclude:
+  - '@atproto/api@0.20.38'
+  - '@atproto/common-web@0.5.9'
+  - '@atproto/lexicon@0.7.11'
+  - '@atproto/syntax@0.7.4'
+  - '@atproto/xrpc@0.8.10'
+  - '@atproto/oauth-client-browser@0.5.3'
+  - '@atproto/oauth-client@0.8.3'

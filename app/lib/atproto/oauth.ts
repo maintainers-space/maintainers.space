@@ -1,50 +1,52 @@
 import { configureOAuth } from '@atcute/oauth-browser-client'
-import { APPVIEW_SERVICE_ID } from '~/lib/chat/config'
 import { identityResolver } from './identity'
 
-// Granular atproto OAuth scope — request only the collections maintainers.space writes.
+// Granular atproto OAuth scope. Requests only what maintainers.space actually uses.
 //
-// maintainers.space's authenticated PDS writes are limited to a handful of record
+// maintainers.space's own authenticated PDS writes are limited to two record
 // collections:
 //
-//   atproto                              → identity only (required base scope)
 //   repo:space.maintainers.forgeAccount  → linked forge accounts (useForgeAccounts.ts)
 //   repo:sh.tangled.feed.star            → starring Tangled repos (useRepoStar.ts)
-//   repo:social.colibri.message          → chat messages, own PDS (useChatMessages.ts)
 //
 // A bare `repo:<nsid>` (no `action=`) grants create/update/delete for that one
 // collection. Everything else (profiles, follows, repos, Tangled reads) is a
 // public, unauthenticated read and needs no scope.
 //
-// Chat also needs two of Colibri's own published permission-sets — bundles of
-// RPC + repo permissions scoped to a specific AppView's did:web, referenced
-// with a single `include:` scope rather than hand-listing every collection/RPC
-// they cover (see https://atproto.com/specs/permission#permission-sets and
-// social.colibri.permissionCommunity / permissionMessaging in
-// https://github.com/colibri-social/appview/tree/main/lexicons). Voice
-// (permissionPush, social.colibri.voice.*) and push notifications
-// (permissionNotification) are deliberately omitted — this is a text-only v1.
+// Chat's permissions come from @colibri-social/client's own buildScopes() (see
+// shared/utils/oauth-scope.ts), which supplies blob uploads, two voice RPCs, and
+// five of Colibri's published permission-sets, which bundle RPC + repo permissions
+// pinned to a specific AppView's did:web and referenced with a single `include:`
+// scope rather than hand-listing every collection and RPC they cover (see
+// https://atproto.com/specs/permission#permission-sets). It is imported rather
+// than transcribed because the embedded client's own ScopeGate blocks the whole
+// chat UI when any one of those five sets is missing, so a hand-maintained copy
+// that drifts would break chat with no way for the embed to recover.
+//
+// Those are NOT requested at sign-in. Signing in asks for getBaseScope() only,
+// and the Chat tab asks for getChatScope() when someone first opens it, so nobody
+// grants access to their messages for a feature they never use. An authorization
+// request may narrow the scope its client declares but never exceed it, which is
+// why the client metadata (both the loopback client_id below and
+// server/routes/client-metadata.json.get.ts) still declares the full set.
 //
 // This deliberately avoids the legacy `transition:generic` scope, which grants
 // full read/write to every collection (Bluesky posts, likes, follows, profile…)
 // and shows users an "access to nearly everything" consent screen.
 //
-// NOTE: this string MUST stay in sync with the `scope` in
-// public/client-metadata.json (the production client_id document) and with the
-// collection constants FORGE_ACCOUNT_COLLECTION (useForgeAccounts.ts),
-// TANGLED_STAR_COLLECTION (useRepoStar.ts) and MESSAGE_COLLECTION
-// (useChatMessages.ts). Already-signed-in users don't gain a newly-added scope
-// automatically — they must re-consent; see useChatCommunity.ts's handling of
-// InvalidToken-shaped errors from calls that need it.
-export const OAUTH_SCOPE = [
-  'atproto',
-  'repo:space.maintainers.forgeAccount',
-  'repo:sh.tangled.feed.star',
-  'repo:social.colibri.message',
-  `include:social.colibri.permissionAccount?aud=${APPVIEW_SERVICE_ID}`,
-  `include:social.colibri.permissionCommunity?aud=${APPVIEW_SERVICE_ID}`,
-  `include:social.colibri.permissionMessaging?aud=${APPVIEW_SERVICE_ID}`
-].join(' ')
+// NOTE: the `include:` audiences pin runtimeConfig.public.colibriAppviewUrl's
+// did:web and are matched by exact string equality, so this and
+// server/routes/client-metadata.json.get.ts must resolve the same AppView URL.
+// That URL must also be resolvable *by the PDS*, which silently drops any
+// `include:` scope whose `aud` it cannot resolve while granting everything else,
+// so pointing it at a loopback AppView costs you exactly the permission sets.
+export function getBaseScope(): string {
+  return baseScope()
+}
+
+export function getChatScope(): string {
+  return chatScope(useRuntimeConfig().public.colibriAppviewUrl)
+}
 
 let configured = false
 
@@ -66,7 +68,7 @@ export function getOAuthMetadata(): { client_id: string; redirect_uri: string } 
     const client_id =
       `http://localhost` +
       `?redirect_uri=${encodeURIComponent(redirect_uri)}` +
-      `&scope=${encodeURIComponent(OAUTH_SCOPE)}`
+      `&scope=${encodeURIComponent(getChatScope())}`
     return { client_id, redirect_uri }
   }
 

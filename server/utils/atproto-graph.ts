@@ -54,14 +54,24 @@ interface DidServiceEndpoint {
   serviceEndpoint?: string
 }
 
-/** Resolve a `did:plc:`/`did:web:` DID to its PDS service endpoint. */
-async function resolvePds(did: string): Promise<string> {
+/**
+ * Resolve a `did:plc:`/`did:web:` DID to its PDS service endpoint.
+ *
+ * `responseType: 'json'` is required, not decorative: plc.directory answers with
+ * `content-type: application/did+ld+json`, and ofetch's content-type sniffing
+ * only recognises a single `+`-suffixed token (`application/<x>+json`). The two
+ * suffixes in `did+ld+json` fail that test, so without this the body comes back
+ * as an unparsed string and every did:plc silently looks like it has no PDS.
+ */
+export async function resolvePds(did: string): Promise<string> {
   const doc = did.startsWith('did:web:')
     ? await $fetch<{ service?: DidServiceEndpoint[] }>(
-        `https://${decodeURIComponent(did.slice('did:web:'.length))}/.well-known/did.json`
+        `https://${decodeURIComponent(did.slice('did:web:'.length))}/.well-known/did.json`,
+        { responseType: 'json' }
       )
     : await $fetch<{ service?: DidServiceEndpoint[] }>(
-        `https://plc.directory/${encodeURIComponent(did)}`
+        `https://plc.directory/${encodeURIComponent(did)}`,
+        { responseType: 'json' }
       )
   const pds = doc.service?.find((s) => s.type === 'AtprotoPersonalDataServer')?.serviceEndpoint
   if (!pds) throw new Error(`No PDS service found for ${did}`)

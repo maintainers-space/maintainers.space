@@ -54,6 +54,19 @@ export const CACHE_SOCIAL_GRAPH: CachePolicy = {
   swr: 604_800
 }
 
+/**
+ * ~1 year class, for third-party static assets proxied through this origin: an
+ * emoji image for a given codepoint, or a pinned model binary. The bytes for a
+ * given path never change, and the upstream version is pinned in code, so a
+ * cached entry can only go stale on a deploy that repoints it.
+ */
+export const CACHE_ASSET: CachePolicy = {
+  browser: 31_536_000,
+  cdn: 31_536_000,
+  netlify: 31_536_000,
+  swr: 604_800
+}
+
 /** Explicitly opt out of shared caching (authenticated / per-user responses). */
 export function setNoStore(event: H3Event): void {
   setResponseHeader(event, 'Cache-Control', 'private, no-store')

@@ -27,18 +27,33 @@ function jwksFor(origin: string): JWTVerifyGetKey {
   return jwks
 }
 
+export type AttestationVerdict =
+  | 'ok'
+  | 'missing'
+  | 'no-trust-anchor'
+  | 'untrusted-issuer'
+  | 'invalid'
+
+/**
+ * Deliberately does NOT fall back to the request origin the way the client falls
+ * back to `window.location.origin`. `getRequestURL()` honours `x-forwarded-host`,
+ * so trusting it would let an attacker point the trust anchor at a host they
+ * control, serve their own JWKS there, and self-sign any attestation. The
+ * configured origin is the only safe anchor, which is why an unset one is
+ * reported as misconfiguration rather than as a failed attestation.
+ */
 export async function verifyForgeAttestationServer(
   account: AttestableAccount,
   ownerDid: string
-): Promise<boolean> {
+): Promise<AttestationVerdict> {
   const { attestation, attestedBy } = account
-  if (!attestation || !attestedBy || !ownerDid) return false
+  if (!attestation || !attestedBy || !ownerDid) return 'missing'
 
   let issuerOrigin: string
   try {
     issuerOrigin = new URL(attestedBy).origin
   } catch {
-    return false
+    return 'invalid'
   }
 
   const appUrl = useRuntimeConfig().public.appUrl as string
@@ -50,7 +65,8 @@ export async function verifyForgeAttestationServer(
       /* ignore malformed config */
     }
   }
-  if (!trusted.has(issuerOrigin)) return false
+  if (trusted.size === 0) return 'no-trust-anchor'
+  if (!trusted.has(issuerOrigin)) return 'untrusted-issuer'
 
   try {
     const { payload } = await jwtVerify(attestation, jwksFor(issuerOrigin), {
@@ -59,12 +75,16 @@ export async function verifyForgeAttestationServer(
       algorithms: ['ES256']
     })
     const claims = payload as Record<string, unknown>
-    return (
+    const matches =
       payload.sub === ownerDid &&
       claims.provider === account.provider &&
       claims.username === account.username
-    )
-  } catch {
-    return false
+    return matches ? 'ok' : 'invalid'
+  } catch (e) {
+    console.warn('[chat] attestation signature check failed', {
+      issuerOrigin,
+      error: e instanceof Error ? e.message : String(e)
+    })
+    return 'invalid'
   }
 }
