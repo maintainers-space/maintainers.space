@@ -1,0 +1,142 @@
+language: en-GB
+tone_instructions: Be concise, direct and human. Report only actionable findings; avoid praise, narration and repetition.
+
+reviews:
+  profile: quiet
+  request_changes_workflow: true
+  high_level_summary: true
+  high_level_summary_instructions: Summarise required adaptations only, in at most three short bullets. Omit file tables, walkthrough narration, release notes, praise and statistics. If nothing needs changing, say only that no changes are required.
+  high_level_summary_in_walkthrough: true
+  review_status: false
+  review_details: false
+  review_progress: true
+  collapse_walkthrough: true
+  changed_files_summary: false
+  sequence_diagrams: false
+  estimate_code_review_effort: false
+  assess_linked_issues: false
+  related_issues: false
+  related_prs: false
+  suggested_labels: true
+  auto_apply_labels: true
+  labeling_instructions:
+    - label: bug
+      instructions: Apply when the pull request fixes incorrect user-visible or runtime behaviour.
+    - label: enhancement
+      instructions: Apply when the pull request adds or materially improves user-visible behaviour.
+    - label: documentation
+      instructions: Apply when documentation is the primary change.
+    - label: accessibility
+      instructions: Apply when accessibility semantics, keyboard interaction, focus, contrast or WCAG tests change.
+    - label: ci
+      instructions: Apply when GitHub Actions, quality gates, hooks or repository automation change.
+    - label: dependencies
+      instructions: Apply when package or GitHub Action dependencies change.
+    - label: forge
+      instructions: Apply when forge adapters, mappers, capabilities or provider integrations change.
+    - label: performance
+      instructions: Apply when runtime, rendering, loading, caching or bundle performance changes.
+    - label: security
+      instructions: Apply when authentication, authorisation, secrets, untrusted input, dependencies or security controls change.
+    - label: server
+      instructions: Apply when Nitro routes, server utilities, proxies, OAuth callbacks or server configuration change.
+    - label: testing
+      instructions: Apply when tests, fixtures, coverage or test infrastructure are a primary part of the change.
+    - label: ui
+      instructions: Apply when Vue pages, components, styles, responsive behaviour or Nuxt UI configuration change.
+  suggested_reviewers: false
+  in_progress_fortune: false
+  poem: false
+  enable_prompt_for_ai_agents: false
+
+  slop_detection:
+    enabled: true
+    label: low-quality
+
+  auto_review:
+    enabled: true
+    drafts: false
+    auto_incremental_review: true
+    auto_pause_after_reviewed_commits: 5
+    base_branches:
+      - ^release$
+    labels:
+      - '!release'
+    ignore_title_keywords:
+      - WIP
+      - '[skip-review]'
+      - 'chore: release'
+      - 'chore: deploy'
+    ignore_usernames:
+      - 'renovate[bot]'
+      - 'dependabot[bot]'
+      - 'github-actions[bot]'
+
+  pre_merge_checks:
+    docstrings:
+      mode: 'off'
+    title:
+      mode: 'off'
+    description:
+      mode: 'off'
+    issue_assessment:
+      mode: 'off'
+
+  finishing_touches:
+    docstrings:
+      enabled: false
+    unit_tests:
+      enabled: false
+    simplify:
+      enabled: false
+    autofix:
+      enabled: false
+    fix_ci:
+      enabled: false
+    resolve_merge_conflict:
+      enabled: false
+
+  tools:
+    gitleaks:
+      enabled: true
+    osvScanner:
+      enabled: true
+    semgrep:
+      enabled: true
+    skillspector:
+      enabled: true
+    actionlint:
+      enabled: true
+    yamllint:
+      enabled: true
+    shellcheck:
+      enabled: true
+    dotenvLint:
+      enabled: true
+
+    eslint:
+      enabled: false
+    biome:
+      enabled: false
+    oxc:
+      enabled: false
+    markdownlint:
+      enabled: false
+    languagetool:
+      enabled: false
+    github-checks:
+      enabled: false
+    zizmor:
+      enabled: false
+
+    checkov:
+      enabled: false
+    trivy:
+      enabled: false
+    opengrep:
+      enabled: false
+
+chat:
+  art: false
+  allow_non_org_members: true
+  auto_reply: false
