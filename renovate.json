@@ -1,7 +1,23 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": ["github>nuxt/renovate-config-nuxt"],
-  "minimumReleaseAge": "3 days",
+  "extends": [
+    "github>nuxt/renovate-config-nuxt",
+    ":configMigration",
+    ":pinDevDependencies",
+    ":widenPeerDependencies",
+    "helpers:pinGitHubActionDigestsToSemver",
+    "workarounds:all"
+  ],
+  "dependencyDashboard": true,
+  "rangeStrategy": "bump",
+  "ignorePaths": ["**/node_modules/**"],
+  "labels": ["dependencies"],
+  "minimumReleaseAge": "7 days",
+  "internalChecksFilter": "strict",
+  "rebaseWhen": "behind-base-branch",
+  "prConcurrentLimit": 5,
+  "branchConcurrentLimit": 5,
+  "schedule": ["before 5am on monday"],
   "lockFileMaintenance": {
     "enabled": true,
     "schedule": ["before 4am on monday"]
@@ -9,30 +25,99 @@
   "postUpdateOptions": ["pnpmDedupe"],
   "packageRules": [
     {
-      "description": "Auto-merge patch and minor updates once CI passes — low risk, high volume, not worth manual review.",
+      "description": "Queue stable minor and patch updates for merge only after required checks pass.",
       "matchUpdateTypes": ["patch", "minor"],
       "automerge": true,
-      "automergeType": "branch"
+      "automergeType": "pr",
+      "platformAutomerge": true
     },
     {
-      "description": "Major bumps always need a human look, regardless of package.",
+      "description": "Only propose major updates after explicit approval in the dependency dashboard.",
       "matchUpdateTypes": ["major"],
-      "automerge": false
+      "automerge": false,
+      "dependencyDashboardApproval": true,
+      "labels": ["dependencies", "major"]
+    },
+    {
+      "description": "Treat minor updates to pre-1.0 packages as potentially breaking.",
+      "matchCurrentVersion": "<1.0.0",
+      "matchUpdateTypes": ["minor"],
+      "automerge": false,
+      "dependencyDashboardApproval": true,
+      "labels": ["dependencies", "major"]
+    },
+    {
+      "description": "Keep pinned GitHub Actions updates in one reviewable pull request.",
+      "groupName": "github actions",
+      "groupSlug": "github-actions",
+      "matchManagers": ["github-actions"]
     },
     {
       "description": "Nuxt ecosystem moves together.",
       "groupName": "nuxt ecosystem",
-      "matchPackageNames": ["nuxt", "@nuxt/**", "@vueuse/**", "vue", "vue-tsc"]
+      "groupSlug": "nuxt",
+      "matchPackageNames": [
+        "nuxt",
+        "@nuxt/**",
+        "@vite-pwa/nuxt",
+        "@vueuse/**",
+        "vue",
+        "@vue/**",
+        "vue-tsc"
+      ],
+      "matchUpdateTypes": ["patch", "minor"]
     },
     {
       "description": "AT Protocol client stack moves together.",
       "groupName": "atcute (atproto)",
-      "matchPackageNames": ["@atcute/**"]
+      "groupSlug": "atcute",
+      "matchPackageNames": ["@atcute/**"],
+      "matchUpdateTypes": ["patch", "minor"]
     },
     {
-      "description": "Lint/format/dead-code tooling moves together.",
-      "groupName": "lint tooling",
-      "matchPackageNames": ["oxlint", "oxfmt", "knip", "lint-staged", "simple-git-hooks"]
+      "description": "Unit and component test tooling is validated together.",
+      "groupName": "unit test tooling",
+      "groupSlug": "unit-tests",
+      "matchPackageNames": [
+        "vitest",
+        "@vitest/**",
+        "@nuxt/test-utils",
+        "@vue/test-utils",
+        "happy-dom",
+        "vitest-environment-nuxt"
+      ],
+      "matchUpdateTypes": ["patch", "minor"]
+    },
+    {
+      "description": "Browser quality tooling is validated together.",
+      "groupName": "browser quality tooling",
+      "groupSlug": "browser-quality",
+      "matchPackageNames": ["@playwright/test", "@axe-core/playwright", "@lhci/cli"],
+      "matchUpdateTypes": ["patch", "minor"]
+    },
+    {
+      "description": "Lint, format, type and dead-code tooling is validated together.",
+      "groupName": "code quality tooling",
+      "groupSlug": "code-quality",
+      "matchPackageNames": [
+        "oxlint",
+        "oxfmt",
+        "knip",
+        "typescript",
+        "nano-staged",
+        "simple-git-hooks"
+      ],
+      "matchUpdateTypes": ["patch", "minor"]
+    },
+    {
+      "description": "Static icon and font assets are updated together.",
+      "groupName": "icons and fonts",
+      "groupSlug": "assets",
+      "matchPackageNames": ["@iconify-json/**", "@fontsource-variable/**"],
+      "matchUpdateTypes": ["patch", "minor"]
     }
-  ]
+  ],
+  "vulnerabilityAlerts": {
+    "postUpdateOptions": ["pnpmDedupe"]
+  }
 }

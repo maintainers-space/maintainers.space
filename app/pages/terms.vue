@@ -22,7 +22,7 @@
             <NuxtLink
               to="https://github.com/maintainers-space/maintainers.space/blob/main/LICENSE"
               target="_blank"
-              class="text-primary hover:underline"
+              class="text-primary underline"
               >MIT license</NuxtLink
             >. You're free to read, fork, modify and self-host it under that license's terms.
           </p>
@@ -56,14 +56,14 @@
             <NuxtLink
               to="https://github.com/maintainers-space/maintainers.space"
               target="_blank"
-              class="text-primary hover:underline"
+              class="text-primary underline"
               >commit history</NuxtLink
             >, same as any other change to the code.
           </p>
         </section>
 
         <p class="text-muted">
-          See also: <NuxtLink to="/privacy" class="text-primary hover:underline">Privacy</NuxtLink>.
+          See also: <NuxtLink to="/privacy" class="text-primary underline">Privacy</NuxtLink>.
         </p>
       </div>
     </template>

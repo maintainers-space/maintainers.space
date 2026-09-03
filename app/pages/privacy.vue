@@ -83,7 +83,7 @@
             <NuxtLink
               to="https://github.com/maintainers-space/maintainers.space"
               target="_blank"
-              class="text-primary hover:underline"
+              class="text-primary underline"
               >open source</NuxtLink
             >, so you can read exactly how any of this works. Open an issue there if something on
             this page doesn't match what you see the app doing.

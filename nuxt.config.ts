@@ -60,8 +60,27 @@ export default defineNuxtConfig({
 
   routeRules: {
     '/api/**': {
-      cors: true
-    }
+      cors: true,
+      headers: { 'x-robots-tag': 'noindex, nofollow' }
+    },
+    '/bitbucket/**': { headers: { 'x-robots-tag': 'noindex, nofollow' } },
+    '/codeberg/**': { headers: { 'x-robots-tag': 'noindex, nofollow' } },
+    '/explore': { headers: { 'x-robots-tag': 'noindex, nofollow' } },
+    '/gitea/**': { headers: { 'x-robots-tag': 'noindex, nofollow' } },
+    '/github/**': { headers: { 'x-robots-tag': 'noindex, nofollow' } },
+    '/gitlab/**': { headers: { 'x-robots-tag': 'noindex, nofollow' } },
+    '/login': { headers: { 'x-robots-tag': 'noindex, nofollow' } },
+    '/notifications': { headers: { 'x-robots-tag': 'noindex, nofollow' } },
+    '/notifications/**': { headers: { 'x-robots-tag': 'noindex, nofollow' } },
+    '/oauth/**': { headers: { 'x-robots-tag': 'noindex, nofollow' } },
+    '/profile': { headers: { 'x-robots-tag': 'noindex, nofollow' } },
+    '/profile/**': { headers: { 'x-robots-tag': 'noindex, nofollow' } },
+    '/search': { headers: { 'x-robots-tag': 'noindex, nofollow' } },
+    '/search/**': { headers: { 'x-robots-tag': 'noindex, nofollow' } },
+    '/settings': { headers: { 'x-robots-tag': 'noindex, nofollow' } },
+    '/settings/**': { headers: { 'x-robots-tag': 'noindex, nofollow' } },
+    '/tangled/**': { headers: { 'x-robots-tag': 'noindex, nofollow' } },
+    '/timeline': { headers: { 'x-robots-tag': 'noindex, nofollow' } }
   },
 
   // Prerender the (route-agnostic, since ssr:false) app shell to a static

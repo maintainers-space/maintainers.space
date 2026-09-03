@@ -1,0 +1,21 @@
+User-agent: *
+Allow: /
+Disallow: /*?*
+Disallow: /api/
+Disallow: /explore
+Disallow: /login
+Disallow: /notifications/
+Disallow: /oauth/
+Disallow: /profile/
+Disallow: /search/
+Disallow: /settings
+Disallow: /timeline
+Disallow: /github/
+Disallow: /gitlab/
+Disallow: /codeberg/
+Disallow: /gitea/
+Disallow: /bitbucket/
+Disallow: /tangled/
+Crawl-delay: 10
+
+Sitemap: https://maintainers.space/sitemap.xml

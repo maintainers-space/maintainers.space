@@ -12,6 +12,30 @@ Not every forge does everything — Bitbucket has no issue tracker (Atlassian is
 
 Bug reports, feature requests and pull requests are all welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for local setup, the OAuth apps you'll need to register, and the project's conventions.
 
+## Quality checks
+
+Every pull request and merge-queue group runs the same required quality gate:
+
+- Oxlint, Oxfmt, TypeScript, Knip and a production Nuxt build.
+- Vitest unit tests with V8 coverage thresholds measured broadly across app and server logic. The baseline stays explicit in `vitest.config.ts` so untested forge clients are not hidden by a selective badge.
+- Playwright checks across desktop and mobile Chromium, including anonymous browsing, repository navigation, sign-in helpers, legal pages and axe-core WCAG A/AA scans.
+- Lighthouse CI on the indexable home, privacy and terms pages, with minimum scores of 0.75 performance and 0.90 accessibility, best practices and SEO.
+- CodeQL extended security queries, dependency review and zizmor's pedantic GitHub Actions audit.
+
+Run the principal checks locally with:
+
+```bash
+pnpm run test:coverage
+pnpm exec playwright install chromium
+pnpm run test:e2e
+pnpm run build
+pnpm run test:lighthouse
+```
+
+Playwright traces, screenshots and videos are retained only on failure. CI uploads the Playwright and Lighthouse HTML reports for 14 days.
+
+The pre-commit hook uses the dependency-free `nano-staged` runner to format and lint only staged files. The pre-push hook runs the complete local quality gate, including browser tests. CodeRabbit CLI review is available as an optional final review with `pnpm run review:ai`; it requires separate CodeRabbit authentication and is not a mandatory hook because it sends the diff to an external service.
+
 ## License
 
 Made with ❤️
