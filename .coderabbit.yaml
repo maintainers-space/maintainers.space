@@ -26,13 +26,13 @@ reviews:
       instructions: Apply when the pull request adds or materially improves user-visible behaviour.
     - label: ✒️ documentation
       instructions: Apply when documentation is the primary change.
-    - label: accessibility
+    - label: ♿ accessibility
       instructions: Apply when accessibility semantics, keyboard interaction, focus, contrast or WCAG tests change.
     - label: 🚨 action
       instructions: Apply when GitHub Actions, quality gates, hooks or repository automation change.
     - label: 🚧 config
       instructions: Apply when configuration files are a primary part of the change.
-    - label: forge
+    - label: 🔌 forge
       instructions: Apply when forge adapters, mappers, capabilities or provider integrations change.
     - label: 🌏 i18n
       instructions: Apply when non-English internationalised content changes.
@@ -40,17 +40,17 @@ reviews:
       instructions: Apply when the pull request contains a changeset file.
     - label: 📦 package
       instructions: Apply when package structure, package manifests or dependencies change.
-    - label: performance
+    - label: ⚡ performance
       instructions: Apply when runtime, rendering, loading, caching or bundle performance changes.
-    - label: security
+    - label: 🔐 security
       instructions: Apply when authentication, authorisation, secrets, untrusted input, dependencies or security controls change.
-    - label: server
+    - label: 🖥️ server
       instructions: Apply when Nitro routes, server utilities, proxies, OAuth callbacks or server configuration change.
     - label: 🏯 styles
       instructions: Apply when stylesheets or visual design are a primary part of the change.
-    - label: testing
+    - label: 🧪 testing
       instructions: Apply when tests, fixtures, coverage or test infrastructure are a primary part of the change.
-    - label: ui
+    - label: 🎨 ui
       instructions: Apply when Vue pages, components, styles, responsive behaviour or Nuxt UI configuration change.
   suggested_reviewers: false
   in_progress_fortune: false
@@ -59,7 +59,7 @@ reviews:
 
   slop_detection:
     enabled: true
-    label: low-quality
+    label: 🧹 low-quality
 
   auto_review:
     enabled: true
@@ -69,7 +69,7 @@ reviews:
     base_branches:
       - ^release$
     labels:
-      - '!release'
+      - '!🚀 release'
     ignore_title_keywords:
       - WIP
       - '[skip-review]'
