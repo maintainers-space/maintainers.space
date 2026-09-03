@@ -1,5 +1,6 @@
 {
   "name": "maintainers.space",
+  "version": "0.1.0",
   "private": true,
   "description": "Unified forges interaction website",
   "homepage": "https://maintainers.space",
@@ -25,8 +26,11 @@
     "typecheck": "nuxt typecheck",
     "knip": "knip",
     "audit": "pnpm audit --audit-level moderate",
+    "changeset": "changeset",
+    "changeset:status": "changeset status",
     "check:quick": "pnpm run lint && pnpm run format:check && pnpm run typecheck && pnpm run test:coverage",
     "check:push": "pnpm run check:quick && pnpm run knip && pnpm run audit && pnpm run test:e2e",
+    "release:version": "node scripts/version-release.mjs",
     "review:ai": "coderabbit review --light --uncommitted",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
@@ -65,6 +69,8 @@
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.13.0",
+    "@changesets/changelog-github": "1.0.0",
+    "@changesets/cli": "3.0.1",
     "@lhci/cli": "^0.15.1",
     "@nuxt/test-utils": "^4.1.0",
     "@playwright/test": "^1.62.1",
@@ -84,6 +90,7 @@
     "vue-tsc": "^3.3.8"
   },
   "simple-git-hooks": {
+    "commit-msg": "node scripts/check-commit-message.mjs \"$1\"",
     "pre-commit": "pnpm exec nano-staged",
     "pre-push": "pnpm run check:push"
   },

@@ -12,7 +12,7 @@ Review the diff as a skeptical maintainer:
 3. Check keyboard use, accessible names, contrast, focus behavior, empty/loading/error states and desktop/mobile layouts.
 4. Confirm tests would fail without the implementation and cover important negative paths.
 5. Inspect dependency and workflow changes especially closely. Keep permissions minimal and Actions SHA-pinned.
-6. Remove redundant comments, generated files, debug output and formatting noise.
+6. Remove redundant comments, unreachable guards, duplicate validation, generated files, debug output and formatting noise. Comments should preserve a constraint, workaround or non-obvious decision rather than narrate the code.
 7. Run `pnpm run check:push`. Run `zizmor --persona pedantic .` for workflow changes and `pnpm run test:lighthouse` for user-facing or performance-sensitive changes.
 
 If CodeRabbit CLI is already installed and authenticated, the repository owner has approved external review, and the diff contains no secrets, run:

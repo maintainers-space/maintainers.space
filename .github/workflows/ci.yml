@@ -4,12 +4,14 @@ on:
   pull_request:
     branches:
       - main
+      - release
   push:
     branches:
       - main
   merge_group:
     branches:
       - main
+      - release
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.number || github.sha }}

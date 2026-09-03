@@ -36,6 +36,14 @@ Playwright traces, screenshots and videos are retained only on failure. CI uploa
 
 The pre-commit hook uses the dependency-free `nano-staged` runner to format and lint only staged files. The pre-push hook runs the complete local quality gate, including browser tests. CodeRabbit CLI review is available as an optional final review with `pnpm run review:ai`; it requires separate CodeRabbit authentication and is not a mandatory hook because it sends the diff to an external service.
 
+## Release flow
+
+`main` is the development branch. Release-relevant pull requests add a Changesets v3 entry with `pnpm changeset`; GitHub-linked changelog entries are accumulated there until a release is ready.
+
+After changes land on `main`, Changesets Action v2 creates or updates a semantic version pull request. Merging it records the version and GitHub-linked changelog on `main`; minor releases also receive a deterministic space-themed internal codename in `CHANGELOG.md`. Automation then opens the version-focused `main` → `release` deployment pull request. Production should deploy only from `release`, after a maintainer approves and merges that second pull request.
+
+Protect both branches with the required quality, CodeQL, dependency-review, semantic-title and zizmor checks. Repository Actions settings must allow GitHub Actions to create pull requests so the release workflow can maintain its PR. The local `commit-msg` hook rejects non-Conventional Commit messages; squash merging preserves the validated semantic PR title.
+
 ## License
 
 Made with ❤️

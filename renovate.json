@@ -96,6 +96,13 @@
       "matchUpdateTypes": ["patch", "minor"]
     },
     {
+      "description": "Changesets release tooling is validated together.",
+      "groupName": "changesets",
+      "groupSlug": "changesets",
+      "matchPackageNames": ["@changesets/**"],
+      "matchUpdateTypes": ["patch", "minor"]
+    },
+    {
       "description": "Lint, format, type and dead-code tooling is validated together.",
       "groupName": "code quality tooling",
       "groupSlug": "code-quality",
