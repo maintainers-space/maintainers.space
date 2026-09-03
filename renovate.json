@@ -11,7 +11,7 @@
   "dependencyDashboard": true,
   "rangeStrategy": "bump",
   "ignorePaths": ["**/node_modules/**"],
-  "labels": ["dependencies"],
+  "labels": ["🤖 bot", "📦 package"],
   "minimumReleaseAge": "7 days",
   "internalChecksFilter": "strict",
   "rebaseWhen": "behind-base-branch",
@@ -36,7 +36,7 @@
       "matchUpdateTypes": ["major"],
       "automerge": false,
       "dependencyDashboardApproval": true,
-      "labels": ["dependencies", "major"]
+      "labels": ["🤖 bot", "📦 package"]
     },
     {
       "description": "Treat minor updates to pre-1.0 packages as potentially breaking.",
@@ -44,7 +44,7 @@
       "matchUpdateTypes": ["minor"],
       "automerge": false,
       "dependencyDashboardApproval": true,
-      "labels": ["dependencies", "major"]
+      "labels": ["🤖 bot", "📦 package"]
     },
     {
       "description": "Keep pinned GitHub Actions updates in one reviewable pull request.",

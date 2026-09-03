@@ -20,26 +20,34 @@ reviews:
   suggested_labels: true
   auto_apply_labels: true
   labeling_instructions:
-    - label: bug
+    - label: 🐛 bug
       instructions: Apply when the pull request fixes incorrect user-visible or runtime behaviour.
-    - label: enhancement
+    - label: ⏫ enhancement
       instructions: Apply when the pull request adds or materially improves user-visible behaviour.
-    - label: documentation
+    - label: ✒️ documentation
       instructions: Apply when documentation is the primary change.
     - label: accessibility
       instructions: Apply when accessibility semantics, keyboard interaction, focus, contrast or WCAG tests change.
-    - label: ci
+    - label: 🚨 action
       instructions: Apply when GitHub Actions, quality gates, hooks or repository automation change.
-    - label: dependencies
-      instructions: Apply when package or GitHub Action dependencies change.
+    - label: 🚧 config
+      instructions: Apply when configuration files are a primary part of the change.
     - label: forge
       instructions: Apply when forge adapters, mappers, capabilities or provider integrations change.
+    - label: 🌏 i18n
+      instructions: Apply when non-English internationalised content changes.
+    - label: 📝 changeset
+      instructions: Apply when the pull request contains a changeset file.
+    - label: 📦 package
+      instructions: Apply when package structure, package manifests or dependencies change.
     - label: performance
       instructions: Apply when runtime, rendering, loading, caching or bundle performance changes.
     - label: security
       instructions: Apply when authentication, authorisation, secrets, untrusted input, dependencies or security controls change.
     - label: server
       instructions: Apply when Nitro routes, server utilities, proxies, OAuth callbacks or server configuration change.
+    - label: 🏯 styles
+      instructions: Apply when stylesheets or visual design are a primary part of the change.
     - label: testing
       instructions: Apply when tests, fixtures, coverage or test infrastructure are a primary part of the change.
     - label: ui
