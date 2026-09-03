@@ -6,7 +6,6 @@ on:
       - main
     paths:
       - CHANGELOG.md
-  workflow_dispatch:
 
 concurrency:
   group: deploy-release
@@ -27,6 +26,12 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          fetch-depth: 0
+
+      - name: Verify versioned release
+        env:
+          PREVIOUS_COMMIT: ${{ github.event.before }}
+        run: node scripts/verify-release-promotion.mjs "$PREVIOUS_COMMIT"
 
       - name: Create or update deployment pull request
         env:
