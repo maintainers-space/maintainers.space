@@ -4,12 +4,14 @@ on:
   pull_request:
     branches:
       - main
+      - release
   push:
     branches:
       - main
   merge_group:
     branches:
       - main
+      - release
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.number || github.sha }}
@@ -104,7 +106,7 @@ jobs:
         run: pnpm run knip
 
   test:
-    name: 🧪 Test
+    name: 🧪 Unit tests and coverage
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -121,8 +123,11 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Test
-        run: pnpm run test
+      - name: Audit dependencies
+        run: pnpm run audit
+
+      - name: Test with coverage thresholds
+        run: pnpm run test:coverage
 
   build:
     name: 🏗️ Build
@@ -144,3 +149,88 @@ jobs:
 
       - name: Build
         run: pnpm run build
+
+  browser:
+    name: 🎭 E2E and accessibility
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Chromium
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Run Playwright and axe-core
+        run: pnpm run test:e2e
+
+      - name: Upload Playwright report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: playwright-report
+          path: playwright-report
+          retention-days: 14
+
+  lighthouse:
+    name: 💡 Lighthouse
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build production app
+        run: pnpm run build
+
+      - name: Audit performance and quality
+        run: pnpm run test:lighthouse
+
+      - name: Upload Lighthouse reports
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: lighthouse-reports
+          path: .lighthouseci/reports
+          retention-days: 14
+
+  quality-gate:
+    name: ✅ Quality gate
+    if: ${{ always() }}
+    needs:
+      - lint
+      - format
+      - typecheck
+      - knip
+      - test
+      - build
+      - browser
+      - lighthouse
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every CI job to pass
+        if: ${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}
+        run: exit 1
+
+      - name: Confirm quality gate
+        run: echo "All required quality checks passed."

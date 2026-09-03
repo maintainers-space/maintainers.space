@@ -93,15 +93,16 @@ async function onSubmit(event: FormSubmitEvent<Schema>) {
 
         <div class="flex flex-wrap items-center gap-1.5">
           <span class="text-xs text-dimmed">Try:</span>
-          <UButton
+          <button
             v-for="host in suggestions"
             :key="host"
-            :label="host"
-            color="neutral"
-            variant="soft"
-            size="xs"
+            type="button"
+            class="rounded-md bg-elevated px-2 py-1 text-xs font-medium text-default hover:bg-accented focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+            @mousedown.prevent
             @click="useSuggestion(host)"
-          />
+          >
+            {{ host }}
+          </button>
         </div>
 
         <UButton

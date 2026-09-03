@@ -22,6 +22,22 @@
 
 :root {
   --ui-radius: 0.5rem;
+  --ui-primary: var(--color-brand-700);
+  --ui-text-dimmed: var(--color-zinc-600);
+}
+
+.dark {
+  --ui-primary: var(--color-brand-400);
+  --ui-text-dimmed: var(--color-zinc-400);
+}
+
+/* Solid controls use a dark primary in light mode and a bright primary in dark mode. */
+.bg-primary.text-neutral-900 {
+  color: white;
+}
+
+.dark .bg-primary.text-neutral-900 {
+  color: var(--color-neutral-900);
 }
 
 /*

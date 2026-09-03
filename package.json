@@ -1,5 +1,6 @@
 {
   "name": "maintainers.space",
+  "version": "0.1.0",
   "private": true,
   "description": "Unified forges interaction website",
   "homepage": "https://maintainers.space",
@@ -24,8 +25,19 @@
     "format:check": "oxfmt . --check",
     "typecheck": "nuxt typecheck",
     "knip": "knip",
+    "audit": "pnpm audit --audit-level moderate",
+    "changeset": "changeset",
+    "changeset:status": "changeset status",
+    "check:quick": "pnpm run lint && pnpm run format:check && pnpm run typecheck && pnpm run test:coverage",
+    "check:push": "pnpm run check:quick && pnpm run knip && pnpm run audit && pnpm run test:e2e",
+    "release:version": "node scripts/version-release.mjs",
+    "review:ai": "coderabbit review --light --uncommitted",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:coverage": "vitest run --coverage",
+    "test:watch": "vitest",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "test:lighthouse": "lhci autorun"
   },
   "dependencies": {
     "@atcute/atproto": "^4.0.3",
@@ -44,7 +56,7 @@
     "@nuxt/ui": "^4.10.0",
     "@vueuse/nuxt": "^14.4.0",
     "codemirror": "^6.0.2",
-    "dompurify": "^3.4.12",
+    "dompurify": "^3.4.13",
     "force-graph": "^1.51.4",
     "h3": "^1.15.11",
     "jose": "^6.2.4",
@@ -56,13 +68,19 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.13.0",
+    "@changesets/changelog-github": "1.0.0",
+    "@changesets/cli": "3.0.1",
+    "@lhci/cli": "^0.15.1",
     "@nuxt/test-utils": "^4.1.0",
+    "@playwright/test": "^1.62.1",
     "@tailwindcss/typography": "^0.5.20",
     "@vite-pwa/nuxt": "^1.1.1",
+    "@vitest/coverage-v8": "4.1.10",
     "@vue/test-utils": "^2.4.11",
     "happy-dom": "^20.11.1",
     "knip": "^6.29.0",
-    "lint-staged": "^17.2.0",
+    "nano-staged": "^1.0.2",
     "oxfmt": "^0.60.0",
     "oxlint": "^1.76.0",
     "simple-git-hooks": "^2.13.1",
@@ -72,9 +90,11 @@
     "vue-tsc": "^3.3.8"
   },
   "simple-git-hooks": {
-    "pre-commit": "npx lint-staged"
+    "commit-msg": "node scripts/check-commit-message.mjs \"$1\"",
+    "pre-commit": "pnpm exec nano-staged",
+    "pre-push": "pnpm run check:push"
   },
-  "lint-staged": {
+  "nano-staged": {
     "*.{ts,vue,js,mjs,cjs}": [
       "oxlint --fix",
       "oxfmt"

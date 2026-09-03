@@ -14,7 +14,7 @@ permissions: {}
 jobs:
   greeting:
     name: Greet First-Time Contributors
-    if: github.repository == 'trueberryless/maintainers.space'
+    if: github.repository == 'maintainers-space/maintainers.space'
     runs-on: ubuntu-latest
     permissions:
       pull-requests: write # post first-time contributor greeting comments

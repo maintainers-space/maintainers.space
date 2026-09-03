@@ -1,0 +1,51 @@
+name: Deploy release
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - CHANGELOG.md
+
+concurrency:
+  group: deploy-release
+  cancel-in-progress: false
+
+permissions: {}
+
+jobs:
+  pull-request:
+    name: 🌌 Prepare production deployment
+    if: github.repository == 'maintainers-space/maintainers.space'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read # read the version and compare main with release
+      pull-requests: write # create or update the manually approved deployment PR
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Verify versioned release
+        env:
+          PREVIOUS_COMMIT: ${{ github.event.before }}
+        run: node scripts/verify-release-promotion.mjs "$PREVIOUS_COMMIT"
+
+      - name: Create or update deployment pull request
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          PR_NUMBER=$(gh pr list --base release --head main --state open --json number --jq '.[0].number // empty')
+
+          if [ -n "$PR_NUMBER" ]; then
+            gh pr edit "$PR_NUMBER" --title "chore: deploy v${VERSION}"
+          else
+            gh pr create \
+              --base release \
+              --head main \
+              --title "chore: deploy v${VERSION}" \
+              --body "Promotes the validated v${VERSION} release to production. Merge only after manual approval and all required checks pass."
+          fi
