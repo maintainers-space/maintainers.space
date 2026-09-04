@@ -36,9 +36,10 @@ async function onMakeUnavailable(entry: RepoRef) {
     <div>
       <h2 class="font-semibold text-highlighted">Offline access</h2>
       <p class="text-sm text-muted">
-        Keep the repositories you return to most readable without an internet connection. This only
-        stores public, read-only data ({README, file tree, metadata) on this device — no tokens or
-        private information.
+        Keep the repositories and pages you care about readable without an internet connection.
+        Frequently-visited repos — plus the issues, pull requests and discussions you've opened or
+        participated in — are cached on this device, along with the repo's open issue/PR/discussion
+        lists. Only public, read-only data is stored; never tokens or private information.
       </p>
     </div>
 
@@ -84,7 +85,8 @@ async function onMakeUnavailable(entry: RepoRef) {
         <div class="min-w-0">
           <p class="font-medium text-default">Always available offline</p>
           <p class="text-sm text-muted">
-            Repositories you pin are kept offline regardless of how often you visit them.
+            Repositories you pin are always kept offline and are never automatically cleaned up,
+            regardless of how often you visit them.
           </p>
         </div>
       </div>

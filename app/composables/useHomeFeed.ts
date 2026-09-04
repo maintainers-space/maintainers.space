@@ -40,6 +40,14 @@ export function useHomeFeed() {
     myPulls.value = [...work.authoredPulls].sort(byRecent)
     reviewRequests.value = [...work.reviewRequests].sort(byRecent)
     assignedIssues.value = [...work.assignedIssues].sort(byRecent)
+    // Anything you participated in is kept offline along with its repo, even if
+    // you never opened the detail page — this is the "participated/watched" set.
+    const offline = useOfflineRepos()
+    const items = [...work.authoredPulls, ...work.reviewRequests, ...work.assignedIssues]
+    for (const it of items) {
+      if (!it.repo?.owner || !it.repo?.name) continue
+      offline.watch(it.isPull ? 'pull' : 'issue', it.provider, it.repo.owner, it.repo.name, it.id)
+    }
   }
 
   async function load(force = false): Promise<void> {
@@ -62,16 +70,19 @@ export function useHomeFeed() {
       const streamAndAggregate = async (): Promise<ForgeMyWork> => {
         const parts = await Promise.all(
           active.map((f) =>
-            f
-              .listMyWork!(
-                f.id === 'tangled' ? { viewer: tangledSelf() } : { token: getToken(f.id) }
-              )
+            f.listMyWork!(
+              f.id === 'tangled' ? { viewer: tangledSelf() } : { token: getToken(f.id) }
+            )
               .then((work) => {
                 apply(work)
                 return work
               })
               .catch(() => {
-                const empty: ForgeMyWork = { authoredPulls: [], reviewRequests: [], assignedIssues: [] }
+                const empty: ForgeMyWork = {
+                  authoredPulls: [],
+                  reviewRequests: [],
+                  assignedIssues: []
+                }
                 apply(empty)
                 return empty
               })

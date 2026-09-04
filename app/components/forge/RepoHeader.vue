@@ -7,7 +7,11 @@ const props = defineProps<{ repo: ForgeRepo }>()
 
 const offline = useOfflineRepos()
 const toast = useToast()
-const repoRef: RepoRef = { provider: props.repo.provider, owner: props.repo.owner, name: props.repo.name }
+const repoRef: RepoRef = {
+  provider: props.repo.provider,
+  owner: props.repo.owner,
+  name: props.repo.name
+}
 
 const pinned = computed(() =>
   offline.settings.value.pinned.some(
@@ -44,7 +48,12 @@ const actionItems = computed<DropdownMenuItem[]>(() => [
     label: props.repo.owner,
     avatar: props.repo.ownerAvatar ? { src: props.repo.ownerAvatar } : { icon: 'i-lucide-user' }
   },
-  { label: `Open on ${props.repo.provider}`, icon: 'i-lucide-external-link', to: props.repo.url, external: true }
+  {
+    label: `Open on ${props.repo.provider}`,
+    icon: 'i-lucide-external-link',
+    to: props.repo.url,
+    external: true
+  }
 ])
 </script>
 
