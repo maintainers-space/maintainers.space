@@ -12,6 +12,7 @@ import type { ActorIdentifier, Did } from '@atcute/lexicons'
 import { OAUTH_SCOPE } from '~/lib/atproto/oauth'
 import { fetchPublicProfile } from '~/lib/atproto/public'
 import { clearCache } from '~/lib/cache'
+import { clearOfflineState } from '~/composables/useOfflineRepos'
 
 const CURRENT_DID_KEY = 'maintainers.space:current-did'
 
@@ -52,8 +53,10 @@ function clearLocalSession(sub?: Did | null): void {
   _did.value = null
   _profile.value = null
   // So another account signing in on the same device never reads this
-  // account's cached repos/issues/notifications.
+  // account's cached repos/issues/notifications, nor its offline pinning/watched
+  // state (which would leak which repos/issues the previous account followed).
   clearCache()
+  clearOfflineState()
   const dead =
     sub ?? (import.meta.client ? (localStorage.getItem(CURRENT_DID_KEY) as Did | null) : null)
   if (dead) {

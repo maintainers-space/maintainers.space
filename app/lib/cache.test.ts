@@ -35,6 +35,19 @@ describe('prefetch', () => {
     await prefetch('repo-code:a:b', fetcher)
     expect(fetcher).not.toHaveBeenCalled()
   })
+
+  it('does not treat a failed fetch as an offline copy (no valueless entry)', async () => {
+    const failing = vi.fn(async () => {
+      throw new Error('network down')
+    })
+    expect(async () => await prefetch('repo-code:a:b', failing)).rejects.toThrow('network down')
+    // The in-flight entry that `cached` leaves behind on rejection must not be
+    // mistaken for a stored value, so a later prefetch retries the fetch.
+    const ok = vi.fn(async () => ({ id: 1 }))
+    await prefetch('repo-code:a:b', ok)
+    expect(ok).toHaveBeenCalledTimes(1)
+    expect(await cacheExists('repo-code:a:b')).toBe(true)
+  })
 })
 
 describe('invalidate', () => {

@@ -7,16 +7,28 @@ const base = computed(() =>
   repoPath({ provider: provider.value, owner: owner.value, name: name.value })
 )
 
-const { data, pending, error, refresh } = useLiveAsyncData(
+// A typed sentinel so a not-ready fetch is never misread as a missing repo.
+const NOT_READY = Symbol('repo-code-not-ready')
+
+const { data, pending, error, refresh } = useLiveAsyncData<Awaited<
+  ReturnType<typeof loadRepoCode>
+> | null>(
   () => `repo-code:${provider.value}:${owner.value}:${name.value}`,
   async () => {
     const f = forge.value
     // Wait for the parent-provided meta so we browse the correct default branch
     // (and avoid a duplicate repo-meta request — the parent already fetched it).
-    if (!f || !meta.value) return null
+    if (!f || !meta.value) throw NOT_READY
     return loadRepoCode(f, locator.value, owner.value, name.value, defaultBranch.value)
   },
-  { lazy: true, watch: [provider, owner, name, meta, defaultBranch] }
+  {
+    lazy: true,
+    watch: [provider, owner, name, meta, defaultBranch],
+    // `cached` only persists resolved values, so the NOT_READY throw never gets
+    // cached as "the repo has no code" — the view stays a skeleton (via !meta)
+    // until meta arrives, then fetches for real.
+    default: () => null as null
+  }
 )
 
 async function loadDoc(path: string): Promise<string> {

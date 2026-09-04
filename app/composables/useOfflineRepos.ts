@@ -16,7 +16,7 @@
 // live page's own stale-while-revalidate freshness and never hammers the forge
 // on a repo the user has already visited (whose data refreshes naturally).
 import { getForge } from '~/lib/forges'
-import { cacheExists, cached, invalidate, prefetch } from '~/lib/cache'
+import { cacheExists, invalidate, prefetch } from '~/lib/cache'
 import { idbKeys } from '~/lib/idb-store'
 import { loadRepoCode } from '~/lib/repo-code'
 import { useRepoVisits } from './useRepoVisits'
@@ -27,6 +27,8 @@ const MAX_COUNT_MIN = 10
 const MAX_COUNT_MAX = 500
 
 const SETTINGS_KEY = 'maintainers.space:offline-repos'
+/** Cap on tracked detail pages, so the protected (watched) set stays bounded. */
+const WATCHED_MAX = 500
 /** Detail pages (issues/PRs/discussions) the user opened, kept offline when their repo is. */
 const WATCHED_KEY = 'maintainers.space:offline-watched'
 
@@ -81,6 +83,27 @@ function load(): void {
   _loaded = true
 }
 
+/**
+ * Forget all offline-availability state (pinned set, watched detail pages).
+ * Kept separate from `load()` so sign-out can leave the module defaults while
+ * another account's data isn't visible.
+ */
+function clearAll(): void {
+  _enabled.value = true
+  _maxCount.value = OFFLINE_DEFAULT_MAX_COUNT
+  _pinned.value = []
+  _watched.value = []
+  if (import.meta.client) {
+    localStorage.removeItem(SETTINGS_KEY)
+    localStorage.removeItem(WATCHED_KEY)
+  }
+}
+
+/** Module-level hook for sign-out: clear local offline state. */
+export function clearOfflineState(): void {
+  clearAll()
+}
+
 function persist(): void {
   if (!import.meta.client) return
   localStorage.setItem(
@@ -97,7 +120,7 @@ async function seedRepo(r: RepoRef, force = false): Promise<void> {
   const metaKey = `repo-meta:${prefix}`
   const codeKey = `repo-code:${prefix}`
   const locator = { owner: r.owner, name: r.name }
-  const repo = await cached(
+  const repo = await prefetch<ForgeRepo>(
     metaKey,
     (): Promise<ForgeRepo> => {
       if (f.getRepo) return f.getRepo(r.owner, r.name)
@@ -215,7 +238,10 @@ function watchDetail(
   if (!import.meta.client || !id) return
   const key = `${kind}:${provider}:${owner}:${name}:${id}`
   if (!_watched.value.includes(key)) {
-    _watched.value = [..._watched.value, key]
+    // Keep the most recent items; older watched entries fall out so the
+    // protected (non-evicted) set stays bounded regardless of how many PRs,
+    // issues or discussions the user interacts with.
+    _watched.value = [key, ..._watched.value].slice(0, WATCHED_MAX)
     localStorage.setItem(WATCHED_KEY, JSON.stringify(_watched.value))
   }
 }
@@ -371,11 +397,24 @@ async function evictExcess(): Promise<void> {
   }
 
   const candidates = [...repos.entries()].filter(([ref]) => !protectedRefs.has(ref))
-  let over = candidates.length - Math.max(0, _maxCount.value - protectedRefs.size)
+  // Only protected refs that are actually stored count toward capacity; a
+  // pinned/watched repo with no cached data yet must not inflate the rear-side
+  // budget and make us evict a stored repo it no longer fits.
+  const storedProtected = [...repos.keys()].filter((r) => protectedRefs.has(r))
+  let over = candidates.length - Math.max(0, _maxCount.value - storedProtected.length)
   if (over <= 0) return
+  // Evict least-favoured first: idbKeys() returns cursor order (arbitrary), so
+  // rely on the repo-visit ranking rather than key order to decide what to drop.
+  const { favourites } = useRepoVisits()
+  const rank = new Map<string, number>()
+  favourites.value.forEach((v, i) => rank.set(keyOf(v), i))
+  candidates.sort(
+    (a, b) =>
+      (rank.get(a[0]) ?? Number.MAX_SAFE_INTEGER) - (rank.get(b[0]) ?? Number.MAX_SAFE_INTEGER)
+  )
   // Drop whole repos (metadata + landing + item pages) until under the cap.
-  // This is purely storage-bounded and never age-based, so repos the user
-  // visits infrequently stay offline for as long as they fit.
+  // Purely storage-bounded and never age-based, so infrequently-visited repos
+  // stay offline for as long as they fit.
   for (const [, owned] of candidates) {
     if (over <= 0) break
     for (const k of owned) invalidate(k)

@@ -138,23 +138,43 @@ export interface PrefetchOptions {
  * disturbing normal staleness. Unlike {@link cached}, this never refetches
  * just because a copy is old: offline availability only needs an entry to
  * exist, and a normal page visit handles freshness behind
- * stale-while-revalidate. Skips entirely while offline, and dedupes on {@link
+ * stale-while-revalidate. Skips entirely while offline (returning the stored
+ * value when one exists, otherwise `undefined`), and dedupes on {@link
  * cached}'s in-flight promise when two callers race to seed the same key.
- * Returns when the entry is present (already cached, or just fetched).
+ * Returns the stored value if present, or the freshly-fetched one.
  */
 export async function prefetch<T>(
   key: string,
   fetcher: () => Promise<T>,
   opts: PrefetchOptions = {}
-): Promise<void> {
-  if (isOffline()) return
-  if (!opts.force && (store.has(key) || (await idbGet<unknown>(key)) !== undefined)) return
-  await cached(key, fetcher, { force: true })
+): Promise<T | undefined> {
+  if (isOffline()) {
+    const mem = store.get(key)
+    if (mem?.value !== undefined) return mem.value as T
+    const persisted = await idbGet<T>(key)
+    return persisted
+  }
+  if (!opts.force) {
+    const mem = store.get(key)
+    if (mem?.value !== undefined) return mem.value as T
+    const persisted = await idbGet<T>(key)
+    if (persisted !== undefined) {
+      store.set(key, persisted as unknown as Entry<T>)
+      return persisted
+    }
+  }
+  return await cached(key, fetcher, { force: true })
+}
+
+/** True when `key` has a real value in memory (a failed fetch leaves a valueless entry). */
+function hasValue(key: string): boolean {
+  const e = store.get(key)
+  return e !== undefined && e.value !== undefined
 }
 
 /** Whether an entry exists for `key` in memory or IndexedDB (offline readable). */
 export async function cacheExists(key: string): Promise<boolean> {
-  if (store.has(key)) return true
+  if (hasValue(key)) return true
   return (await idbGet<unknown>(key)) !== undefined
 }
 

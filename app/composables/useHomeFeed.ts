@@ -6,6 +6,11 @@ function byRecent(a: ForgeIssue, b: ForgeIssue): number {
   return new Date(b.updatedAt ?? 0).getTime() - new Date(a.updatedAt ?? 0).getTime()
 }
 
+/** Concatenate two lists and sort newest-first (used by the streaming merge). */
+function concatWork(a: ForgeIssue[], b: ForgeIssue[]): ForgeIssue[] {
+  return [...a, ...b].sort(byRecent)
+}
+
 /**
  * Actionable "what should I work on next" feed for the signed-in home page.
  * Pools every connected forge (GitHub, GitLab, …) via each provider's
@@ -68,34 +73,30 @@ export function useHomeFeed() {
       // behaviour: when a copy is already stored it renders instantly, and the
       // fetcher only runs (painting slices) when a fresh fetch is needed.
       const streamAndAggregate = async (): Promise<ForgeMyWork> => {
-        const parts = await Promise.all(
+        // Accumulate each forge's slice into a running aggregate and paint the
+        // merged result, so a later-resolving forge never clobbers earlier ones,
+        // and a failing forge keeps the feed showing what already arrived.
+        const acc: ForgeMyWork = { authoredPulls: [], reviewRequests: [], assignedIssues: [] }
+        const merge = (p: ForgeMyWork): void => {
+          acc.authoredPulls = concatWork(acc.authoredPulls, p.authoredPulls)
+          acc.reviewRequests = concatWork(acc.reviewRequests, p.reviewRequests)
+          acc.assignedIssues = concatWork(acc.assignedIssues, p.assignedIssues)
+          apply(acc)
+        }
+        const empty: ForgeMyWork = { authoredPulls: [], reviewRequests: [], assignedIssues: [] }
+        await Promise.all(
           active.map((f) =>
             f.listMyWork!(
               f.id === 'tangled' ? { viewer: tangledSelf() } : { token: getToken(f.id) }
             )
               .then((work) => {
-                apply(work)
+                merge(work)
                 return work
               })
-              .catch(() => {
-                const empty: ForgeMyWork = {
-                  authoredPulls: [],
-                  reviewRequests: [],
-                  assignedIssues: []
-                }
-                apply(empty)
-                return empty
-              })
+              .catch(() => empty)
           )
         )
-        return parts.reduce<ForgeMyWork>(
-          (acc, p) => ({
-            authoredPulls: acc.authoredPulls.concat(p.authoredPulls),
-            reviewRequests: acc.reviewRequests.concat(p.reviewRequests),
-            assignedIssues: acc.assignedIssues.concat(p.assignedIssues)
-          }),
-          { authoredPulls: [], reviewRequests: [], assignedIssues: [] }
-        )
+        return acc
       }
       const work = await cached(key, streamAndAggregate, {
         ttl: TTL.SHORT,
