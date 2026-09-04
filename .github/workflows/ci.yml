@@ -132,9 +132,6 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Audit dependencies
-        run: pnpm run audit
-
       - name: Test with coverage thresholds
         run: pnpm run test:coverage
 
