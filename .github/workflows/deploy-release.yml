@@ -19,7 +19,7 @@ jobs:
     if: github.repository == 'maintainers-space/maintainers.space'
     runs-on: ubuntu-latest
     permissions:
-      contents: read # read the version and compare main with release
+      contents: read
       pull-requests: write # create or update the manually approved deployment PR
 
     steps:

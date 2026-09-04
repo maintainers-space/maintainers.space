@@ -27,7 +27,7 @@ jobs:
     name: 🔎 CodeQL JavaScript and TypeScript
     runs-on: ubuntu-latest
     permissions:
-      contents: read # checkout and analyze repository source
+      contents: read
       security-events: write # upload CodeQL results
 
     steps:
@@ -42,4 +42,10 @@ jobs:
           queries: security-extended
 
       - name: Analyze
+        id: analyze
         uses: github/codeql-action/analyze@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4
+
+      - name: Require a clean CodeQL analysis
+        env:
+          SARIF_DIRECTORY: ${{ steps.analyze.outputs.sarif-output }}
+        run: jq --slurp --exit-status '[.[].runs[]?.results[]?] | length == 0' "$SARIF_DIRECTORY"/*.sarif
