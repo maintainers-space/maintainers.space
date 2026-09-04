@@ -1,7 +1,42 @@
 <script setup lang="ts">
 import type { ForgeRepo } from '~/types/forge'
+import { useOfflineRepos } from '~/composables/useOfflineRepos'
 
-defineProps<{ repo: ForgeRepo }>()
+const props = defineProps<{ repo: ForgeRepo }>()
+
+const offline = useOfflineRepos()
+const toast = useToast()
+const repoRef = computed(() => ({
+  provider: props.repo.provider,
+  owner: props.repo.owner,
+  name: props.repo.name
+}))
+const pinned = computed(() =>
+  offline.settings.value.pinned.some(
+    (r) =>
+      r.provider === repoRef.value.provider &&
+      r.owner === repoRef.value.owner &&
+      r.name === repoRef.value.name
+  )
+)
+
+async function toggleOffline(): Promise<void> {
+  try {
+    if (pinned.value) {
+      offline.makeUnavailable(repoRef.value)
+      toast.add({ title: 'No longer pinned offline', color: 'neutral' })
+    } else {
+      await offline.makeAvailable(repoRef.value)
+      toast.add({ title: 'Available offline', color: 'success' })
+    }
+  } catch (e) {
+    toast.add({
+      title: 'Could not make available offline',
+      description: e instanceof Error ? e.message : String(e),
+      color: 'error'
+    })
+  }
+}
 </script>
 
 <template>
@@ -41,14 +76,25 @@ defineProps<{ repo: ForgeRepo }>()
         </p>
       </div>
 
-      <UButton
-        :to="repo.url"
-        target="_blank"
-        icon="i-lucide-external-link"
-        color="neutral"
-        variant="subtle"
-        label="Open"
-      />
+      <div class="flex items-center gap-2">
+        <UButton
+          :icon="pinned ? 'i-lucide-cloud' : 'i-lucide-cloud-off'"
+          :color="pinned ? 'success' : 'neutral'"
+          variant="subtle"
+          :label="pinned ? 'Pinned offline' : 'Available offline'"
+          :aria-pressed="pinned"
+          :title="pinned ? 'Remove from offline availability' : 'Make available offline'"
+          @click="toggleOffline"
+        />
+        <UButton
+          :to="repo.url"
+          target="_blank"
+          icon="i-lucide-external-link"
+          color="neutral"
+          variant="subtle"
+          label="Open"
+        />
+      </div>
     </div>
 
     <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted">

@@ -125,6 +125,39 @@ export async function cached<T>(
   return runFetch()
 }
 
+export interface PrefetchOptions {
+  /**
+   * Always (re)fetch instead of skipping when an offline copy already exists.
+   * Use when the user explicitly seeds a repo and expects it ready now.
+   */
+  force?: boolean
+}
+
+/**
+ * Ensure a value exists for `key` so the page can be read offline, *without*
+ * disturbing normal staleness. Unlike {@link cached}, this never refetches
+ * just because a copy is old: offline availability only needs an entry to
+ * exist, and a normal page visit handles freshness behind
+ * stale-while-revalidate. Skips entirely while offline, and dedupes on {@link
+ * cached}'s in-flight promise when two callers race to seed the same key.
+ * Returns when the entry is present (already cached, or just fetched).
+ */
+export async function prefetch<T>(
+  key: string,
+  fetcher: () => Promise<T>,
+  opts: PrefetchOptions = {}
+): Promise<void> {
+  if (isOffline()) return
+  if (!opts.force && (store.has(key) || (await idbGet<unknown>(key)) !== undefined)) return
+  await cached(key, fetcher, { force: true })
+}
+
+/** Whether an entry exists for `key` in memory or IndexedDB (offline readable). */
+export async function cacheExists(key: string): Promise<boolean> {
+  if (store.has(key)) return true
+  return (await idbGet<unknown>(key)) !== undefined
+}
+
 /** Drop a single key (or every key with the given prefix when `prefix` is true). */
 export function invalidate(key: string, prefix = false): void {
   if (!prefix) {
