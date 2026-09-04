@@ -54,34 +54,43 @@ export function useHomeFeed() {
       .sort()
       .join(',')}`
     try {
-      const work = await cached(
-        key,
-        async () => {
-          const parts = await Promise.all(
-            active.map((f) =>
-              f.listMyWork!(
+      // Stream: paint each forge's slice the moment it resolves so the first
+      // data shows immediately and the rest fills in as it arrives. Passing the
+      // streaming aggregator straight to `cached` keeps the offline/warm-cache
+      // behaviour: when a copy is already stored it renders instantly, and the
+      // fetcher only runs (painting slices) when a fresh fetch is needed.
+      const streamAndAggregate = async (): Promise<ForgeMyWork> => {
+        const parts = await Promise.all(
+          active.map((f) =>
+            f
+              .listMyWork!(
                 f.id === 'tangled' ? { viewer: tangledSelf() } : { token: getToken(f.id) }
-              ).catch(
-                () =>
-                  ({
-                    authoredPulls: [],
-                    reviewRequests: [],
-                    assignedIssues: []
-                  }) as ForgeMyWork
               )
-            )
+              .then((work) => {
+                apply(work)
+                return work
+              })
+              .catch(() => {
+                const empty: ForgeMyWork = { authoredPulls: [], reviewRequests: [], assignedIssues: [] }
+                apply(empty)
+                return empty
+              })
           )
-          return parts.reduce<ForgeMyWork>(
-            (acc, p) => ({
-              authoredPulls: acc.authoredPulls.concat(p.authoredPulls),
-              reviewRequests: acc.reviewRequests.concat(p.reviewRequests),
-              assignedIssues: acc.assignedIssues.concat(p.assignedIssues)
-            }),
-            { authoredPulls: [], reviewRequests: [], assignedIssues: [] }
-          )
-        },
-        { ttl: TTL.SHORT, force, onRevalidate: apply }
-      )
+        )
+        return parts.reduce<ForgeMyWork>(
+          (acc, p) => ({
+            authoredPulls: acc.authoredPulls.concat(p.authoredPulls),
+            reviewRequests: acc.reviewRequests.concat(p.reviewRequests),
+            assignedIssues: acc.assignedIssues.concat(p.assignedIssues)
+          }),
+          { authoredPulls: [], reviewRequests: [], assignedIssues: [] }
+        )
+      }
+      const work = await cached(key, streamAndAggregate, {
+        ttl: TTL.SHORT,
+        force,
+        onRevalidate: apply
+      })
       apply(work)
     } finally {
       loading.value = false
