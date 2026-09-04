@@ -54,9 +54,16 @@ jobs:
               .[].runs[]?
               | . as $run
               | .results[]?
+              | . as $result
+              | (
+                  $result.ruleIndex
+                  // ($run.tool.driver.rules | map(.id) | index($result.ruleId))
+                ) as $ruleIndex
               | select(
-                  $run.tool.driver.rules[.ruleIndex].properties.kind
+                  $ruleIndex != null
+                  and ($run.tool.driver.rules[$ruleIndex].properties.kind
                   | IN("problem", "path-problem")
+                  )
                 )
             ]
             | length == 0
