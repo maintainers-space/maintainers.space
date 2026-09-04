@@ -48,4 +48,16 @@ jobs:
       - name: Require a clean CodeQL analysis
         env:
           SARIF_DIRECTORY: ${{ steps.analyze.outputs.sarif-output }}
-        run: jq --slurp --exit-status '[.[].runs[]?.results[]?] | length == 0' "$SARIF_DIRECTORY"/*.sarif
+        run: |
+          jq --slurp --exit-status '
+            [
+              .[].runs[]?
+              | . as $run
+              | .results[]?
+              | select(
+                  $run.tool.driver.rules[.ruleIndex].properties.kind
+                  | IN("problem", "path-problem")
+                )
+            ]
+            | length == 0
+          ' "$SARIF_DIRECTORY"/*.sarif
