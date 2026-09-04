@@ -151,16 +151,18 @@ export async function prefetch<T>(
   if (isOffline()) {
     const mem = store.get(key)
     if (mem?.value !== undefined) return mem.value as T
-    const persisted = await idbGet<T>(key)
-    return persisted
+    const persisted = await idbGet<Omit<Entry<T>, 'pending'>>(key)
+    return persisted?.value
   }
   if (!opts.force) {
     const mem = store.get(key)
     if (mem?.value !== undefined) return mem.value as T
-    const persisted = await idbGet<T>(key)
-    if (persisted !== undefined) {
+    // IndexedDB stores the envelope `{ value, fresh, dead }` (see persistable),
+    // so unwrap `.value` before returning it to callers.
+    const persisted = await idbGet<Omit<Entry<T>, 'pending'>>(key)
+    if (persisted?.value !== undefined) {
       store.set(key, persisted as unknown as Entry<T>)
-      return persisted
+      return persisted.value
     }
   }
   return await cached(key, fetcher, { force: true })

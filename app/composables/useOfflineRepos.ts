@@ -271,10 +271,16 @@ export function useOfflineRepos() {
       const [provider, owner, name] = k.split('/')
       if (provider && owner && name) fromWatched.push({ provider, owner, name })
     }
+    // Watched repos share the same `maxCount` budget as auto-kept ones — bound
+    // them by whatever remains after pinned + top visits so the offline store
+    // can never exceed `maxCount` repositories (which would otherwise drive the
+    // eviction budget to zero and evict every auto-kept repo). `watchedSet` is
+    // newest-first, so the most recently watched repos win the remaining slots.
+    const budget = Math.max(0, _maxCount.value - pinnedSet.size - autoCandidates.length)
     return [
       ..._pinned.value,
       ...autoCandidates.map((v) => ({ provider: v.provider, owner: v.owner, name: v.name })),
-      ...fromWatched
+      ...fromWatched.slice(0, budget)
     ].filter((r) => r.provider && r.owner && r.name)
   }
 

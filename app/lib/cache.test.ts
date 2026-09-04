@@ -48,6 +48,16 @@ describe('prefetch', () => {
     expect(ok).toHaveBeenCalledTimes(1)
     expect(await cacheExists('repo-code:a:b')).toBe(true)
   })
+
+  it('returns the stored value (not the persisted cache envelope)', async () => {
+    const value = { defaultBranch: 'main' }
+    await prefetch('repo-meta:github:nuxt:nuxt', async () => value)
+    const found = await prefetch('repo-meta:github:nuxt:nuxt', async () => ({
+      defaultBranch: 'other'
+    }))
+    // A warm prefetch returns the stored value, not an IndexedDB `{value, fresh, dead}` wrapper.
+    expect(found).toEqual({ defaultBranch: 'main' })
+  })
 })
 
 describe('invalidate', () => {
