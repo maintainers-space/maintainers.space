@@ -9,6 +9,8 @@ const config: KnipConfig = {
   ],
   project: ['app/**/*.{ts,vue}', 'server/**/*.ts'],
   ignoreExportsUsedInFile: true,
+  // Optional external CLI; intentionally not installed as a project dependency.
+  ignoreBinaries: ['coderabbit'],
   ignoreDependencies: [
     // Nuxt module-only deps: consumed via nuxt.config.ts modules/css, not imported in app code.
     '@iconify-json/lucide',

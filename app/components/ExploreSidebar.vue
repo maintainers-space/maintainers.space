@@ -30,7 +30,12 @@ const top = computed(() => repos.value.slice(0, 5))
         >
           <UIcon name="i-lucide-history" class="size-3.5" />Recent
         </span>
-        <NuxtLink to="/explore" class="text-xs text-primary hover:underline">More</NuxtLink>
+        <NuxtLink
+          to="/explore"
+          aria-label="Explore all repositories"
+          class="text-xs text-primary hover:underline"
+          >More</NuxtLink
+        >
       </div>
 
       <ul class="space-y-0.5">
@@ -56,7 +61,12 @@ const top = computed(() => repos.value.slice(0, 5))
         >
           <UIcon name="i-lucide-flame" class="size-3.5" />Trending
         </span>
-        <NuxtLink to="/explore" class="text-xs text-primary hover:underline">More</NuxtLink>
+        <NuxtLink
+          to="/explore"
+          aria-label="Explore all repositories"
+          class="text-xs text-primary hover:underline"
+          >More</NuxtLink
+        >
       </div>
 
       <div v-if="loading && !top.length" class="space-y-2">

@@ -1,0 +1,150 @@
+language: en-GB
+tone_instructions: Be concise, direct and human. Report only actionable findings; avoid praise, narration and repetition.
+
+reviews:
+  profile: quiet
+  request_changes_workflow: true
+  high_level_summary: true
+  high_level_summary_instructions: Summarise required adaptations only, in at most three short bullets. Omit file tables, walkthrough narration, release notes, praise and statistics. If nothing needs changing, say only that no changes are required.
+  high_level_summary_in_walkthrough: true
+  review_status: false
+  review_details: false
+  review_progress: true
+  collapse_walkthrough: true
+  changed_files_summary: false
+  sequence_diagrams: false
+  estimate_code_review_effort: false
+  assess_linked_issues: false
+  related_issues: false
+  related_prs: false
+  suggested_labels: true
+  auto_apply_labels: true
+  labeling_instructions:
+    - label: 🐛 bug
+      instructions: Apply only when the pull request's primary purpose is to correct a reproducible defect. Do not infer this label from fix-prefixed commits or corrections made during review.
+    - label: ⏫ enhancement
+      instructions: Apply when the pull request's primary outcome is a new or materially improved user-facing capability, not maintenance or tooling.
+    - label: ✒️ documentation
+      instructions: Apply when prose documentation is the primary deliverable, not merely updated alongside code.
+    - label: ♿ accessibility
+      instructions: Apply when the pull request intentionally changes accessibility semantics, keyboard interaction, focus, contrast or WCAG enforcement.
+    - label: 🚨 action
+      instructions: Apply when files under .github/workflows or GitHub Action security and execution behaviour materially change.
+    - label: 🚧 config
+      instructions: Apply when project configuration is a primary deliverable, excluding package manifests and GitHub Actions workflows covered by other labels.
+    - label: 🔌 forge
+      instructions: Apply when provider-facing behaviour in forge adapters, mappers, capabilities or integrations materially changes.
+    - label: 🌏 i18n
+      instructions: Apply when non-English translations or internationalisation infrastructure materially changes.
+    - label: 📝 changeset
+      instructions: Apply when the pull request adds a release entry under .changeset.
+    - label: 📦 package
+      instructions: Apply when package manifests, dependency resolution or package structure materially changes, not for incidental lockfile updates.
+    - label: ⚡ performance
+      instructions: Apply when improving or intentionally changing runtime, rendering, loading, caching or bundle performance is a stated goal.
+    - label: 🔐 security
+      instructions: Apply when the pull request intentionally changes a security boundary such as authentication, authorisation, secret handling, untrusted input or dependency policy.
+    - label: 🖥️ server
+      instructions: Apply when runtime server behaviour in Nitro routes, server utilities, proxies or OAuth callbacks materially changes.
+    - label: 🏯 styles
+      instructions: Apply when visual design or stylesheet changes are a primary deliverable, not incidental component styling.
+    - label: 🧪 testing
+      instructions: Apply when tests, fixtures, coverage policy or test infrastructure are a primary deliverable, not merely included with a feature or fix.
+    - label: 🎨 ui
+      instructions: Apply when Vue pages, components, responsive interaction or Nuxt UI behaviour materially changes; use styles instead for purely visual work.
+  suggested_reviewers: false
+  in_progress_fortune: false
+  poem: false
+  enable_prompt_for_ai_agents: false
+
+  slop_detection:
+    enabled: true
+    label: 🧹 low-quality
+
+  auto_review:
+    enabled: true
+    drafts: false
+    auto_incremental_review: true
+    auto_pause_after_reviewed_commits: 5
+    base_branches:
+      - ^release$
+    labels:
+      - '!🚀 release'
+    ignore_title_keywords:
+      - WIP
+      - '[skip-review]'
+      - 'chore: release'
+      - 'chore: deploy'
+    ignore_usernames:
+      - 'renovate[bot]'
+      - 'dependabot[bot]'
+      - 'github-actions[bot]'
+
+  pre_merge_checks:
+    docstrings:
+      mode: 'off'
+    title:
+      mode: 'off'
+    description:
+      mode: 'off'
+    issue_assessment:
+      mode: 'off'
+
+  finishing_touches:
+    docstrings:
+      enabled: false
+    unit_tests:
+      enabled: false
+    simplify:
+      enabled: false
+    autofix:
+      enabled: false
+    fix_ci:
+      enabled: false
+    resolve_merge_conflict:
+      enabled: false
+
+  tools:
+    gitleaks:
+      enabled: true
+    osvScanner:
+      enabled: true
+    semgrep:
+      enabled: true
+    skillspector:
+      enabled: true
+    actionlint:
+      enabled: true
+    yamllint:
+      enabled: true
+    shellcheck:
+      enabled: true
+    dotenvLint:
+      enabled: true
+
+    eslint:
+      enabled: false
+    biome:
+      enabled: false
+    oxc:
+      enabled: false
+    markdownlint:
+      enabled: false
+    languagetool:
+      enabled: false
+    github-checks:
+      enabled: false
+    zizmor:
+      enabled: false
+
+    checkov:
+      enabled: false
+    trivy:
+      enabled: false
+    opengrep:
+      enabled: false
+
+chat:
+  art: false
+  allow_non_org_members: true
+  auto_reply: false
