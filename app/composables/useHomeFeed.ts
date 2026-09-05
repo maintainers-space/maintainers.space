@@ -45,8 +45,15 @@ export function useHomeFeed() {
     myPulls.value = [...work.authoredPulls].sort(byRecent)
     reviewRequests.value = [...work.reviewRequests].sort(byRecent)
     assignedIssues.value = [...work.assignedIssues].sort(byRecent)
-    // Anything you participated in is kept offline along with its repo, even if
-    // you never opened the detail page — this is the "participated/watched" set.
+  }
+
+  /**
+   * Anything you participated in is kept offline along with its repo, even if
+   * you never opened the detail page — this is the "participated/watched" set.
+   * Called once per load (after the aggregate is final), not per streamed slice,
+   * so watchDetail isn't doing hundreds of localStorage writes per slice.
+   */
+  function recordWatched(work: ForgeMyWork): void {
     const offline = useOfflineRepos()
     const items = [...work.authoredPulls, ...work.reviewRequests, ...work.assignedIssues]
     for (const it of items) {
@@ -129,6 +136,7 @@ export function useHomeFeed() {
         onRevalidate: apply
       })
       apply(work)
+      recordWatched(work)
     } finally {
       loading.value = false
       loaded.value = true
