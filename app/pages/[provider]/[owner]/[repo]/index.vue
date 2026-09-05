@@ -1,6 +1,5 @@
 <script setup lang="ts">
-import type { ForgeTreeEntry } from '~/types/forge'
-import type { HealthFile } from '~/components/forge/RepoHealthFiles.vue'
+import { loadRepoCode } from '~/lib/repo-code'
 import { useRepoContext } from '~/composables/useRepoContext'
 
 const { provider, owner, name, forge, locator, meta, defaultBranch } = useRepoContext()
@@ -8,74 +7,28 @@ const base = computed(() =>
   repoPath({ provider: provider.value, owner: owner.value, name: name.value })
 )
 
-const HEALTH: Record<string, { order: number; label: string; icon: string }> = {
-  readme: { order: 0, label: 'README', icon: 'i-lucide-book-open' },
-  contributing: { order: 1, label: 'Contributing', icon: 'i-lucide-git-pull-request-arrow' },
-  security: { order: 2, label: 'Security', icon: 'i-lucide-shield-check' },
-  code_of_conduct: { order: 3, label: 'Code of conduct', icon: 'i-lucide-scale' },
-  support: { order: 4, label: 'Support', icon: 'i-lucide-life-buoy' },
-  license: { order: 5, label: 'License', icon: 'i-lucide-scroll-text' },
-  changelog: { order: 6, label: 'Changelog', icon: 'i-lucide-history' }
-}
+// A typed sentinel so a not-ready fetch is never misread as a missing repo.
+const NOT_READY = Symbol('repo-code-not-ready')
 
-function healthKey(fileName: string): string | null {
-  const b = fileName
-    .replace(/\.(md|markdown|mdown|rst|txt|adoc)$/i, '')
-    .toLowerCase()
-    .replace(/[\s-]+/g, '_')
-  if (b === 'readme') return 'readme'
-  if (b === 'contributing') return 'contributing'
-  if (b === 'security') return 'security'
-  if (b === 'code_of_conduct') return 'code_of_conduct'
-  if (b === 'support' || b === 'governance') return 'support'
-  if (b === 'license' || b === 'licence' || b === 'copying') return 'license'
-  if (b === 'changelog' || b === 'changes' || b === 'history') return 'changelog'
-  return null
-}
-
-const { data, pending, error, refresh } = useLiveAsyncData(
+const { data, pending, error, refresh } = useLiveAsyncData<Awaited<
+  ReturnType<typeof loadRepoCode>
+> | null>(
   () => `repo-code:${provider.value}:${owner.value}:${name.value}`,
   async () => {
     const f = forge.value
     // Wait for the parent-provided meta so we browse the correct default branch
     // (and avoid a duplicate repo-meta request — the parent already fetched it).
-    if (!f || !meta.value) return null
-    const ref = defaultBranch.value
-
-    let entries: ForgeTreeEntry[]
-    if (f.getTree) entries = await f.getTree(locator.value, ref, '')
-    else entries = (await f.getOverview(owner.value, name.value)).entries
-
-    const candidates = [...entries]
-    const dotgithub = entries.find((e) => e.type === 'dir' && e.name.toLowerCase() === '.github')
-    if (dotgithub && f.getTree) {
-      try {
-        candidates.push(...(await f.getTree(locator.value, ref, dotgithub.path)))
-      } catch {
-        /* health files in .github are best-effort */
-      }
-    }
-
-    const seen = new Set<string>()
-    const health: HealthFile[] = []
-    for (const e of candidates) {
-      if (e.type !== 'file') continue
-      const key = healthKey(e.name)
-      if (!key || seen.has(key)) continue
-      seen.add(key)
-      health.push({
-        key,
-        label: HEALTH[key]!.label,
-        icon: HEALTH[key]!.icon,
-        name: e.name,
-        path: e.path
-      })
-    }
-    health.sort((a, b) => HEALTH[a.key]!.order - HEALTH[b.key]!.order)
-
-    return { entries, health }
+    if (!f || !meta.value) throw NOT_READY
+    return loadRepoCode(f, locator.value, owner.value, name.value, defaultBranch.value)
   },
-  { lazy: true, watch: [provider, owner, name, meta, defaultBranch] }
+  {
+    lazy: true,
+    watch: [provider, owner, name, meta, defaultBranch],
+    // `cached` only persists resolved values, so the NOT_READY throw never gets
+    // cached as "the repo has no code" — the view stays a skeleton (via !meta)
+    // until meta arrives, then fetches for real.
+    default: () => null as null
+  }
 )
 
 async function loadDoc(path: string): Promise<string> {

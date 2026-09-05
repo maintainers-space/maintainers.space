@@ -1,7 +1,60 @@
 <script setup lang="ts">
+import type { DropdownMenuItem } from '@nuxt/ui'
 import type { ForgeRepo } from '~/types/forge'
+import { useOfflineRepos, type RepoRef } from '~/composables/useOfflineRepos'
 
-defineProps<{ repo: ForgeRepo }>()
+const props = defineProps<{ repo: ForgeRepo }>()
+
+const offline = useOfflineRepos()
+const toast = useToast()
+const repoRef: RepoRef = {
+  provider: props.repo.provider,
+  owner: props.repo.owner,
+  name: props.repo.name
+}
+
+const pinned = computed(() =>
+  offline.settings.value.pinned.some(
+    (r) => r.provider === repoRef.provider && r.owner === repoRef.owner && r.name === repoRef.name
+  )
+)
+
+async function toggleOffline(): Promise<void> {
+  try {
+    if (pinned.value) {
+      offline.makeUnavailable(repoRef)
+      toast.add({ title: 'No longer pinned offline', color: 'neutral' })
+    } else {
+      await offline.makeAvailable(repoRef)
+      toast.add({ title: 'Available offline', color: 'success' })
+    }
+  } catch (e) {
+    toast.add({
+      title: 'Could not make available offline',
+      description: e instanceof Error ? e.message : String(e),
+      color: 'error'
+    })
+  }
+}
+
+const actionItems = computed<DropdownMenuItem[]>(() => [
+  {
+    label: pinned.value ? 'Remove from offline availability' : 'Available offline',
+    icon: pinned.value ? 'i-lucide-cloud' : 'i-lucide-cloud-off',
+    onSelect: toggleOffline
+  },
+  {
+    type: 'label',
+    label: props.repo.owner,
+    avatar: props.repo.ownerAvatar ? { src: props.repo.ownerAvatar } : { icon: 'i-lucide-user' }
+  },
+  {
+    label: `Open on ${props.repo.provider}`,
+    icon: 'i-lucide-external-link',
+    to: props.repo.url,
+    external: true
+  }
+])
 </script>
 
 <template>
@@ -41,14 +94,17 @@ defineProps<{ repo: ForgeRepo }>()
         </p>
       </div>
 
-      <UButton
-        :to="repo.url"
-        target="_blank"
-        icon="i-lucide-external-link"
-        color="neutral"
-        variant="subtle"
-        label="Open"
-      />
+      <div class="flex gap-2">
+        <!-- Less-used repo actions live behind a "…" menu so the header stays
+             compact while remaining extensible (offline pin, open on platform, …). -->
+        <UDropdownMenu
+          :items="actionItems"
+          :content="{ align: 'end', side: 'bottom' }"
+          :ui="{ content: 'w-60' }"
+        >
+          <UButton color="neutral" variant="ghost" square icon="i-lucide-ellipsis" size="md" />
+        </UDropdownMenu>
+      </div>
     </div>
 
     <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted">

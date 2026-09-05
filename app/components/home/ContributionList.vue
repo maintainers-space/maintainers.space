@@ -47,7 +47,7 @@ const KIND_META: Record<
 
 <template>
   <div class="rounded-xl border border-default bg-elevated/20">
-    <div v-if="loading" class="space-y-2 p-3">
+    <div v-if="loading && !entries.length" class="space-y-2 p-3">
       <USkeleton v-for="i in 4" :key="i" class="h-12 w-full" />
     </div>
 

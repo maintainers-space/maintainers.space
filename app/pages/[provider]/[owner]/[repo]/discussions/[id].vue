@@ -10,8 +10,23 @@ const base = computed(() =>
 )
 const id = computed(() => String(route.params.id))
 
+const watchItem = useOfflineRepos().watch
+const itemKey = computed(
+  () => `discussion:${provider.value}:${owner.value}:${name.value}:${id.value}`
+)
+
+// Any discussion you open is remembered so it can be kept offline once its repo is.
+watch(
+  itemKey,
+  (k) => {
+    const [, , , , iid] = k.split(':')
+    if (iid) watchItem('discussion', provider.value, owner.value, name.value, iid)
+  },
+  { immediate: true }
+)
+
 const { data, pending, error } = useLiveAsyncData<ForgeDiscussionDetail | null>(
-  () => `discussion:${provider.value}:${owner.value}:${name.value}:${id.value}`,
+  () => itemKey.value,
   async () => {
     if (!forge.value?.getDiscussion) return null
     return await forge.value.getDiscussion(locator.value, id.value, {
