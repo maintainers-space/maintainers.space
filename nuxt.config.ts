@@ -54,7 +54,11 @@ export default defineNuxtConfig({
     public: {
       // OAuth client id for production; overridden per-env. Empty => localhost dev client.
       atprotoClientId: '',
-      appUrl: ''
+      // The deployment's own canonical URL (NUXT_PUBLIC_SITE_URL) — used as the
+      // trusted-issuer origin for attestation verification and as the origin
+      // for OG image/meta URLs baked into the prerendered `/` shell, which has
+      // no real request to read one from at build time.
+      siteUrl: ''
     }
   },
 
