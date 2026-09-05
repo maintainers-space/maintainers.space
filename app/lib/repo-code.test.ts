@@ -51,6 +51,13 @@ describe('loadRepoCode', () => {
     expect(health.map((h) => h.key)).toEqual(['readme', 'security', 'license'])
   })
 
+  it('gives GOVERNANCE.md its own key instead of folding it into Support', async () => {
+    const entries = [file('SUPPORT.md'), file('GOVERNANCE.md')]
+    const { health } = await loadRepoCode(forge({ tree: entries }), locator, 'nuxt', 'nuxt', 'main')
+    expect(health.map((h) => h.key)).toEqual(['support', 'governance'])
+    expect(health.find((h) => h.key === 'governance')).toMatchObject({ name: 'GOVERNANCE.md' })
+  })
+
   it('falls back to getOverview entries when the forge has no getTree', async () => {
     const entries = [file('CHANGELOG.md')]
     const { entries: got, health } = await loadRepoCode(

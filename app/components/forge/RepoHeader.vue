@@ -10,7 +10,8 @@ const toast = useToast()
 const repoRef: RepoRef = {
   provider: props.repo.provider,
   owner: props.repo.owner,
-  name: props.repo.name
+  name: props.repo.name,
+  isPrivate: props.repo.isPrivate
 }
 
 const pinned = computed(() =>
@@ -37,24 +38,31 @@ async function toggleOffline(): Promise<void> {
   }
 }
 
-const actionItems = computed<DropdownMenuItem[]>(() => [
-  {
-    label: pinned.value ? 'Remove from offline availability' : 'Available offline',
-    icon: pinned.value ? 'i-lucide-cloud' : 'i-lucide-cloud-off',
-    onSelect: toggleOffline
-  },
-  {
-    type: 'label',
-    label: props.repo.owner,
-    avatar: props.repo.ownerAvatar ? { src: props.repo.ownerAvatar } : { icon: 'i-lucide-user' }
-  },
-  {
-    label: `Open on ${props.repo.provider}`,
-    icon: 'i-lucide-external-link',
-    to: props.repo.url,
-    external: true
+const actionItems = computed<DropdownMenuItem[]>(() => {
+  const items: DropdownMenuItem[] = [
+    {
+      type: 'label',
+      label: props.repo.owner,
+      avatar: props.repo.ownerAvatar ? { src: props.repo.ownerAvatar } : { icon: 'i-lucide-user' }
+    },
+    {
+      label: `Open on ${props.repo.provider}`,
+      icon: 'i-lucide-external-link',
+      to: props.repo.url,
+      external: true
+    }
+  ]
+  // Private repos are never stored offline (public-only cache), so the pin
+  // action only appears for public repos.
+  if (!props.repo.isPrivate) {
+    items.unshift({
+      label: pinned.value ? 'Remove from offline availability' : 'Available offline',
+      icon: pinned.value ? 'i-lucide-cloud' : 'i-lucide-cloud-off',
+      onSelect: toggleOffline
+    })
   }
-])
+  return items
+})
 </script>
 
 <template>

@@ -19,6 +19,7 @@ import { getForge } from '~/lib/forges'
 import { cacheExists, invalidate, prefetch } from '~/lib/cache'
 import { idbKeys } from '~/lib/idb-store'
 import { loadRepoCode } from '~/lib/repo-code'
+import { isForgeRateLimit } from '~/utils/forge-errors'
 import { useRepoVisits } from './useRepoVisits'
 import type { ForgeId, ForgeProvider, ForgeRepo, RepoLocator } from '~/types/forge'
 
@@ -36,6 +37,8 @@ export interface RepoRef {
   provider: string
   owner: string
   name: string
+  /** Private repos are never written to the offline cache (public-only storage). */
+  isPrivate?: boolean
 }
 
 export interface OfflineRepoSettings {
@@ -53,6 +56,15 @@ const _pinned = ref<RepoRef[]>([])
 const _running = ref<boolean>(false)
 const _watched = ref<string[]>([])
 let _loaded = false
+/**
+ * Per-run budget of forge API requests, so one auto() run can never issue an
+ * unbounded burst (default 100 repos × several requests each). Decremented as
+ * each seed request is issued; the run stops when it hits zero.
+ */
+let _runBudget = 0
+/** When a forge rate-limits us mid-run, stop issuing further requests. */
+let _rateLimited = false
+const RUN_REQUEST_BUDGET = 300
 
 function clampMaxCount(n: number): number {
   return Math.min(MAX_COUNT_MAX, Math.max(MAX_COUNT_MIN, Math.round(n)))
@@ -65,7 +77,17 @@ function keyOf(r: RepoRef): string {
 function isRef(r: unknown): r is RepoRef {
   if (typeof r !== 'object' || !r) return false
   const o = r as Record<string, unknown>
-  return typeof o.provider === 'string' && typeof o.owner === 'string' && typeof o.name === 'string'
+  return (
+    typeof o.provider === 'string' &&
+    typeof o.owner === 'string' &&
+    typeof o.name === 'string' &&
+    (o.isPrivate === undefined || typeof o.isPrivate === 'boolean')
+  )
+}
+
+/** Private repositories are never cached — only public, read-only data is stored. */
+function isCacheable(r: RepoRef): boolean {
+  return !r.isPrivate
 }
 
 function load(): void {
@@ -112,26 +134,54 @@ function persist(): void {
   )
 }
 
+/** True when the current run should stop issuing forge requests. */
+function runExhausted(): boolean {
+  return _rateLimited || _runBudget <= 0
+}
+
+/**
+ * Spend one request from the run budget, and short-circuit when the budget is
+ * spent or a forge rate-limited us. Returns the prefetch result, or undefined
+ * when the run is exhausted.
+ */
+function runRequest<T>(
+  key: string,
+  fetcher: () => Promise<T>,
+  force = false
+): Promise<T | undefined> | undefined {
+  if (runExhausted()) return undefined
+  _runBudget--
+  return prefetch(key, fetcher, { force })
+}
+
 /** Crawl one repo's offline surface (metadata + landing page + lists + watched detail pages). */
 async function seedRepo(r: RepoRef, force = false): Promise<void> {
   const f = getForge(r.provider)
-  if (!f || !r.owner || !r.name) return
+  if (!f || !r.owner || !r.name || !isCacheable(r) || runExhausted()) return
   const prefix = `${r.provider}:${r.owner}:${r.name}`
   const metaKey = `repo-meta:${prefix}`
   const codeKey = `repo-code:${prefix}`
   const locator = { owner: r.owner, name: r.name }
-  const repo = await prefetch<ForgeRepo>(
+  const repo = await runRequest<ForgeRepo>(
     metaKey,
     (): Promise<ForgeRepo> => {
       if (f.getRepo) return f.getRepo(r.owner, r.name)
       return f.getOverview(r.owner, r.name).then((ov) => ov.repo)
     },
-    { force }
-  )
-  if (!repo?.defaultBranch) return
-  await prefetch(codeKey, () => loadRepoCode(f, locator, r.owner, r.name, repo.defaultBranch), {
     force
-  })
+  )
+  if (runExhausted() || !repo?.defaultBranch) return
+  // A watched/auto repo only becomes private once we look it up (the home feed
+  // doesn't know visibility); drop its cached metadata and stop seeding.
+  if (repo.isPrivate) {
+    invalidate(metaKey)
+    return
+  }
+  await runRequest(
+    codeKey,
+    () => loadRepoCode(f, locator, r.owner, r.name, repo.defaultBranch),
+    force
+  )
   await prefetchRepoLocales(f, locator, prefix, force)
 }
 
@@ -143,16 +193,31 @@ function itemListFetchers(
   token: string | undefined
 ): Array<[string, () => Promise<unknown>]> {
   const lists: Array<[string, () => Promise<unknown>]> = []
-  if (f.listIssues)
+  // Seed every state the live pages request, so each filter has an offline copy.
+  if (f.listIssues) {
     lists.push([
       `issues:${prefix}:open`,
       () => f.listIssues!(locator, { token, state: 'open', limit: 30 })
     ])
-  if (f.listPulls)
+    lists.push([
+      `issues:${prefix}:closed`,
+      () => f.listIssues!(locator, { token, state: 'closed', limit: 30 })
+    ])
+  }
+  if (f.listPulls) {
     lists.push([
       `pulls:${prefix}:open`,
       () => f.listPulls!(locator, { token, state: 'open', limit: 30 })
     ])
+    lists.push([
+      `pulls:${prefix}:closed`,
+      () => f.listPulls!(locator, { token, state: 'closed', limit: 30 })
+    ])
+    lists.push([
+      `pulls:${prefix}:merged`,
+      () => f.listPulls!(locator, { token, state: 'merged', limit: 30 })
+    ])
+  }
   if (f.listDiscussions)
     lists.push([
       `discussions:${prefix}:${token ? 'auth' : 'anon'}`,
@@ -177,7 +242,7 @@ function detailFetcher(
   }
   if (kind === 'pull' && f.getPull) {
     const getPull = f.getPull
-    return () => getPull(locator, itemId)
+    return () => getPull(locator, itemId, { token })
   }
   if (kind === 'discussion' && f.getDiscussion) {
     const getDiscussion = f.getDiscussion
@@ -198,10 +263,11 @@ async function prefetchRepoLocales(
   const token = getToken(providerId)
 
   for (const [key, fetcher] of itemListFetchers(f, locator, prefix, token)) {
+    if (runExhausted()) return
     try {
-      await prefetch(key, fetcher, { force })
-    } catch {
-      /* best-effort */
+      await runRequest(key, fetcher, force)
+    } catch (e) {
+      if (isForgeRateLimit(e)) _rateLimited = true
     }
   }
 
@@ -215,11 +281,11 @@ async function prefetchRepoLocales(
     )
       continue
     const fetcher = detailFetcher(f, locator, key, token)
-    if (!fetcher) continue
+    if (!fetcher || runExhausted()) continue
     try {
-      await prefetch(key, fetcher, { force })
-    } catch {
-      /* best-effort */
+      await runRequest(key, fetcher, force)
+    } catch (e) {
+      if (isForgeRateLimit(e)) _rateLimited = true
     }
   }
 }
@@ -237,13 +303,12 @@ function watchDetail(
 ): void {
   if (!import.meta.client || !id) return
   const key = `${kind}:${provider}:${owner}:${name}:${id}`
-  if (!_watched.value.includes(key)) {
-    // Keep the most recent items; older watched entries fall out so the
-    // protected (non-evicted) set stays bounded regardless of how many PRs,
-    // issues or discussions the user interacts with.
-    _watched.value = [key, ..._watched.value].slice(0, WATCHED_MAX)
-    localStorage.setItem(WATCHED_KEY, JSON.stringify(_watched.value))
-  }
+  // Keep the most recent items; older watched entries fall out so the protected
+  // (non-evicted) set stays bounded. Re-opening an item moves it back to the
+  // front so it keeps its recency instead of being pushed out by newer one-offs.
+  if (_watched.value[0] === key) return
+  _watched.value = [key, ..._watched.value.filter((k) => k !== key)].slice(0, WATCHED_MAX)
+  localStorage.setItem(WATCHED_KEY, JSON.stringify(_watched.value))
 }
 
 export function useOfflineRepos() {
@@ -281,18 +346,22 @@ export function useOfflineRepos() {
       ..._pinned.value,
       ...autoCandidates.map((v) => ({ provider: v.provider, owner: v.owner, name: v.name })),
       ...fromWatched.slice(0, budget)
-    ].filter((r) => r.provider && r.owner && r.name)
+    ].filter((r) => r.provider && r.owner && r.name && isCacheable(r))
   }
 
   /** Seed every candidate (best-effort). No-op while already running or disabled. */
   async function auto(): Promise<void> {
     if (_running.value || !_enabled.value) return
     _running.value = true
+    _runBudget = RUN_REQUEST_BUDGET
+    _rateLimited = false
     try {
       for (const r of candidates()) {
+        if (runExhausted()) break
         try {
           await seedRepo(r)
-        } catch {
+        } catch (e) {
+          if (isForgeRateLimit(e)) _rateLimited = true
           /* keep whatever is already cached; skip to the next repo */
         }
       }
@@ -315,6 +384,9 @@ export function useOfflineRepos() {
 
   /** Keep `repo` offline from now on and seed it immediately. */
   async function makeAvailable(repo: RepoRef): Promise<void> {
+    if (!isCacheable(repo)) {
+      throw new Error('Private repositories are never stored offline.')
+    }
     if (!_pinned.value.some((p) => keyOf(p) === keyOf(repo))) {
       _pinned.value = [..._pinned.value, repo]
       persist()
@@ -367,13 +439,15 @@ export function useOfflineRepos() {
  */
 async function evictExcess(): Promise<void> {
   if (!import.meta.client) return
-  const pinnedSet = new Set(_pinned.value.map(keyOf))
   const watchedSet = new Set<string>()
   for (const k of _watched.value) {
     const [, provider, owner, name] = k.split(':')
     if (provider && owner && name) watchedSet.add(`${provider}/${owner}/${name}`)
   }
-  const protectedRefs = new Set([...pinnedSet, ...watchedSet])
+  // Never protect a private repo: if legacy data for one exists (pinned before
+  // the public-only rule), it is an eviction candidate so it gets cleaned up.
+  const cacheableProtected = _pinned.value.filter(isCacheable).map(keyOf)
+  const protectedRefs = new Set([...cacheableProtected, ...watchedSet])
 
   // Attribute every stored cache key to the repository (provider/owner/name)
   // it belongs to. Repo keys look like `<kind>:<provider>:<owner>:<name>[:<rest>]`.

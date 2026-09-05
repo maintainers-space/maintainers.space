@@ -73,10 +73,13 @@ export function useHomeFeed() {
       // behaviour: when a copy is already stored it renders instantly, and the
       // fetcher only runs (painting slices) when a fresh fetch is needed.
       const streamAndAggregate = async (): Promise<ForgeMyWork> => {
-        // Accumulate each forge's slice into a running aggregate and paint the
-        // merged result, so a later-resolving forge never clobbers earlier ones,
-        // and a failing forge keeps the feed showing what already arrived.
-        const acc: ForgeMyWork = { authoredPulls: [], reviewRequests: [], assignedIssues: [] }
+        // Start from what is already on screen so a revalidation paint never
+        // shrinks an already-rendered feed while slower forges resolve.
+        const acc: ForgeMyWork = {
+          authoredPulls: [...myPulls.value],
+          reviewRequests: [...reviewRequests.value],
+          assignedIssues: [...assignedIssues.value]
+        }
         const merge = (p: ForgeMyWork): void => {
           acc.authoredPulls = concatWork(acc.authoredPulls, p.authoredPulls)
           acc.reviewRequests = concatWork(acc.reviewRequests, p.reviewRequests)

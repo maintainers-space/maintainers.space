@@ -14,7 +14,8 @@ const HEALTH: Record<string, { order: number; label: string; icon: string }> = {
   code_of_conduct: { order: 3, label: 'Code of conduct', icon: 'i-lucide-scale' },
   support: { order: 4, label: 'Support', icon: 'i-lucide-life-buoy' },
   license: { order: 5, label: 'License', icon: 'i-lucide-scroll-text' },
-  changelog: { order: 6, label: 'Changelog', icon: 'i-lucide-history' }
+  changelog: { order: 6, label: 'Changelog', icon: 'i-lucide-history' },
+  governance: { order: 7, label: 'Governance', icon: 'i-lucide-landmark' }
 }
 
 function healthKey(fileName: string): string | null {
@@ -26,7 +27,8 @@ function healthKey(fileName: string): string | null {
   if (base === 'contributing') return 'contributing'
   if (base === 'security') return 'security'
   if (base === 'code_of_conduct') return 'code_of_conduct'
-  if (base === 'support' || base === 'governance') return 'support'
+  if (base === 'support') return 'support'
+  if (base === 'governance') return 'governance'
   if (base === 'license' || base === 'licence' || base === 'copying') return 'license'
   if (base === 'changelog' || base === 'changes' || base === 'history') return 'changelog'
   return null

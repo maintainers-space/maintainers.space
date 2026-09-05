@@ -39,7 +39,8 @@ async function onMakeUnavailable(entry: RepoRef) {
         Keep the repositories and pages you care about readable without an internet connection.
         Frequently-visited repos — plus the issues, pull requests and discussions you've opened or
         participated in — are cached on this device, along with the repo's open issue/PR/discussion
-        lists. Only public, read-only data is stored; never tokens or private information.
+        lists. Only public, read-only data is stored — private repositories are never cached — and
+        never tokens.
       </p>
     </div>
 

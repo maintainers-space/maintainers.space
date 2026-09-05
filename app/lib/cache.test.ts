@@ -40,7 +40,7 @@ describe('prefetch', () => {
     const failing = vi.fn(async () => {
       throw new Error('network down')
     })
-    expect(async () => await prefetch('repo-code:a:b', failing)).rejects.toThrow('network down')
+    await expect(prefetch('repo-code:a:b', failing)).rejects.toThrow('network down')
     // The in-flight entry that `cached` leaves behind on rejection must not be
     // mistaken for a stored value, so a later prefetch retries the fetch.
     const ok = vi.fn(async () => ({ id: 1 }))

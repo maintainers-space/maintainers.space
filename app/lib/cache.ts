@@ -156,6 +156,9 @@ export async function prefetch<T>(
   }
   if (!opts.force) {
     const mem = store.get(key)
+    // Join a concurrent seed instead of starting a second request (boot-time
+    // auto() and a user-triggered makeAvailable() can race on the same key).
+    if (mem?.pending !== undefined) return mem.pending as Promise<T>
     if (mem?.value !== undefined) return mem.value as T
     // IndexedDB stores the envelope `{ value, fresh, dead }` (see persistable),
     // so unwrap `.value` before returning it to callers.
