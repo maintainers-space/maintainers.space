@@ -6,6 +6,11 @@ function byRecent(a: ForgeIssue, b: ForgeIssue): number {
   return new Date(b.updatedAt ?? 0).getTime() - new Date(a.updatedAt ?? 0).getTime()
 }
 
+/** Concatenate two lists and sort newest-first (used by the streaming merge). */
+function concatWork(a: ForgeIssue[], b: ForgeIssue[]): ForgeIssue[] {
+  return [...a, ...b].sort(byRecent)
+}
+
 /**
  * Actionable "what should I work on next" feed for the signed-in home page.
  * Pools every connected forge (GitHub, GitLab, …) via each provider's
@@ -42,6 +47,21 @@ export function useHomeFeed() {
     assignedIssues.value = [...work.assignedIssues].sort(byRecent)
   }
 
+  /**
+   * Anything you participated in is kept offline along with its repo, even if
+   * you never opened the detail page — this is the "participated/watched" set.
+   * Called once per load (after the aggregate is final), not per streamed slice,
+   * so watchDetail isn't doing hundreds of localStorage writes per slice.
+   */
+  function recordWatched(work: ForgeMyWork): void {
+    const offline = useOfflineRepos()
+    const items = [...work.authoredPulls, ...work.reviewRequests, ...work.assignedIssues]
+    for (const it of items) {
+      if (!it.repo?.owner || !it.repo?.name) continue
+      offline.watch(it.isPull ? 'pull' : 'issue', it.provider, it.repo.owner, it.repo.name, it.id)
+    }
+  }
+
   async function load(force = false): Promise<void> {
     const active = workForges()
     if (!active.length) {
@@ -54,35 +74,69 @@ export function useHomeFeed() {
       .sort()
       .join(',')}`
     try {
-      const work = await cached(
-        key,
-        async () => {
-          const parts = await Promise.all(
-            active.map((f) =>
-              f.listMyWork!(
-                f.id === 'tangled' ? { viewer: tangledSelf() } : { token: getToken(f.id) }
-              ).catch(
-                () =>
-                  ({
-                    authoredPulls: [],
-                    reviewRequests: [],
-                    assignedIssues: []
-                  }) as ForgeMyWork
-              )
+      // Stream: paint each forge's slice the moment it resolves so the first
+      // data shows immediately and the rest fills in as it arrives. Passing the
+      // streaming aggregator straight to `cached` keeps the offline/warm-cache
+      // behaviour: when a copy is already stored it renders instantly, and the
+      // fetcher only runs (painting slices) when a fresh fetch is needed.
+      const streamAndAggregate = async (): Promise<ForgeMyWork> => {
+        // Track the newest slice per provider, seeded from what is already on
+        // screen (so a revalidation never shrinks the rendered feed) by grouping
+        // the current items by provider.
+        const slices = new Map<string, ForgeMyWork>()
+        const seedSlice = (p: string, kind: keyof ForgeMyWork, items: ForgeIssue[]): void => {
+          if (!items.length) return
+          const entry = slices.get(p) ?? {
+            authoredPulls: [],
+            reviewRequests: [],
+            assignedIssues: []
+          }
+          ;(entry[kind] as ForgeIssue[]).push(...items)
+          slices.set(p, entry)
+        }
+        // Seed each bucket from what is already on screen, grouped by provider.
+        for (const it of myPulls.value) seedSlice(it.provider, 'authoredPulls', [it])
+        for (const it of reviewRequests.value) seedSlice(it.provider, 'reviewRequests', [it])
+        for (const it of assignedIssues.value) seedSlice(it.provider, 'assignedIssues', [it])
+
+        const mergeAll = (): ForgeMyWork => {
+          const acc: ForgeMyWork = { authoredPulls: [], reviewRequests: [], assignedIssues: [] }
+          for (const p of slices.values()) {
+            acc.authoredPulls = concatWork(acc.authoredPulls, p.authoredPulls)
+            acc.reviewRequests = concatWork(acc.reviewRequests, p.reviewRequests)
+            acc.assignedIssues = concatWork(acc.assignedIssues, p.assignedIssues)
+          }
+          return acc
+        }
+        const empty: ForgeMyWork = { authoredPulls: [], reviewRequests: [], assignedIssues: [] }
+        await Promise.all(
+          active.map((f) =>
+            f.listMyWork!(
+              f.id === 'tangled' ? { viewer: tangledSelf() } : { token: getToken(f.id) }
             )
+              .then((work) => {
+                // Replace this provider's slice — never concatenate — so a force
+                // refresh doesn't duplicate items that were already on screen.
+                slices.set(f.id, work)
+                apply(mergeAll())
+                return work
+              })
+              .catch(() => {
+                slices.set(f.id, empty)
+                apply(mergeAll())
+                return empty
+              })
           )
-          return parts.reduce<ForgeMyWork>(
-            (acc, p) => ({
-              authoredPulls: acc.authoredPulls.concat(p.authoredPulls),
-              reviewRequests: acc.reviewRequests.concat(p.reviewRequests),
-              assignedIssues: acc.assignedIssues.concat(p.assignedIssues)
-            }),
-            { authoredPulls: [], reviewRequests: [], assignedIssues: [] }
-          )
-        },
-        { ttl: TTL.SHORT, force, onRevalidate: apply }
-      )
+        )
+        return mergeAll()
+      }
+      const work = await cached(key, streamAndAggregate, {
+        ttl: TTL.SHORT,
+        force,
+        onRevalidate: apply
+      })
       apply(work)
+      recordWatched(work)
     } finally {
       loading.value = false
       loaded.value = true

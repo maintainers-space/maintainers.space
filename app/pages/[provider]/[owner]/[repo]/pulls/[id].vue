@@ -9,8 +9,21 @@ const base = computed(() =>
 )
 const id = computed(() => String(route.params.id))
 
+const watchItem = useOfflineRepos().watch
+const itemKey = computed(() => `pull:${provider.value}:${owner.value}:${name.value}:${id.value}`)
+
+// Any pull you open is remembered so it can be kept offline once its repo is.
+watch(
+  itemKey,
+  (k) => {
+    const [, , , , iid] = k.split(':')
+    if (iid) watchItem('pull', provider.value, owner.value, name.value, iid)
+  },
+  { immediate: true }
+)
+
 const { data, pending, error, refresh } = useLiveAsyncData<ForgePullDetail | null>(
-  () => `pull:${provider.value}:${owner.value}:${name.value}:${id.value}`,
+  () => itemKey.value,
   async () => {
     if (!forge.value?.getPull) return null
     return await forge.value.getPull(locator.value, id.value)

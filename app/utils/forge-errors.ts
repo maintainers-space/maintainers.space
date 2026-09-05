@@ -16,6 +16,14 @@ function headersOf(e: unknown): Headers | undefined {
   return (e as { response?: { headers?: Headers } })?.response?.headers
 }
 
+/** True when `e` is a forge rate-limit response (429, or a 403 whose body says "rate limit"). */
+export function isForgeRateLimit(e: unknown): boolean {
+  const raw =
+    (e as { data?: { message?: string }; message?: string })?.data?.message ??
+    (e as { message?: string })?.message
+  return statusOf(e) === 429 || (statusOf(e) === 403 && !!raw && RATE_LIMIT_MESSAGE.test(raw))
+}
+
 /** Minutes from now until a rate limit resets, from whichever header the forge sent. */
 function minutesUntilReset(headers: Headers | undefined): number | undefined {
   if (!headers) return undefined

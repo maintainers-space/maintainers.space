@@ -9,8 +9,21 @@ const base = computed(() =>
 )
 const id = computed(() => String(route.params.id))
 
+const watchItem = useOfflineRepos().watch
+const itemKey = computed(() => `issue:${provider.value}:${owner.value}:${name.value}:${id.value}`)
+
+// Any issue you open is remembered so it can be kept offline once its repo is.
+watch(
+  itemKey,
+  (k) => {
+    const [, , , , iid] = k.split(':')
+    if (iid) watchItem('issue', provider.value, owner.value, name.value, iid)
+  },
+  { immediate: true }
+)
+
 const { data, pending, error } = useLiveAsyncData<ForgeIssueDetail | null>(
-  () => `issue:${provider.value}:${owner.value}:${name.value}:${id.value}`,
+  () => itemKey.value,
   async () => {
     if (!forge.value?.getIssue) return null
     return await forge.value.getIssue(locator.value, id.value)

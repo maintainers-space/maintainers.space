@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { describeForgeError } from './forge-errors'
+import { describeForgeError, isForgeRateLimit } from './forge-errors'
 
 function fetchError(status: number, message: string, headers: Record<string, string> = {}) {
   return {
@@ -76,5 +76,21 @@ describe('describeForgeError', () => {
       const hint = describeForgeError(fetchError(429, ''))
       expect(hint.description).toContain('try again shortly')
     })
+  })
+})
+
+describe('isForgeRateLimit', () => {
+  it('returns true for a 429', () => {
+    expect(isForgeRateLimit(fetchError(429, ''))).toBe(true)
+  })
+
+  it('returns true for a 403 whose body mentions the rate limit', () => {
+    expect(isForgeRateLimit(fetchError(403, 'API rate limit exceeded'))).toBe(true)
+  })
+
+  it('returns false for a plain 403 or other errors', () => {
+    expect(isForgeRateLimit(fetchError(403, 'Resource not accessible'))).toBe(false)
+    expect(isForgeRateLimit(fetchError(500, 'boom'))).toBe(false)
+    expect(isForgeRateLimit(new Error('network down'))).toBe(false)
   })
 })
