@@ -73,18 +73,33 @@ export function useHomeFeed() {
       // behaviour: when a copy is already stored it renders instantly, and the
       // fetcher only runs (painting slices) when a fresh fetch is needed.
       const streamAndAggregate = async (): Promise<ForgeMyWork> => {
-        // Start from what is already on screen so a revalidation paint never
-        // shrinks an already-rendered feed while slower forges resolve.
-        const acc: ForgeMyWork = {
-          authoredPulls: [...myPulls.value],
-          reviewRequests: [...reviewRequests.value],
-          assignedIssues: [...assignedIssues.value]
+        // Track the newest slice per provider, seeded from what is already on
+        // screen (so a revalidation never shrinks the rendered feed) by grouping
+        // the current items by provider.
+        const slices = new Map<string, ForgeMyWork>()
+        const seedSlice = (p: string, kind: keyof ForgeMyWork, items: ForgeIssue[]): void => {
+          if (!items.length) return
+          const entry = slices.get(p) ?? {
+            authoredPulls: [],
+            reviewRequests: [],
+            assignedIssues: []
+          }
+          ;(entry[kind] as ForgeIssue[]).push(...items)
+          slices.set(p, entry)
         }
-        const merge = (p: ForgeMyWork): void => {
-          acc.authoredPulls = concatWork(acc.authoredPulls, p.authoredPulls)
-          acc.reviewRequests = concatWork(acc.reviewRequests, p.reviewRequests)
-          acc.assignedIssues = concatWork(acc.assignedIssues, p.assignedIssues)
-          apply(acc)
+        // Seed each bucket from what is already on screen, grouped by provider.
+        for (const it of myPulls.value) seedSlice(it.provider, 'authoredPulls', [it])
+        for (const it of reviewRequests.value) seedSlice(it.provider, 'reviewRequests', [it])
+        for (const it of assignedIssues.value) seedSlice(it.provider, 'assignedIssues', [it])
+
+        const mergeAll = (): ForgeMyWork => {
+          const acc: ForgeMyWork = { authoredPulls: [], reviewRequests: [], assignedIssues: [] }
+          for (const p of slices.values()) {
+            acc.authoredPulls = concatWork(acc.authoredPulls, p.authoredPulls)
+            acc.reviewRequests = concatWork(acc.reviewRequests, p.reviewRequests)
+            acc.assignedIssues = concatWork(acc.assignedIssues, p.assignedIssues)
+          }
+          return acc
         }
         const empty: ForgeMyWork = { authoredPulls: [], reviewRequests: [], assignedIssues: [] }
         await Promise.all(
@@ -93,13 +108,20 @@ export function useHomeFeed() {
               f.id === 'tangled' ? { viewer: tangledSelf() } : { token: getToken(f.id) }
             )
               .then((work) => {
-                merge(work)
+                // Replace this provider's slice — never concatenate — so a force
+                // refresh doesn't duplicate items that were already on screen.
+                slices.set(f.id, work)
+                apply(mergeAll())
                 return work
               })
-              .catch(() => empty)
+              .catch(() => {
+                slices.set(f.id, empty)
+                apply(mergeAll())
+                return empty
+              })
           )
         )
-        return acc
+        return mergeAll()
       }
       const work = await cached(key, streamAndAggregate, {
         ttl: TTL.SHORT,

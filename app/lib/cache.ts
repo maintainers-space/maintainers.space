@@ -143,6 +143,11 @@ export interface PrefetchOptions {
  * cached}'s in-flight promise when two callers race to seed the same key.
  * Returns the stored value if present, or the freshly-fetched one.
  */
+/** Unwrap the IndexedDB envelope (`{ value, fresh, dead }`) or return undefined. */
+function persistedValue<T>(p: Omit<Entry<T>, 'pending'> | undefined): T | undefined {
+  return p?.value
+}
+
 export async function prefetch<T>(
   key: string,
   fetcher: () => Promise<T>,
@@ -151,24 +156,39 @@ export async function prefetch<T>(
   if (isOffline()) {
     const mem = store.get(key)
     if (mem?.value !== undefined) return mem.value as T
-    const persisted = await idbGet<Omit<Entry<T>, 'pending'>>(key)
-    return persisted?.value
+    return persistedValue(await idbGet<Omit<Entry<T>, 'pending'>>(key))
   }
-  if (!opts.force) {
-    const mem = store.get(key)
-    // Join a concurrent seed instead of starting a second request (boot-time
-    // auto() and a user-triggered makeAvailable() can race on the same key).
-    if (mem?.pending !== undefined) return mem.pending as Promise<T>
-    if (mem?.value !== undefined) return mem.value as T
-    // IndexedDB stores the envelope `{ value, fresh, dead }` (see persistable),
-    // so unwrap `.value` before returning it to callers.
-    const persisted = await idbGet<Omit<Entry<T>, 'pending'>>(key)
-    if (persisted?.value !== undefined) {
-      store.set(key, persisted as unknown as Entry<T>)
-      return persisted.value
-    }
+
+  const mem = store.get(key)
+  // Join a concurrent seed instead of starting a second request (boot-time
+  // auto() and a user-triggered makeAvailable() can race on the same key).
+  if (mem?.pending !== undefined) return mem.pending as Promise<T>
+  if (!opts.force && mem?.value !== undefined) return mem.value as T
+
+  // IndexedDB stores the envelope `{ value, fresh, dead }` (see persistable).
+  const persisted = await idbGet<Omit<Entry<T>, 'pending'>>(key)
+  if (!opts.force && persisted?.value !== undefined) {
+    store.set(key, persisted as unknown as Entry<T>)
+    return persisted.value
   }
-  return await cached(key, fetcher, { force: true })
+
+  // A concurrent prefetch may have recorded its pending promise while we awaited
+  // IndexedDB above — join it rather than starting a duplicate fetch.
+  const afterHydrate = store.get(key)
+  if (afterHydrate?.pending !== undefined) return afterHydrate.pending as Promise<T>
+  if (!opts.force && afterHydrate?.value !== undefined) return afterHydrate.value as T
+
+  // Record our in-flight promise before it settles so a second concurrent
+  // prefetch for the same key joins this one instead of fetching again.
+  const inflight = cached(key, fetcher, { force: true })
+  const marker: Entry<T> = {
+    value: undefined as unknown as T,
+    fresh: 0,
+    dead: 0,
+    pending: inflight
+  }
+  store.set(key, marker)
+  return await inflight
 }
 
 /** True when `key` has a real value in memory (a failed fetch leaves a valueless entry). */
@@ -176,7 +196,6 @@ function hasValue(key: string): boolean {
   const e = store.get(key)
   return e !== undefined && e.value !== undefined
 }
-
 /** Whether an entry exists for `key` in memory or IndexedDB (offline readable). */
 export async function cacheExists(key: string): Promise<boolean> {
   if (hasValue(key)) return true

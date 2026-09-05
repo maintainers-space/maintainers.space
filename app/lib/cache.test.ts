@@ -58,6 +58,23 @@ describe('prefetch', () => {
     // A warm prefetch returns the stored value, not an IndexedDB `{value, fresh, dead}` wrapper.
     expect(found).toEqual({ defaultBranch: 'main' })
   })
+
+  it('joins a concurrent cold prefetch instead of fetching twice', async () => {
+    // Both calls start with no stored value and await IndexedDB (undefined in
+    // the test env) before either records pending; single-flight must still
+    // issue the fetch exactly once.
+    let resolve!: (v: { id: number }) => void
+    const gate = new Promise<{ id: number }>((r) => (resolve = r))
+    const fetcher = vi.fn(() => gate)
+    const a = prefetch('repo-meta:single-flight', fetcher)
+    const b = prefetch('repo-meta:single-flight', fetcher)
+    // Let both calls hydrate from IndexedDB and reach the fetcher gate.
+    await new Promise((r) => setTimeout(r, 0))
+    resolve({ id: 1 })
+    expect(await a).toEqual({ id: 1 })
+    expect(await b).toEqual({ id: 1 })
+    expect(fetcher).toHaveBeenCalledTimes(1)
+  })
 })
 
 describe('invalidate', () => {

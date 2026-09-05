@@ -407,6 +407,81 @@ export function useOfflineRepos() {
     )
   }
 
+  /**
+   * Bound the offline store to `maxCount` *repositories* (by metadata entries).
+   * Pinned repos and repos the user has watched items in are never evicted; among
+   * the remaining auto-kept repos, the whole repo (metadata + landing + any item
+   * pages) is dropped one at a time until under the cap. Because we drop in a
+   * deterministic but storage-bounded order and only when over the cap — never by
+   * age — repos this user rarely visits stay offline for a long time, which is
+   * the point: auto-clean happens only when storage would otherwise grow unbounded.
+   */
+  async function evictExcess(): Promise<void> {
+    if (!import.meta.client) return
+    // Never protect a private repo: if legacy data for one exists (pinned before
+    // the public-only rule), it is an eviction candidate so it gets cleaned up.
+    const cacheableProtected = _pinned.value.filter(isCacheable).map(keyOf)
+    // Watch protection mirrors the *capped* candidate set (`candidates()` keeps at
+    // most `maxCount` watched repos), so lowering maxCount actually shrinks the
+    // store instead of leaving old watched repos permanently protected.
+    const cappedWatched = candidates()
+      .map(keyOf)
+      .filter((r) => !cacheableProtected.includes(r))
+    const protectedRefs = new Set([...cacheableProtected, ...cappedWatched])
+
+    // Attribute every stored cache key to the repository (provider/owner/name)
+    // it belongs to. Repo keys look like `<kind>:<provider>:<owner>:<name>[:<rest>]`.
+    const repos = new Map<string, string[]>()
+    const addTo = (kindLen: number, key: string): void => {
+      const rest = key.slice(kindLen)
+      const [provider, owner, name] = rest.split(':')
+      if (!provider || !owner || !name) return
+      const ref = `${provider}/${owner}/${name}`
+      if (!repos.has(ref)) repos.set(ref, [])
+      repos.get(ref)!.push(key)
+    }
+    for (const key of await idbKeys()) {
+      if (key.startsWith('repo-meta:')) addTo('repo-meta:'.length, key)
+      else if (key.startsWith('repo-code:')) addTo('repo-code:'.length, key)
+      else if (key.startsWith('issue:')) addTo('issue:'.length, key)
+      else if (key.startsWith('pull:')) addTo('pull:'.length, key)
+      else if (key.startsWith('discussion:')) addTo('discussion:'.length, key)
+      else if (key.startsWith('issues:')) addTo('issues:'.length, key)
+      else if (key.startsWith('pulls:')) addTo('pulls:'.length, key)
+      else if (key.startsWith('discussions:')) addTo('discussions:'.length, key)
+      else if (key.startsWith('actions:')) addTo('actions:'.length, key)
+      else if (key.startsWith('commits:')) addTo('commits:'.length, key)
+      else if (key.startsWith('commit:')) addTo('commit:'.length, key)
+      else if (key.startsWith('tree:')) addTo('tree:'.length, key)
+      else if (key.startsWith('blob:')) addTo('blob:'.length, key)
+    }
+
+    const evictionCandidates = [...repos.entries()].filter(([ref]) => !protectedRefs.has(ref))
+    // Only protected refs that are actually stored count toward capacity; a
+    // pinned/watched repo with no cached data yet must not inflate the rear-side
+    // budget and make us evict a stored repo it no longer fits.
+    const storedProtected = [...repos.keys()].filter((r) => protectedRefs.has(r))
+    let over = evictionCandidates.length - Math.max(0, _maxCount.value - storedProtected.length)
+    if (over <= 0) return
+    // Evict least-favoured first: idbKeys() returns cursor order (arbitrary), so
+    // rely on the repo-visit ranking rather than key order to decide what to drop.
+    const { favourites } = useRepoVisits()
+    const rank = new Map<string, number>()
+    favourites.value.forEach((v, i) => rank.set(keyOf(v), i))
+    evictionCandidates.sort(
+      (a, b) =>
+        (rank.get(b[0]) ?? Number.MAX_SAFE_INTEGER) - (rank.get(a[0]) ?? Number.MAX_SAFE_INTEGER)
+    )
+    // Drop whole repos (metadata + landing + item pages) until under the cap.
+    // Purely storage-bounded and never age-based, so infrequently-visited repos
+    // stay offline for as long as they fit.
+    for (const [, owned] of evictionCandidates) {
+      if (over <= 0) break
+      for (const k of owned) invalidate(k)
+      over--
+    }
+  }
+
   const settings = computed<OfflineRepoSettings>(() => ({
     enabled: _enabled.value,
     maxCount: _maxCount.value,
@@ -425,79 +500,5 @@ export function useOfflineRepos() {
     isAvailable,
     /** Record a detail page the user opened so its repo keeps it offline (see watchDetail). */
     watch: watchDetail
-  }
-}
-
-/**
- * Bound the offline store to `maxCount` *repositories* (by metadata entries).
- * Pinned repos and repos the user has watched items in are never evicted; among
- * the remaining auto-kept repos, the whole repo (metadata + landing + any item
- * pages) is dropped one at a time until under the cap. Because we drop in a
- * deterministic but storage-bounded order and only when over the cap — never by
- * age — repos this user rarely visits stay offline for a long time, which is
- * the point: auto-clean happens only when storage would otherwise grow unbounded.
- */
-async function evictExcess(): Promise<void> {
-  if (!import.meta.client) return
-  const watchedSet = new Set<string>()
-  for (const k of _watched.value) {
-    const [, provider, owner, name] = k.split(':')
-    if (provider && owner && name) watchedSet.add(`${provider}/${owner}/${name}`)
-  }
-  // Never protect a private repo: if legacy data for one exists (pinned before
-  // the public-only rule), it is an eviction candidate so it gets cleaned up.
-  const cacheableProtected = _pinned.value.filter(isCacheable).map(keyOf)
-  const protectedRefs = new Set([...cacheableProtected, ...watchedSet])
-
-  // Attribute every stored cache key to the repository (provider/owner/name)
-  // it belongs to. Repo keys look like `<kind>:<provider>:<owner>:<name>[:<rest>]`.
-  const repos = new Map<string, string[]>()
-  const addTo = (kindLen: number, key: string): void => {
-    const rest = key.slice(kindLen)
-    const [provider, owner, name] = rest.split(':')
-    if (!provider || !owner || !name) return
-    const ref = `${provider}/${owner}/${name}`
-    if (!repos.has(ref)) repos.set(ref, [])
-    repos.get(ref)!.push(key)
-  }
-  for (const key of await idbKeys()) {
-    if (key.startsWith('repo-meta:')) addTo('repo-meta:'.length, key)
-    else if (key.startsWith('repo-code:')) addTo('repo-code:'.length, key)
-    else if (key.startsWith('issue:')) addTo('issue:'.length, key)
-    else if (key.startsWith('pull:')) addTo('pull:'.length, key)
-    else if (key.startsWith('discussion:')) addTo('discussion:'.length, key)
-    else if (key.startsWith('issues:')) addTo('issues:'.length, key)
-    else if (key.startsWith('pulls:')) addTo('pulls:'.length, key)
-    else if (key.startsWith('discussions:')) addTo('discussions:'.length, key)
-    else if (key.startsWith('actions:')) addTo('actions:'.length, key)
-    else if (key.startsWith('commits:')) addTo('commits:'.length, key)
-    else if (key.startsWith('commit:')) addTo('commit:'.length, key)
-    else if (key.startsWith('tree:')) addTo('tree:'.length, key)
-    else if (key.startsWith('blob:')) addTo('blob:'.length, key)
-  }
-
-  const candidates = [...repos.entries()].filter(([ref]) => !protectedRefs.has(ref))
-  // Only protected refs that are actually stored count toward capacity; a
-  // pinned/watched repo with no cached data yet must not inflate the rear-side
-  // budget and make us evict a stored repo it no longer fits.
-  const storedProtected = [...repos.keys()].filter((r) => protectedRefs.has(r))
-  let over = candidates.length - Math.max(0, _maxCount.value - storedProtected.length)
-  if (over <= 0) return
-  // Evict least-favoured first: idbKeys() returns cursor order (arbitrary), so
-  // rely on the repo-visit ranking rather than key order to decide what to drop.
-  const { favourites } = useRepoVisits()
-  const rank = new Map<string, number>()
-  favourites.value.forEach((v, i) => rank.set(keyOf(v), i))
-  candidates.sort(
-    (a, b) =>
-      (rank.get(a[0]) ?? Number.MAX_SAFE_INTEGER) - (rank.get(b[0]) ?? Number.MAX_SAFE_INTEGER)
-  )
-  // Drop whole repos (metadata + landing + item pages) until under the cap.
-  // Purely storage-bounded and never age-based, so infrequently-visited repos
-  // stay offline for as long as they fit.
-  for (const [, owned] of candidates) {
-    if (over <= 0) break
-    for (const k of owned) invalidate(k)
-    over--
   }
 }
