@@ -40,7 +40,7 @@ The pre-commit hook uses the dependency-free `nano-staged` runner to format and 
 
 `main` is the development branch. Release-relevant pull requests add a Changesets v3 entry with `pnpm changeset`; GitHub-linked changelog entries are accumulated there until a release is ready.
 
-After changes land on `main`, Changesets Action v2 creates or updates a semantic version pull request. Merging it records the version and GitHub-linked changelog on `main`; automation then tags it with `vX.Y.Z`, drafts a GitHub release and fast-forwards the `release` branch to that exact release commit, so `release` history stays identical to `main`. Production should deploy only from `release`.
+After changes land on `main`, Changesets Action v2 creates or updates a semantic version pull request. Merging it records the version and GitHub-linked changelog on `main`; Changesets then creates and pushes the `vX.Y.Z` tag and publishes the GitHub release, and the workflow fast-forwards the `release` branch to that exact release commit, so `release` history stays identical to `main`. Production should deploy only from `release`.
 
 Protect both branches with the required quality, CodeQL, dependency-review, semantic-title and zizmor checks. Repository Actions settings must allow GitHub Actions to create pull requests so the release workflow can maintain its PR. The local `commit-msg` hook rejects non-Conventional Commit messages; squash merging preserves the validated semantic PR title.
 
