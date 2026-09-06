@@ -1,29 +1,3 @@
-const codenames = [
-  'Alpheratz',
-  'Caph',
-  'Diphda',
-  'Errai',
-  'Furud',
-  'Gacrux',
-  'Hamal',
-  'Izar',
-  'Jabbah',
-  'Keid',
-  'Lesath',
-  'Menkar',
-  'Nashira',
-  'Okul',
-  'Pherkad',
-  'Rasalhague',
-  'Sadr',
-  'Talitha',
-  'Unukalhai',
-  'Vindemiatrix',
-  'Wasat',
-  'Yed Prior',
-  'Zaniah'
-]
-
 function parseSemanticVersion(version) {
   const match =
     /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/.exec(
@@ -47,18 +21,6 @@ function parseSemanticVersion(version) {
     patch: Number(match[3]),
     prerelease
   }
-}
-
-export function codenameForVersion(version) {
-  const { major, minor } = parseSemanticVersion(version)
-  const index = (major * 31 + minor - 1) % codenames.length
-  return codenames.at(index)
-}
-
-export function isMinorRelease(previousVersion, nextVersion) {
-  const previous = parseSemanticVersion(previousVersion)
-  const next = parseSemanticVersion(nextVersion)
-  return next.major === previous.major && next.minor > previous.minor
 }
 
 export function isVersionPromotion(previousVersion, nextVersion) {

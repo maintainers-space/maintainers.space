@@ -13,13 +13,13 @@ concurrency:
 permissions: {}
 
 jobs:
-  version:
-    name: 🚀 Prepare release
+  release:
+    name: 🚀 Prepare release, tag and advance release branch
     if: github.repository == 'maintainers-space/maintainers.space'
     runs-on: ubuntu-latest
     permissions:
-      contents: write # create the signed release commit and update its branch
-      pull-requests: write # create or update the manually approved release PR
+      contents: write # create the release commit/branch, the version tag + GitHub release, and fast-forward the release branch
+      pull-requests: write # create or update the version release PR
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -42,7 +42,6 @@ jobs:
         uses: changesets/action@8488615a623b1b9c987934bb89eae8af6a946ac1 # v2.1.1
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          version-script: pnpm run release:version
           commit-message: 'chore: version release'
           pr-title: 'chore: release next version'
           pr-base-branch: main
@@ -57,3 +56,57 @@ jobs:
         run: |
           VERSION=$(node -p "require('./package.json').version")
           gh pr edit "$PR_NUMBER" --title "chore: release v${VERSION}"
+
+      # The changesets action output is reused here: when a version PR was
+      # created or updated, pr-number is set and no release happens yet. When it
+      # is empty, this push is the merge of the version PR (or a plain push), so
+      # we check whether CHANGELOG.md actually changed and only then tag, release
+      # and advance the release branch.
+      - name: Detect release commit
+        id: detect
+        if: steps.release.outputs.pr-number == ''
+        env:
+          PREVIOUS_COMMIT: ${{ github.event.before }}
+        run: |
+          if [ -z "$PREVIOUS_COMMIT" ] || [ "$PREVIOUS_COMMIT" = "0000000000000000000000000000000000000000" ]; then
+            echo "released=false"
+          elif git diff --name-only "$PREVIOUS_COMMIT" "$GITHUB_SHA" | grep -q '^CHANGELOG.md$'; then
+            echo "released=true"
+          else
+            echo "released=false"
+          fi
+
+      - name: Verify versioned release
+        if: steps.detect.outputs.released == 'true'
+        env:
+          PREVIOUS_COMMIT: ${{ github.event.before }}
+        run: node scripts/verify-release-promotion.mjs "$PREVIOUS_COMMIT"
+
+      - name: Create git tag and GitHub release
+        if: steps.detect.outputs.released == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          TAG="v${VERSION}"
+
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release ${TAG} already exists; skipping tag and release creation"
+          else
+            gh release create "$TAG" \
+              --target "$GITHUB_SHA" \
+              --title "$TAG" \
+              --generate-notes
+          fi
+
+      - name: Advance release branch to the released commit
+        if: steps.detect.outputs.released == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Fast-forward the release branch to the exact release commit so its
+          # history stays identical to main. force=false only permits a
+          # fast-forward, so any divergence on release surfaces loudly.
+          gh api --method PATCH "repos/{owner}/{repo}/git/refs/heads/release" \
+            -f sha="$GITHUB_SHA" \
+            -f force=false

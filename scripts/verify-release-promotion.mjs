@@ -1,7 +1,7 @@
 import { execFileSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 
-import { isVersionPromotion } from './release-codename.mjs'
+import { isVersionPromotion } from './release-version.mjs'
 
 const previousCommit = process.argv[2]
 if (!/^[0-9a-f]{40}$/.test(previousCommit)) {
