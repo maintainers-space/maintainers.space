@@ -46,8 +46,6 @@ jobs:
           commit-message: 'chore: version release'
           pr-title: 'chore: release next version'
           pr-base-branch: main
-          create-github-releases: true
-          push-git-tags: true
 
       - name: Set semantic release title
         if: steps.changesets.outputs.pr-number != ''
