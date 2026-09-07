@@ -65,4 +65,4 @@ jobs:
         run: |
           gh api --method PATCH "repos/{owner}/{repo}/git/refs/heads/release" \
             -f sha="$GITHUB_SHA" \
-            -f force=false
+            -F 'force=false'
