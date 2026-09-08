@@ -45,17 +45,15 @@ export function tangledUser(did: string): ForgeUser {
 
 export function mapTreeFiles(tree: TangledTree, basePath = ''): ForgeTreeEntry[] {
   return (tree.files ?? [])
-    .map(
-      (f): ForgeTreeEntry => ({
-        name: f.name,
-        path: basePath ? `${basePath}/${f.name}` : f.name,
-        type: isDirMode(f.mode) ? 'dir' : 'file',
-        size: f.size,
-        lastCommit: f.last_commit
-          ? { message: f.last_commit.message, when: f.last_commit.when, hash: f.last_commit.hash }
-          : undefined
-      })
-    )
+    .map((f): ForgeTreeEntry => ({
+      name: f.name,
+      path: basePath ? `${basePath}/${f.name}` : f.name,
+      type: isDirMode(f.mode) ? 'dir' : 'file',
+      size: f.size,
+      lastCommit: f.last_commit
+        ? { message: f.last_commit.message, when: f.last_commit.when, hash: f.last_commit.hash }
+        : undefined
+    }))
     .sort(sortEntries)
 }
 
@@ -158,16 +156,14 @@ export function mapPipeline(p: TangledPipeline): ForgeActionRun {
     branch,
     commitSha: p.commit ?? null,
     createdAt: p.createdAt ?? null,
-    jobs: (p.workflows ?? []).map(
-      (w): ForgeActionJob => ({
-        id: w.id || w.name || '',
-        name: w.name || w.id || 'workflow',
-        status: ciStatus(w.status),
-        startedAt: w.startedAt ?? null,
-        completedAt: w.finishedAt ?? null,
-        error: w.error ?? null
-      })
-    )
+    jobs: (p.workflows ?? []).map((w): ForgeActionJob => ({
+      id: w.id || w.name || '',
+      name: w.name || w.id || 'workflow',
+      status: ciStatus(w.status),
+      startedAt: w.startedAt ?? null,
+      completedAt: w.finishedAt ?? null,
+      error: w.error ?? null
+    }))
   }
 }
 

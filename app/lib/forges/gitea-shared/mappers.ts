@@ -338,12 +338,10 @@ export function parseActivityCommits(
   try {
     const parsed = JSON.parse(content) as GfActivityPushContent
     if (Array.isArray(parsed.Commits)) {
-      return parsed.Commits.map(
-        (c): ForgeContributionCommit => ({
-          sha: c.Sha1,
-          message: (c.Message ?? '').split('\n')[0] ?? ''
-        })
-      ).filter((c) => c.message)
+      return parsed.Commits.map((c): ForgeContributionCommit => ({
+        sha: c.Sha1,
+        message: (c.Message ?? '').split('\n')[0] ?? ''
+      })).filter((c) => c.message)
     }
   } catch {
     // Not JSON — fall through to the legacy line format below.
@@ -387,15 +385,13 @@ export function mapActionJob(j: GfActionRunJobResponse): ForgeActionJob {
     id: String(j.id ?? ''),
     name: j.name ?? '',
     status: giteaRunStatus(j.status),
-    steps: (j.steps ?? []).map(
-      (s): ForgeActionStep => ({
-        name: s.name ?? '',
-        status: giteaRunStatus(s.status),
-        number: s.number,
-        startedAt: s.started ?? null,
-        completedAt: s.stopped ?? null
-      })
-    )
+    steps: (j.steps ?? []).map((s): ForgeActionStep => ({
+      name: s.name ?? '',
+      status: giteaRunStatus(s.status),
+      number: s.number,
+      startedAt: s.started ?? null,
+      completedAt: s.stopped ?? null
+    }))
   }
 }
 

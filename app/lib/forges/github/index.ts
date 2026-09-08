@@ -213,15 +213,13 @@ async function getRootTree(
   )
   const arr = Array.isArray(data) ? data : [data]
   return arr
-    .map(
-      (e): ForgeTreeEntry => ({
-        name: e.name,
-        path: e.path,
-        type: e.type === 'dir' ? 'dir' : 'file',
-        size: e.size,
-        sha: e.sha
-      })
-    )
+    .map((e): ForgeTreeEntry => ({
+      name: e.name,
+      path: e.path,
+      type: e.type === 'dir' ? 'dir' : 'file',
+      size: e.size,
+      sha: e.sha
+    }))
     .sort(sortEntries)
 }
 
@@ -337,15 +335,13 @@ export const githubProvider: ForgeProvider = {
     )
     const arr = Array.isArray(data) ? data : [data]
     return arr
-      .map(
-        (e): ForgeTreeEntry => ({
-          name: e.name,
-          path: e.path,
-          type: e.type === 'dir' ? 'dir' : 'file',
-          size: e.size,
-          sha: e.sha
-        })
-      )
+      .map((e): ForgeTreeEntry => ({
+        name: e.name,
+        path: e.path,
+        type: e.type === 'dir' ? 'dir' : 'file',
+        size: e.size,
+        sha: e.sha
+      }))
       .sort(sortEntries)
   },
 
@@ -720,20 +716,18 @@ export const githubProvider: ForgeProvider = {
       query: { q, per_page: perPage, page },
       signal: opts?.signal
     })
-    const items = (data.items ?? []).map(
-      (r): ForgeSearchCode => ({
-        provider: 'github',
-        repo: {
-          owner: r.repository?.owner?.login ?? '',
-          name: r.repository?.name ?? '',
-          fullName: r.repository?.full_name ?? '',
-          url: r.repository?.html_url
-        },
-        path: r.path,
-        url: r.html_url,
-        fragments: (r.text_matches ?? []).map((m) => m.fragment).filter(Boolean) as string[]
-      })
-    )
+    const items = (data.items ?? []).map((r): ForgeSearchCode => ({
+      provider: 'github',
+      repo: {
+        owner: r.repository?.owner?.login ?? '',
+        name: r.repository?.name ?? '',
+        fullName: r.repository?.full_name ?? '',
+        url: r.repository?.html_url
+      },
+      path: r.path,
+      url: r.html_url,
+      fragments: (r.text_matches ?? []).map((m) => m.fragment).filter(Boolean) as string[]
+    }))
     return {
       items,
       total: data.total_count,
@@ -749,14 +743,12 @@ export const githubProvider: ForgeProvider = {
       { q, per_page: perPage, page },
       opts
     )
-    const items = (data.items ?? []).map(
-      (u): ForgeUser => ({
-        provider: 'github',
-        login: u.login ?? '',
-        avatarUrl: u.avatar_url,
-        url: u.html_url
-      })
-    )
+    const items = (data.items ?? []).map((u): ForgeUser => ({
+      provider: 'github',
+      login: u.login ?? '',
+      avatarUrl: u.avatar_url,
+      url: u.html_url
+    }))
     return {
       items,
       total: data.total_count,

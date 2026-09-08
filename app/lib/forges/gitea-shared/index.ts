@@ -197,15 +197,13 @@ export function createGiteaFamilyProvider(config: GiteaFamilyConfig): ForgeProvi
     )
     const arr = Array.isArray(data) ? data : [data]
     return arr
-      .map(
-        (e: GfContentResponse): ForgeTreeEntry => ({
-          name: e.name ?? '',
-          path: e.path ?? '',
-          type: e.type === 'dir' ? 'dir' : 'file',
-          size: e.size,
-          sha: e.sha
-        })
-      )
+      .map((e: GfContentResponse): ForgeTreeEntry => ({
+        name: e.name ?? '',
+        path: e.path ?? '',
+        type: e.type === 'dir' ? 'dir' : 'file',
+        size: e.size,
+        sha: e.sha
+      }))
       .sort(sortEntries)
   }
 
@@ -299,13 +297,11 @@ export function createGiteaFamilyProvider(config: GiteaFamilyConfig): ForgeProvi
         { limit: 100 },
         opts
       )
-      return (data ?? []).map(
-        (b): ForgeBranch => ({
-          name: b.name,
-          isDefault: b.name === repo.ref?.defaultBranch,
-          commit: { sha: b.commit?.id, message: b.commit?.message, when: b.commit?.timestamp }
-        })
-      )
+      return (data ?? []).map((b): ForgeBranch => ({
+        name: b.name,
+        isDefault: b.name === repo.ref?.defaultBranch,
+        commit: { sha: b.commit?.id, message: b.commit?.message, when: b.commit?.timestamp }
+      }))
     },
 
     async getTree(repo, ref, path, opts) {
@@ -319,15 +315,13 @@ export function createGiteaFamilyProvider(config: GiteaFamilyConfig): ForgeProvi
       )
       const arr = Array.isArray(data) ? data : [data]
       return arr
-        .map(
-          (e: GfContentResponse): ForgeTreeEntry => ({
-            name: e.name ?? '',
-            path: e.path ?? '',
-            type: e.type === 'dir' ? 'dir' : 'file',
-            size: e.size,
-            sha: e.sha
-          })
-        )
+        .map((e: GfContentResponse): ForgeTreeEntry => ({
+          name: e.name ?? '',
+          path: e.path ?? '',
+          type: e.type === 'dir' ? 'dir' : 'file',
+          size: e.size,
+          sha: e.sha
+        }))
         .sort(sortEntries)
     },
 

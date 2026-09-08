@@ -264,14 +264,12 @@ export const gitlabProvider: ForgeProvider = {
       )
     ])
     const entries = (tree ?? [])
-      .map(
-        (e): ForgeTreeEntry => ({
-          name: e.name,
-          path: e.path,
-          type: e.type === 'tree' ? 'dir' : 'file',
-          sha: e.id
-        })
-      )
+      .map((e): ForgeTreeEntry => ({
+        name: e.name,
+        path: e.path,
+        type: e.type === 'tree' ? 'dir' : 'file',
+        sha: e.id
+      }))
       .sort(sortEntries)
     const topLang = Object.entries(languages ?? {}).sort((a, b) => b[1] - a[1])[0]?.[0]
     if (topLang) meta.language = topLang
@@ -300,9 +298,11 @@ export const gitlabProvider: ForgeProvider = {
       { per_page: 100 },
       opts
     )
-    return (data ?? []).map(
-      (b): ForgeBranch => ({ name: b.name, isDefault: b.default, commit: { sha: b.commit?.id } })
-    )
+    return (data ?? []).map((b): ForgeBranch => ({
+      name: b.name,
+      isDefault: b.default,
+      commit: { sha: b.commit?.id }
+    }))
   },
 
   async getTree(repo, ref, path, opts) {
@@ -312,14 +312,12 @@ export const gitlabProvider: ForgeProvider = {
       opts
     )
     return (data ?? [])
-      .map(
-        (e): ForgeTreeEntry => ({
-          name: e.name,
-          path: e.path,
-          type: e.type === 'tree' ? 'dir' : 'file',
-          sha: e.id
-        })
-      )
+      .map((e): ForgeTreeEntry => ({
+        name: e.name,
+        path: e.path,
+        type: e.type === 'tree' ? 'dir' : 'file',
+        sha: e.id
+      }))
       .sort(sortEntries)
   },
 
@@ -633,15 +631,13 @@ export const gitlabProvider: ForgeProvider = {
       { scope: 'blobs', search: q, per_page: perPage, page },
       opts
     ).catch(() => [])
-    const items = (data ?? []).map(
-      (r): ForgeSearchCode => ({
-        provider: 'gitlab',
-        repo: { owner: '', name: '', fullName: String(r.project_id ?? ''), url: undefined },
-        path: r.path ?? r.filename ?? '',
-        url: undefined,
-        fragments: r.data ? [String(r.data)] : []
-      })
-    )
+    const items = (data ?? []).map((r): ForgeSearchCode => ({
+      provider: 'gitlab',
+      repo: { owner: '', name: '', fullName: String(r.project_id ?? ''), url: undefined },
+      path: r.path ?? r.filename ?? '',
+      url: undefined,
+      fragments: r.data ? [String(r.data)] : []
+    }))
     return { items, cursor: items.length === perPage ? String(page + 1) : undefined }
   },
 

@@ -193,13 +193,11 @@ export const bitbucketProvider: ForgeProvider = {
       { pagelen: 100 },
       opts
     )
-    return (data.values ?? []).map(
-      (b): ForgeBranch => ({
-        name: b.name ?? '',
-        isDefault: b.name === repo.ref?.defaultBranch,
-        commit: { sha: b.target?.hash }
-      })
-    )
+    return (data.values ?? []).map((b): ForgeBranch => ({
+      name: b.name ?? '',
+      isDefault: b.name === repo.ref?.defaultBranch,
+      commit: { sha: b.target?.hash }
+    }))
   },
 
   async getTree(repo, ref, path, opts) {

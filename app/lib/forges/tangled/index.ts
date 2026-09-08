@@ -186,14 +186,12 @@ async function listTangledComments(
       { subject: subjectAtUri, limit: 100, order: 'asc' },
       opts
     )
-    return (data.items ?? []).map(
-      (c): ForgeComment => ({
-        id: rkeyFromUri(c.uri),
-        author: tangledUser(didFromUri(c.uri)),
-        body: c.value?.body ?? '',
-        createdAt: c.value?.createdAt ?? null
-      })
-    )
+    return (data.items ?? []).map((c): ForgeComment => ({
+      id: rkeyFromUri(c.uri),
+      author: tangledUser(didFromUri(c.uri)),
+      body: c.value?.body ?? '',
+      createdAt: c.value?.createdAt ?? null
+    }))
   } catch {
     return []
   }
@@ -403,13 +401,11 @@ export const tangledProvider: ForgeProvider = {
         branches?: Array<{ reference?: { name?: string; hash?: string }; is_default?: boolean }>
       }>('sh.tangled.repo.branches', { repo: resolved.atUri }, opts)
       return (data.branches ?? [])
-        .map(
-          (b): ForgeBranch => ({
-            name: b.reference?.name || '',
-            isDefault: b.is_default,
-            commit: { sha: b.reference?.hash }
-          })
-        )
+        .map((b): ForgeBranch => ({
+          name: b.reference?.name || '',
+          isDefault: b.is_default,
+          commit: { sha: b.reference?.hash }
+        }))
         .filter((b) => b.name)
     } catch {
       return []
@@ -633,14 +629,12 @@ export const tangledProvider: ForgeProvider = {
         { repo: resolved.atUri, rev1: tgt.branch, rev2: src.branch },
         opts
       )
-      return (data.format_patch ?? []).map(
-        (fp): ForgeCommit => ({
-          sha: fp.SHA ?? '',
-          shortSha: fp.SHA ? String(fp.SHA).slice(0, 7) : '',
-          message: [fp.Title, fp.Body].filter(Boolean).join('\n\n'),
-          author: { name: fp.Author?.Name, email: fp.Author?.Email, when: fp.AuthorDate }
-        })
-      )
+      return (data.format_patch ?? []).map((fp): ForgeCommit => ({
+        sha: fp.SHA ?? '',
+        shortSha: fp.SHA ? String(fp.SHA).slice(0, 7) : '',
+        message: [fp.Title, fp.Body].filter(Boolean).join('\n\n'),
+        author: { name: fp.Author?.Name, email: fp.Author?.Email, when: fp.AuthorDate }
+      }))
     } catch {
       return []
     }
@@ -682,20 +676,18 @@ export const tangledProvider: ForgeProvider = {
   // recent issue, PR and CI activity on the viewer's own repos instead.
   async listNotifications(opts): Promise<ForgeNotification[]> {
     const items = await collectTangledInbox(opts)
-    return items.map(
-      (it): ForgeNotification => ({
-        provider: 'tangled',
-        id: it.id,
-        kind: it.kind,
-        title: it.title,
-        reason: it.reason,
-        unread: it.unread,
-        updatedAt: it.updatedAt,
-        repo: it.repo,
-        to: it.to,
-        url: it.url
-      })
-    )
+    return items.map((it): ForgeNotification => ({
+      provider: 'tangled',
+      id: it.id,
+      kind: it.kind,
+      title: it.title,
+      reason: it.reason,
+      unread: it.unread,
+      updatedAt: it.updatedAt,
+      repo: it.repo,
+      to: it.to,
+      url: it.url
+    }))
   },
 
   async listInbox(opts): Promise<ForgeInboxItem[]> {

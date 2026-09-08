@@ -204,15 +204,13 @@ export const GH_REACTION_GRAPHQL: Record<ForgeReactionKind, string> = {
 export function mapReactions(r?: GhReactionsResponse): ForgeReactionSummary[] | undefined {
   if (!r) return undefined
   const summaries = (Object.keys(GH_REACTION_CONTENT) as ForgeReactionKind[])
-    .map(
-      (kind): ForgeReactionSummary => ({
-        kind,
-        count: r[GH_REACTION_CONTENT[kind]] ?? 0,
-        // GitHub's REST reaction summary has no per-viewer info; the reaction bar
-        // tracks "mine" optimistically from the viewer's own clicks this session.
-        viewerReacted: false
-      })
-    )
+    .map((kind): ForgeReactionSummary => ({
+      kind,
+      count: r[GH_REACTION_CONTENT[kind]] ?? 0,
+      // GitHub's REST reaction summary has no per-viewer info; the reaction bar
+      // tracks "mine" optimistically from the viewer's own clicks this session.
+      viewerReacted: false
+    }))
     .filter((s) => s.count > 0)
   return summaries.length ? summaries : undefined
 }
