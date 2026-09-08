@@ -13,13 +13,13 @@ concurrency:
 permissions: {}
 
 jobs:
-  version:
-    name: 🚀 Prepare release
+  release:
+    name: 🚀 Release
     if: github.repository == 'maintainers-space/maintainers.space'
     runs-on: ubuntu-latest
     permissions:
-      contents: write # create the signed release commit and update its branch
-      pull-requests: write # create or update the manually approved release PR
+      contents: write # push the version branch and the release tags
+      pull-requests: write # create or update the version release PR
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -37,23 +37,30 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Create or update release pull request
-        id: release
+      - name: Changesets
+        id: changesets
         uses: changesets/action@8488615a623b1b9c987934bb89eae8af6a946ac1 # v2.1.1
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          version-script: pnpm run release:version
+          publish-script: pnpm exec changeset publish
           commit-message: 'chore: version release'
           pr-title: 'chore: release next version'
           pr-base-branch: main
-          create-github-releases: false
-          push-git-tags: false
 
       - name: Set semantic release title
-        if: steps.release.outputs.pr-number != ''
+        if: steps.changesets.outputs.pr-number != ''
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          PR_NUMBER: ${{ steps.release.outputs.pr-number }}
+          PR_NUMBER: ${{ steps.changesets.outputs.pr-number }}
         run: |
           VERSION=$(node -p "require('./package.json').version")
           gh pr edit "$PR_NUMBER" --title "chore: release v${VERSION}"
+
+      - name: Fast-forward release branch
+        if: steps.changesets.outputs.published == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_PAT }}
+        run: |
+          gh api --method PATCH "repos/{owner}/{repo}/git/refs/heads/release" \
+            -f sha="$GITHUB_SHA" \
+            -F 'force=false'
