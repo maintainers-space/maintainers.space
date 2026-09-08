@@ -11,7 +11,7 @@
   "linked": [],
   "access": "restricted",
   "baseBranch": "main",
-  "format": "prettier",
+  "format": false,
   "updateInternalDependencies": "patch",
   "ignore": [],
   "privatePackages": {
