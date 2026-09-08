@@ -13,7 +13,7 @@ let bypassUntil = 0
 
 if (import.meta.client) {
   try {
-    const [nav] = performance.getEntriesByType('navigation') as PerformanceNavigationTiming[]
+    const [nav] = performance.getEntriesByType('navigation') as Array<{ type?: string }>
     if (nav?.type === 'reload') bypassUntil = Date.now() + 10_000
   } catch {
     /* Performance API unavailable — no bypass, normal caching applies. */
