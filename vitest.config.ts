@@ -4,7 +4,7 @@ import { configDefaults } from 'vitest/config'
 export default defineVitestConfig({
   test: {
     environment: 'nuxt',
-    exclude: [...configDefaults.exclude, '__e2e__/**'],
+    exclude: [...configDefaults.exclude, '__e2e__/**', '**/.*/**'],
     setupFiles: ['./__tests__/setup.ts'],
     coverage: {
       provider: 'v8',
