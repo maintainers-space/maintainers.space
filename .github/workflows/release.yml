@@ -59,7 +59,7 @@ jobs:
       - name: Fast-forward release branch
         if: steps.changesets.outputs.published == 'true'
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.RELEASE_PAT }}
         run: |
           gh api --method PATCH "repos/{owner}/{repo}/git/refs/heads/release" \
             -f sha="$GITHUB_SHA" \
