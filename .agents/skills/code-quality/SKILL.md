@@ -8,4 +8,4 @@ Use this skill while implementing and before review.
 - Delete unreachable code instead of preserving it “just in case”; type-aware Oxlint and Knip enforce this mechanically.
 - Write comments only for constraints, security boundaries, upstream limitations, workarounds or decisions that are not evident from the code. Link an upstream issue when a workaround depends on one.
 - Do not narrate assignments, repeat type information or leave stale TODOs.
-- Use Conventional Commits: `type(scope): lowercase imperative subject`. Keep commits few, coherent and independently reviewable.
+- Use Conventional Commits: `type(scope): lowercase imperative subject`. The allowed scopes are `ui`, `server`, `forge`, `docs`, `deps` and `ci`; use `forge` for a forge-specific change such as GitHub. Use the same valid title for a pull request and verify it before opening the PR. Keep commits few, coherent and independently reviewable.
