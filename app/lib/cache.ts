@@ -48,6 +48,11 @@ export interface CacheOptions<T> {
   /** Bypass the cache, fetch fresh, and replace the entry. */
   force?: boolean
   /**
+   * Keep a response in memory only. Private repository data uses this so it
+   * cannot survive a reload or be visible to another signed-in account.
+   */
+  persist?: boolean
+  /**
    * Called when a *background* revalidation (triggered by serving stale data)
    * resolves with a newer value, so the UI can update in place.
    */
@@ -72,7 +77,7 @@ export async function cached<T>(
 
   // Cold start (nothing in memory yet this session): hydrate from IndexedDB
   // before deciding whether to hit the network.
-  if (!existing) {
+  if (!existing && opts.persist !== false) {
     const persisted = await idbGet<Omit<Entry<T>, 'pending'>>(key)
     if (persisted) {
       existing = persisted
@@ -91,7 +96,7 @@ export async function cached<T>(
       .then((value) => {
         const entry: Entry<T> = { value, fresh: Date.now() + ttl, dead: Date.now() + ttl + swr }
         store.set(key, entry)
-        void idbSet(key, persistable(entry))
+        if (opts.persist !== false) void idbSet(key, persistable(entry))
         return value
       })
       .catch((err) => {
@@ -213,6 +218,33 @@ export function invalidate(key: string, prefix = false): void {
     if (k.startsWith(key)) store.delete(k)
   }
   void idbDeletePrefix(key)
+}
+
+/**
+ * Remove every cached payload belonging to one repository. This is used as
+ * soon as a repo is identified as private so old persisted data cannot remain
+ * available after the session that discovered its visibility.
+ */
+export function invalidateRepoCache(provider: string, owner: string, name: string): void {
+  const ref = `${provider}:${owner}:${name}`
+  for (const kind of ['repo-meta', 'repo-code', 'actions']) {
+    invalidate(`${kind}:${ref}`)
+  }
+  for (const kind of [
+    'issue',
+    'pull',
+    'discussion',
+    'issues',
+    'pulls',
+    'discussions',
+    'run',
+    'commits',
+    'commit',
+    'tree',
+    'blob'
+  ]) {
+    invalidate(`${kind}:${ref}:`, true)
+  }
 }
 
 /** Clear the entire cache (e.g. on sign-out, so another account can't read it). */

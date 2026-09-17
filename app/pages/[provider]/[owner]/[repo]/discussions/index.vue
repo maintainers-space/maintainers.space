@@ -146,36 +146,45 @@ onMounted(load)
 
     <ul v-else class="divide-y divide-default overflow-hidden rounded-lg border border-default">
       <li v-for="d in filtered" :key="d.id">
-        <NuxtLink
+        <CommonOfflineLink
           :to="`${base}/discussions/${encodeURIComponent(d.id)}`"
+          :cache-key="`discussion:${provider}:${owner}:${name}:${d.id}`"
           class="flex items-start gap-3 px-4 py-3 transition hover:bg-elevated/40"
         >
-          <UIcon
-            :name="d.answered ? 'i-lucide-check-circle' : 'i-lucide-messages-square'"
-            class="mt-0.5 size-4 shrink-0"
-            :class="d.answered ? 'text-success' : 'text-muted'"
-          />
-          <div class="min-w-0 flex-1">
-            <p class="truncate text-sm font-medium text-default">{{ d.title }}</p>
-            <div class="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-muted">
-              <UBadge
-                v-if="d.category"
-                :label="d.category"
-                color="neutral"
-                variant="subtle"
-                size="xs"
-              />
-              <span v-if="d.author">{{ userLabel(d.author) }}</span>
-              <span v-if="d.createdAt">· {{ formatRelativeTime(d.createdAt) }}</span>
+          <template #default="{ offline }">
+            <UIcon
+              :name="
+                offline
+                  ? 'i-lucide-wifi-off'
+                  : d.answered
+                    ? 'i-lucide-check-circle'
+                    : 'i-lucide-messages-square'
+              "
+              class="mt-0.5 size-4 shrink-0"
+              :class="offline ? 'text-muted' : d.answered ? 'text-success' : 'text-muted'"
+            />
+            <div class="min-w-0 flex-1">
+              <p class="truncate text-sm font-medium text-default">{{ d.title }}</p>
+              <div class="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-muted">
+                <UBadge
+                  v-if="d.category"
+                  :label="d.category"
+                  color="neutral"
+                  variant="subtle"
+                  size="xs"
+                />
+                <span v-if="d.author">{{ userLabel(d.author) }}</span>
+                <span v-if="d.createdAt">· {{ formatRelativeTime(d.createdAt) }}</span>
+              </div>
             </div>
-          </div>
-          <span
-            v-if="d.commentCount"
-            class="inline-flex shrink-0 items-center gap-1 text-xs text-muted"
-          >
-            <UIcon name="i-lucide-message-square" class="size-3.5" />{{ d.commentCount }}
-          </span>
-        </NuxtLink>
+            <span
+              v-if="d.commentCount"
+              class="inline-flex shrink-0 items-center gap-1 text-xs text-muted"
+            >
+              <UIcon name="i-lucide-message-square" class="size-3.5" />{{ d.commentCount }}
+            </span>
+          </template>
+        </CommonOfflineLink>
       </li>
     </ul>
   </div>

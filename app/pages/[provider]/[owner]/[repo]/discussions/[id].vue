@@ -10,7 +10,8 @@ const base = computed(() =>
 )
 const id = computed(() => String(route.params.id))
 
-const watchItem = useOfflineRepos().watch
+const offline = useOfflineRepos()
+const watchItem = offline.watch
 const itemKey = computed(
   () => `discussion:${provider.value}:${owner.value}:${name.value}:${id.value}`
 )
@@ -20,7 +21,10 @@ watch(
   itemKey,
   (k) => {
     const [, , , , iid] = k.split(':')
-    if (iid) watchItem('discussion', provider.value, owner.value, name.value, iid)
+    if (iid) {
+      watchItem('discussion', provider.value, owner.value, name.value, iid)
+      void offline.auto()
+    }
   },
   { immediate: true }
 )

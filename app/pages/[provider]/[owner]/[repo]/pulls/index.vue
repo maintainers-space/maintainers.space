@@ -88,6 +88,10 @@ function itemLink(it: ForgePull): string {
   return `${base.value}/pulls/${encodeURIComponent(it.id)}`
 }
 
+function itemCacheKey(it: ForgePull): string {
+  return `pull:${provider.value}:${owner.value}:${name.value}:${it.id}`
+}
+
 function icon(s: ForgePullState): string {
   return PULL_STATE_ICON[s] ?? 'i-lucide-git-pull-request'
 }
@@ -201,29 +205,36 @@ function color(s: ForgePullState): string {
 
     <ul v-else class="divide-y divide-default overflow-hidden rounded-lg border border-default">
       <li v-for="it in filtered" :key="it.id">
-        <NuxtLink
+        <CommonOfflineLink
           :to="itemLink(it)"
+          :cache-key="itemCacheKey(it)"
           class="flex items-start gap-3 px-4 py-3 transition hover:bg-elevated/40"
         >
-          <UIcon :name="icon(it.state)" class="mt-0.5 size-4 shrink-0" :class="color(it.state)" />
-          <div class="min-w-0 flex-1">
-            <p class="truncate text-sm font-medium text-default">{{ it.title }}</p>
-            <div class="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-muted">
-              <span v-if="it.number">#{{ it.number }}</span>
-              <span v-if="it.author">· {{ userLabel(it.author) }}</span>
-              <span v-if="it.sourceBranch && it.targetBranch" class="font-mono"
-                >· {{ it.sourceBranch }} → {{ it.targetBranch }}</span
-              >
-              <span v-if="it.updatedAt">· {{ formatRelativeTime(it.updatedAt) }}</span>
+          <template #default="{ offline }">
+            <UIcon
+              :name="offline ? 'i-lucide-wifi-off' : icon(it.state)"
+              class="mt-0.5 size-4 shrink-0"
+              :class="offline ? 'text-muted' : color(it.state)"
+            />
+            <div class="min-w-0 flex-1">
+              <p class="truncate text-sm font-medium text-default">{{ it.title }}</p>
+              <div class="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-muted">
+                <span v-if="it.number">#{{ it.number }}</span>
+                <span v-if="it.author">· {{ userLabel(it.author) }}</span>
+                <span v-if="it.sourceBranch && it.targetBranch" class="font-mono"
+                  >· {{ it.sourceBranch }} → {{ it.targetBranch }}</span
+                >
+                <span v-if="it.updatedAt">· {{ formatRelativeTime(it.updatedAt) }}</span>
+              </div>
             </div>
-          </div>
-          <span
-            v-if="it.commentCount"
-            class="inline-flex shrink-0 items-center gap-1 text-xs text-muted"
-          >
-            <UIcon name="i-lucide-message-square" class="size-3.5" />{{ it.commentCount }}
-          </span>
-        </NuxtLink>
+            <span
+              v-if="it.commentCount"
+              class="inline-flex shrink-0 items-center gap-1 text-xs text-muted"
+            >
+              <UIcon name="i-lucide-message-square" class="size-3.5" />{{ it.commentCount }}
+            </span>
+          </template>
+        </CommonOfflineLink>
       </li>
     </ul>
   </div>

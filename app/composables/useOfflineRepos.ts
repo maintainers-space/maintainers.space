@@ -2,14 +2,14 @@
 //
 // The PWA shell already precaches the app itself; this makes individual repos
 // viewable with zero connectivity. Every repo you open is tracked locally by
-// useRepoVisits (never sent anywhere); the ones you return to most are fetched
-// into the persisted cache (~/lib/cache → IndexedDB) so the landing page
+// useRepoVisits (never sent anywhere) and fetched into the persisted cache
+// (~/lib/cache → IndexedDB) so the landing page
 // (README, file tree) and repo metadata open instantly and offline, plus the
 // issues / pull requests / discussions the user participated in or watched,
-// and each repo's open issue/PR/discussion lists. Auto-kept repos are ranked by
-// the same recency-decayed score the home "favourites" list uses and capped at
-// a configurable `maxCount` (default 100); pinned repos are always kept offline
-// and never pushed out by ranking.
+// and each repo's open issue/PR/discussion lists. The most recently visited
+// repos win the automatic cache budget, after pinned repos and repos containing
+// a recently opened item. This makes the current repo available immediately
+// while preserving a deterministic, configurable `maxCount` (default 100).
 //
 // Prefetching only ever *adds* to the cache: it seeds a repo when it isn't
 // stored yet and otherwise leaves the copy alone, so it never competes with the
@@ -42,7 +42,7 @@ export interface RepoRef {
 }
 
 export interface OfflineRepoSettings {
-  /** Automatically keep frequently-visited repos available offline. */
+  /** Automatically keep recently visited repos available offline. */
   enabled: boolean
   /** Cap on how many repos auto-prefetching will keep, default 100. */
   maxCount: number
@@ -56,6 +56,10 @@ const _pinned = ref<RepoRef[]>([])
 const _running = ref<boolean>(false)
 const _watched = ref<string[]>([])
 let _loaded = false
+/** A visit that arrives during a run gets one deterministic follow-up pass. */
+let _rerunRequested = false
+/** The shared crawl callers await, including any queued follow-up pass. */
+let _run: Promise<void> | null = null
 /**
  * Per-run budget of forge API requests, so one auto() run can never issue an
  * unbounded burst (default 100 repos × several requests each). Decremented as
@@ -115,6 +119,7 @@ function clearAll(): void {
   _maxCount.value = OFFLINE_DEFAULT_MAX_COUNT
   _pinned.value = []
   _watched.value = []
+  _rerunRequested = false
   if (import.meta.client) {
     localStorage.removeItem(SETTINGS_KEY)
     localStorage.removeItem(WATCHED_KEY)
@@ -177,12 +182,39 @@ async function seedRepo(r: RepoRef, force = false): Promise<void> {
     invalidate(metaKey)
     return
   }
-  await runRequest(
+  const code = await runRequest(
     codeKey,
     () => loadRepoCode(f, locator, r.owner, r.name, repo.defaultBranch),
     force
   )
+  if (code)
+    await prefetchRepoHealthFiles(f, locator, prefix, repo.defaultBranch, code.health, force)
   await prefetchRepoLocales(f, locator, prefix, force)
+  await prefetchRepoCommits(f, locator, prefix, repo.defaultBranch, force)
+}
+
+/** Store the documentation surfaced on a repo landing page with the landing page itself. */
+async function prefetchRepoHealthFiles(
+  f: ForgeProvider,
+  locator: RepoLocator,
+  prefix: string,
+  defaultBranch: string,
+  health: Awaited<ReturnType<typeof loadRepoCode>>['health'],
+  force = false
+): Promise<void> {
+  if (!f.getBlob) return
+  for (const file of health) {
+    if (runExhausted()) return
+    try {
+      await runRequest(
+        `blob:${prefix}:${defaultBranch}:${file.path}`,
+        () => f.getBlob!(locator, defaultBranch, file.path),
+        force
+      )
+    } catch (e) {
+      if (isForgeRateLimit(e)) _rateLimited = true
+    }
+  }
 }
 
 /** Deduplicate the list of opener functions for the lists a forge can prefetch. */
@@ -223,6 +255,8 @@ function itemListFetchers(
       `discussions:${prefix}:${token ? 'auth' : 'anon'}`,
       () => f.listDiscussions!(locator, { token, limit: 30 })
     ])
+  if (f.listActionRuns)
+    lists.push([`actions:${prefix}`, () => f.listActionRuns!(locator, { limit: 30 })])
   return lists
 }
 
@@ -290,6 +324,26 @@ async function prefetchRepoLocales(
   }
 }
 
+/** Seed the same first commit page shown by the repo's commits screen. */
+async function prefetchRepoCommits(
+  f: ForgeProvider,
+  locator: RepoLocator,
+  prefix: string,
+  defaultBranch: string,
+  force = false
+): Promise<void> {
+  if (!f.listCommits || runExhausted()) return
+  try {
+    await runRequest(
+      `commits:${prefix}:${defaultBranch}`,
+      () => f.listCommits!(locator, defaultBranch, { limit: 30 }),
+      force
+    )
+  } catch (e) {
+    if (isForgeRateLimit(e)) _rateLimited = true
+  }
+}
+
 /**
  * Remember that the user opened a repo's item page so it is kept offline (along
  * with its repo) when the repo itself is made available offline.
@@ -314,16 +368,12 @@ function watchDetail(
 export function useOfflineRepos() {
   load()
 
-  /** Top candidates to keep offline: pinned set plus the highest-ranked visits. */
+  /** Top candidates: pinned, watched, then most-recently visited repositories. */
   function candidates(): RepoRef[] {
     const pinnedSet = new Set(_pinned.value.map(keyOf))
-    const { favourites } = useRepoVisits()
-    const autoCandidates = favourites.value
-      .filter((v) => !pinnedSet.has(keyOf(v)))
-      .slice(0, Math.max(0, _maxCount.value - pinnedSet.size))
-    // Repos with items you participated in / watched are always strong candidates,
-    // even if your raw visit count is low — so their PRs/issues/discussions
-    // (recorded via watch) stay available offline.
+    // Repos with an opened item are first after explicit pins. `_watched` is
+    // newest-first, so an item remains readable even when its repo was only a
+    // brief visit and the automatic budget is full.
     const watchedSet = new Set<string>()
     for (const k of _watched.value) {
       // key looks like <kind>:<provider>:<owner>:<name>:<id>
@@ -336,22 +386,20 @@ export function useOfflineRepos() {
       const [provider, owner, name] = k.split('/')
       if (provider && owner && name) fromWatched.push({ provider, owner, name })
     }
-    // Watched repos share the same `maxCount` budget as auto-kept ones — bound
-    // them by whatever remains after pinned + top visits so the offline store
-    // can never exceed `maxCount` repositories (which would otherwise drive the
-    // eviction budget to zero and evict every auto-kept repo). `watchedSet` is
-    // newest-first, so the most recently watched repos win the remaining slots.
-    const budget = Math.max(0, _maxCount.value - pinnedSet.size - autoCandidates.length)
+    const watched = fromWatched.slice(0, Math.max(0, _maxCount.value - pinnedSet.size))
+    const watchedKeys = new Set(watched.map(keyOf))
+    const { recent } = useRepoVisits()
+    const recentVisits = recent.value
+      .filter((v) => !pinnedSet.has(keyOf(v)) && !watchedKeys.has(keyOf(v)))
+      .slice(0, Math.max(0, _maxCount.value - pinnedSet.size - watched.length))
     return [
       ..._pinned.value,
-      ...autoCandidates.map((v) => ({ provider: v.provider, owner: v.owner, name: v.name })),
-      ...fromWatched.slice(0, budget)
+      ...watched,
+      ...recentVisits.map((v) => ({ provider: v.provider, owner: v.owner, name: v.name }))
     ].filter((r) => r.provider && r.owner && r.name && isCacheable(r))
   }
 
-  /** Seed every candidate (best-effort). No-op while already running or disabled. */
-  async function auto(): Promise<void> {
-    if (_running.value || !_enabled.value) return
+  async function seedCandidates(): Promise<void> {
     _running.value = true
     _runBudget = RUN_REQUEST_BUDGET
     _rateLimited = false
@@ -368,7 +416,36 @@ export function useOfflineRepos() {
     } finally {
       _running.value = false
     }
-    await evictExcess()
+  }
+
+  /**
+   * Start one shared crawl. Calls made while it is running await this promise;
+   * a concurrent visit requests one final candidate pass before it resolves.
+   */
+  function run(seed: () => Promise<void>): Promise<void> {
+    const work = (async () => {
+      let next = seed
+      do {
+        _rerunRequested = false
+        await next()
+        next = seedCandidates
+      } while (_rerunRequested)
+      await evictExcess()
+    })()
+    _run = work.finally(() => {
+      _run = null
+    })
+    return _run
+  }
+
+  /** Seed every candidate (best-effort), with one follow-up for concurrent visits. */
+  function auto(): Promise<void> {
+    if (!_enabled.value) return Promise.resolve()
+    if (_run) {
+      _rerunRequested = true
+      return _run
+    }
+    return run(seedCandidates)
   }
 
   function setEnabled(enabled: boolean): void {
@@ -382,6 +459,15 @@ export function useOfflineRepos() {
     void evictExcess()
   }
 
+  /**
+   * Fill a newly opened public repo after its visible header has loaded.
+   * `auto()` owns the shared request budget, so visits cannot create an
+   * unbounded foreground request burst.
+   */
+  function visit(repo: RepoRef): void {
+    if (_enabled.value && isCacheable(repo)) void auto()
+  }
+
   /** Keep `repo` offline from now on and seed it immediately. */
   async function makeAvailable(repo: RepoRef): Promise<void> {
     if (!isCacheable(repo)) {
@@ -391,7 +477,23 @@ export function useOfflineRepos() {
       _pinned.value = [..._pinned.value, repo]
       persist()
     }
-    await seedRepo(repo, true)
+    if (_run) {
+      // The pin is already in `candidates()`. Add a pass after the in-flight
+      // crawl, and do not resolve until that pass has seeded it.
+      _rerunRequested = true
+      await _run
+      return
+    }
+    await run(async () => {
+      _running.value = true
+      _runBudget = RUN_REQUEST_BUDGET
+      _rateLimited = false
+      try {
+        await seedRepo(repo, true)
+      } finally {
+        _running.value = false
+      }
+    })
   }
 
   /** Stop keeping `repo` offline; existing cached data is left in place. */
@@ -409,25 +511,22 @@ export function useOfflineRepos() {
 
   /**
    * Bound the offline store to `maxCount` *repositories* (by metadata entries).
-   * Pinned repos and repos the user has watched items in are never evicted; among
-   * the remaining auto-kept repos, the whole repo (metadata + landing + any item
-   * pages) is dropped one at a time until under the cap. Because we drop in a
-   * deterministic but storage-bounded order and only when over the cap — never by
-   * age — repos this user rarely visits stay offline for a long time, which is
-   * the point: auto-clean happens only when storage would otherwise grow unbounded.
+   * Pinned repos and the current bounded candidate set are never evicted; the
+   * rest are dropped as whole repos (metadata + landing + item pages) until
+   * under the cap. Candidate order is deterministic, so opening a repo promotes
+   * it and makes room by removing an older unpinned repo.
    */
   async function evictExcess(): Promise<void> {
     if (!import.meta.client) return
     // Never protect a private repo: if legacy data for one exists (pinned before
     // the public-only rule), it is an eviction candidate so it gets cleaned up.
     const cacheableProtected = _pinned.value.filter(isCacheable).map(keyOf)
-    // Watch protection mirrors the *capped* candidate set (`candidates()` keeps at
-    // most `maxCount` watched repos), so lowering maxCount actually shrinks the
-    // store instead of leaving old watched repos permanently protected.
-    const cappedWatched = candidates()
+    // Protection mirrors the *capped* candidate set, so lowering maxCount
+    // actually shrinks the store instead of preserving old automatic entries.
+    const cappedCandidates = candidates()
       .map(keyOf)
       .filter((r) => !cacheableProtected.includes(r))
-    const protectedRefs = new Set([...cacheableProtected, ...cappedWatched])
+    const protectedRefs = new Set([...cacheableProtected, ...cappedCandidates])
 
     // Attribute every stored cache key to the repository (provider/owner/name)
     // it belongs to. Repo keys look like `<kind>:<provider>:<owner>:<name>[:<rest>]`.
@@ -463,18 +562,16 @@ export function useOfflineRepos() {
     const storedProtected = [...repos.keys()].filter((r) => protectedRefs.has(r))
     let over = evictionCandidates.length - Math.max(0, _maxCount.value - storedProtected.length)
     if (over <= 0) return
-    // Evict least-favoured first: idbKeys() returns cursor order (arbitrary), so
-    // rely on the repo-visit ranking rather than key order to decide what to drop.
-    const { favourites } = useRepoVisits()
+    // Evict least-recent first: idbKeys() returns cursor order (arbitrary), so
+    // rely on local visit recency rather than key order to decide what to drop.
+    const { recent } = useRepoVisits()
     const rank = new Map<string, number>()
-    favourites.value.forEach((v, i) => rank.set(keyOf(v), i))
+    recent.value.forEach((v, i) => rank.set(keyOf(v), i))
     evictionCandidates.sort(
       (a, b) =>
         (rank.get(b[0]) ?? Number.MAX_SAFE_INTEGER) - (rank.get(a[0]) ?? Number.MAX_SAFE_INTEGER)
     )
     // Drop whole repos (metadata + landing + item pages) until under the cap.
-    // Purely storage-bounded and never age-based, so infrequently-visited repos
-    // stay offline for as long as they fit.
     for (const [, owned] of evictionCandidates) {
       if (over <= 0) break
       for (const k of owned) invalidate(k)
@@ -498,6 +595,7 @@ export function useOfflineRepos() {
     makeAvailable,
     makeUnavailable,
     isAvailable,
+    visit,
     /** Record a detail page the user opened so its repo keeps it offline (see watchDetail). */
     watch: watchDetail
   }
