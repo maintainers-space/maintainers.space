@@ -11,7 +11,7 @@ const props = defineProps<{
   commitsHref?: string
 }>()
 
-const { forge, locator } = useRepoContext()
+const { provider, owner, name, forge, locator } = useRepoContext()
 
 const sorted = computed(() =>
   [...props.entries].sort((a, b) => {
@@ -23,6 +23,11 @@ const sorted = computed(() =>
 function linkFor(entry: ForgeTreeEntry): string {
   const kind = entry.type === 'dir' ? 'tree' : 'blob'
   return `${props.base}/${kind}/${encodeURIComponent(props.gitRef)}/${encodePathSegments(entry.path)}`
+}
+
+function cacheKeyFor(entry: ForgeTreeEntry): string {
+  const kind = entry.type === 'dir' ? 'tree' : 'blob'
+  return `${kind}:${provider.value}:${owner.value}:${name.value}:${props.gitRef}:${entry.path}`
 }
 
 const crumbs = computed(() => {
@@ -136,32 +141,41 @@ function onBranchChange(next: string | undefined): void {
 
     <ul role="list" class="divide-y divide-default">
       <li v-for="entry in sorted" :key="entry.path">
-        <NuxtLink
+        <CommonOfflineLink
           :to="linkFor(entry)"
+          :cache-key="cacheKeyFor(entry)"
           class="flex items-center gap-3 px-4 py-2 text-sm hover:bg-elevated/40"
         >
-          <UIcon
-            :name="entry.type === 'dir' ? 'i-lucide-folder' : 'i-lucide-file'"
-            class="size-4 shrink-0"
-            :class="entry.type === 'dir' ? 'text-primary' : 'text-muted'"
-          />
-          <span class="truncate text-default" :class="{ 'font-medium': entry.type === 'dir' }">{{
-            entry.name
-          }}</span>
-          <span
-            v-if="entry.lastCommit?.message"
-            class="ml-2 hidden min-w-0 truncate text-muted md:inline"
-            >{{ entry.lastCommit.message }}</span
-          >
-          <span class="ml-auto shrink-0 text-xs text-muted">
-            <span v-if="entry.lastCommit?.when">{{
-              formatRelativeTime(entry.lastCommit.when)
+          <template #default="{ offline }">
+            <UIcon
+              :name="
+                offline
+                  ? 'i-lucide-wifi-off'
+                  : entry.type === 'dir'
+                    ? 'i-lucide-folder'
+                    : 'i-lucide-file'
+              "
+              class="size-4 shrink-0"
+              :class="offline ? 'text-muted' : entry.type === 'dir' ? 'text-primary' : 'text-muted'"
+            />
+            <span class="truncate text-default" :class="{ 'font-medium': entry.type === 'dir' }">{{
+              entry.name
             }}</span>
-            <span v-else-if="entry.type === 'file' && entry.size !== undefined">{{
-              formatBytes(entry.size)
-            }}</span>
-          </span>
-        </NuxtLink>
+            <span
+              v-if="entry.lastCommit?.message"
+              class="ml-2 hidden min-w-0 truncate text-muted md:inline"
+              >{{ entry.lastCommit.message }}</span
+            >
+            <span class="ml-auto shrink-0 text-xs text-muted">
+              <span v-if="entry.lastCommit?.when">{{
+                formatRelativeTime(entry.lastCommit.when)
+              }}</span>
+              <span v-else-if="entry.type === 'file' && entry.size !== undefined">{{
+                formatBytes(entry.size)
+              }}</span>
+            </span>
+          </template>
+        </CommonOfflineLink>
       </li>
 
       <li v-if="!entries.length" class="px-4 py-8 text-center text-sm text-muted">

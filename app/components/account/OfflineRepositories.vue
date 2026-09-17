@@ -37,19 +37,20 @@ async function onMakeUnavailable(entry: RepoRef) {
       <h2 class="font-semibold text-highlighted">Offline access</h2>
       <p class="text-sm text-muted">
         Keep the repositories and pages you care about readable without an internet connection.
-        Frequently-visited repos — plus the issues, pull requests and discussions you've opened or
-        participated in — are cached on this device, along with the repo's open issue/PR/discussion
-        lists. Only public, read-only data is stored — private repositories are never cached — and
-        never tokens.
+        Recently visited repos — plus the issues, pull requests and discussions you've opened or
+        participated in — are cached on this device, along with the repo's landing-page documents,
+        first commit page and open issue/PR/discussion lists. Only public, read-only data is stored
+        — private repositories are never cached — and never tokens.
       </p>
     </div>
 
     <UCard>
       <div class="flex items-center justify-between gap-3">
         <div class="min-w-0">
-          <p class="font-medium text-default">Automatically keep frequent repos available</p>
+          <p class="font-medium text-default">Automatically keep recent repos available</p>
           <p class="text-sm text-muted">
-            Repos you visit most are made available offline, up to your maximum.
+            Repos you visit are saved in the background. The most recently opened ones are kept, up
+            to your maximum.
           </p>
         </div>
         <USwitch
@@ -65,8 +66,8 @@ async function onMakeUnavailable(entry: RepoRef) {
         <div class="min-w-0">
           <p class="font-medium text-default">Maximum repos kept automatically</p>
           <p class="text-sm text-muted">
-            When this many are already available offline, only your most-visited repos stay cached
-            on this device.
+            When this many are already available offline, the least recently opened unpinned repos
+            are removed from this device.
           </p>
         </div>
         <UInputNumber

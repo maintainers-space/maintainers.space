@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { ForgeCommit, ForgeFileDiff, ForgePullDetail } from '~/types/forge'
 import { useRepoContext } from '~/composables/useRepoContext'
+import { cached, TTL } from '~/lib/cache'
 
 const route = useRoute()
 const { provider, owner, name, forge, locator } = useRepoContext()
@@ -9,7 +10,8 @@ const base = computed(() =>
 )
 const id = computed(() => String(route.params.id))
 
-const watchItem = useOfflineRepos().watch
+const offline = useOfflineRepos()
+const watchItem = offline.watch
 const itemKey = computed(() => `pull:${provider.value}:${owner.value}:${name.value}:${id.value}`)
 
 // Any pull you open is remembered so it can be kept offline once its repo is.
@@ -17,7 +19,10 @@ watch(
   itemKey,
   (k) => {
     const [, , , , iid] = k.split(':')
-    if (iid) watchItem('pull', provider.value, owner.value, name.value, iid)
+    if (iid) {
+      watchItem('pull', provider.value, owner.value, name.value, iid)
+      void offline.auto()
+    }
   },
   { immediate: true }
 )
@@ -41,12 +46,26 @@ const files = ref<ForgeFileDiff[] | null>(null)
 const filesLoading = ref(false)
 const commits = ref<ForgeCommit[] | null>(null)
 const commitsLoading = ref(false)
+const isOnline = useOnline()
+
+watch(
+  itemKey,
+  () => {
+    files.value = null
+    commits.value = null
+  },
+  { immediate: true }
+)
 
 async function ensureFiles(): Promise<void> {
   if (files.value || filesLoading.value || !forge.value?.getPullFiles) return
   filesLoading.value = true
   try {
-    files.value = await forge.value.getPullFiles(locator.value, id.value)
+    files.value = await cached(
+      `${itemKey.value}:files`,
+      () => forge.value!.getPullFiles!(locator.value, id.value),
+      { ttl: TTL.MEDIUM }
+    )
   } catch {
     files.value = []
   } finally {
@@ -58,13 +77,31 @@ async function ensureCommits(): Promise<void> {
   if (commits.value || commitsLoading.value || !forge.value?.getPullCommits) return
   commitsLoading.value = true
   try {
-    commits.value = await forge.value.getPullCommits(locator.value, id.value)
+    commits.value = await cached(
+      `${itemKey.value}:commits`,
+      () => forge.value!.getPullCommits!(locator.value, id.value),
+      { ttl: TTL.MEDIUM }
+    )
   } catch {
     commits.value = []
   } finally {
     commitsLoading.value = false
   }
 }
+
+// A pull is not complete offline without its changed files and commits. Fetch
+// them after the conversation has rendered rather than making a user open both
+// tabs. The work remains cache-backed and is never attempted while offline.
+watch(
+  data,
+  (pull) => {
+    if (pull && isOnline.value) {
+      void ensureFiles()
+      void ensureCommits()
+    }
+  },
+  { immediate: true }
+)
 
 watch(tab, (t) => {
   if (t === 'files') ensureFiles()

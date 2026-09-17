@@ -39,7 +39,6 @@ useSeoMeta({
   <UApp :toaster="{ disableSwipe: true }">
     <VitePwaManifest />
     <NuxtLoadingIndicator />
-    <CommonOfflineBanner />
 
     <NuxtLayout>
       <NuxtPage />

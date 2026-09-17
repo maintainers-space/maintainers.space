@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { getForge, isForgeId } from '~/lib/forges'
+import { cacheExists } from '~/lib/cache'
 import type { ForgeRepo } from '~/types/forge'
 import { provideRepoContext, useRepoParams } from '~/composables/useRepoContext'
 
@@ -30,10 +31,17 @@ provideRepoContext({ provider, owner, name, forge, locator, meta, defaultBranch 
 
 // Track visits locally so signed-in users get a personal recent/favourite feed.
 const { record, recordSection } = useRepoVisits()
+const offline = useOfflineRepos()
 watch(
   meta,
   (m) => {
-    if (m) record(m)
+    if (m) {
+      record(m)
+      // Fill the repo's bounded offline surface after the visible header has
+      // loaded; the prefetcher deduplicates these entries with the page's own
+      // requests and stays within the configured repository/request limits.
+      offline.visit(m)
+    }
   },
   { immediate: true }
 )
@@ -42,6 +50,45 @@ const base = computed(() =>
   repoPath({ provider: provider.value, owner: owner.value, name: name.value })
 )
 const caps = computed(() => forge.value?.capabilities)
+const isOnline = useOnline()
+const { get: getToken } = useForgeTokens()
+const sectionAvailability = ref<Record<string, boolean>>({})
+
+const sectionCacheKeys = computed<Record<string, string>>(() => ({
+  code: `repo-code:${provider.value}:${owner.value}:${name.value}`,
+  issues: `issues:${provider.value}:${owner.value}:${name.value}:open`,
+  pulls: `pulls:${provider.value}:${owner.value}:${name.value}:open`,
+  actions: `actions:${provider.value}:${owner.value}:${name.value}`,
+  discussions: `discussions:${provider.value}:${owner.value}:${name.value}:${
+    getToken(provider.value) ? 'auth' : 'anon'
+  }`
+}))
+
+async function checkSectionAvailability(): Promise<void> {
+  if (!import.meta.client || isOnline.value) {
+    sectionAvailability.value = {}
+    return
+  }
+  const entries = await Promise.all(
+    Object.entries(sectionCacheKeys.value).map(async ([section, key]) => [
+      section,
+      await cacheExists(key)
+    ])
+  )
+  sectionAvailability.value = Object.fromEntries(entries)
+}
+
+watch([isOnline, provider, owner, name], () => void checkSectionAvailability(), {
+  immediate: true
+})
+
+function unavailableOffline(section: string): boolean {
+  return !isOnline.value && !sectionAvailability.value[section]
+}
+
+function tabIcon(section: string, normal: string): string {
+  return unavailableOffline(section) ? 'i-lucide-wifi-off' : normal
+}
 
 function startsWith(seg: string): boolean {
   return route.path === `${base.value}/${seg}` || route.path.startsWith(`${base.value}/${seg}/`)
@@ -72,34 +119,46 @@ const isCode = computed(
 const features = computed(() => meta.value?.features)
 
 const tabs = computed(() => {
-  const items = [{ label: 'Code', icon: 'i-lucide-code', to: base.value, active: isCode.value }]
+  const items = [
+    {
+      label: 'Code',
+      icon: tabIcon('code', 'i-lucide-code'),
+      to: base.value,
+      active: isCode.value,
+      disabled: unavailableOffline('code')
+    }
+  ]
   if (caps.value?.issues && features.value?.issues !== false)
     items.push({
       label: 'Issues',
-      icon: 'i-lucide-circle-dot',
+      icon: tabIcon('issues', 'i-lucide-circle-dot'),
       to: `${base.value}/issues`,
-      active: startsWith('issues')
+      active: startsWith('issues'),
+      disabled: unavailableOffline('issues')
     })
   if (caps.value?.pulls && features.value?.pulls !== false)
     items.push({
       label: pullsTerm(provider.value, { plural: true, capitalize: true }),
-      icon: 'i-lucide-git-pull-request',
+      icon: tabIcon('pulls', 'i-lucide-git-pull-request'),
       to: `${base.value}/pulls`,
-      active: startsWith('pulls')
+      active: startsWith('pulls'),
+      disabled: unavailableOffline('pulls')
     })
   if (caps.value?.actions)
     items.push({
       label: 'Actions',
-      icon: 'i-lucide-play',
+      icon: tabIcon('actions', 'i-lucide-play'),
       to: `${base.value}/actions`,
-      active: startsWith('actions')
+      active: startsWith('actions'),
+      disabled: unavailableOffline('actions')
     })
   if (caps.value?.discussions && features.value?.discussions !== false)
     items.push({
       label: 'Discussions',
-      icon: 'i-lucide-messages-square',
+      icon: tabIcon('discussions', 'i-lucide-messages-square'),
       to: `${base.value}/discussions`,
-      active: startsWith('discussions')
+      active: startsWith('discussions'),
+      disabled: unavailableOffline('discussions')
     })
   return items
 })

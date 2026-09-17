@@ -4,6 +4,7 @@ import { ACCENT_COLORS } from '~/composables/useAccentColor'
 withDefaults(defineProps<{ collapsed?: boolean }>(), { collapsed: false })
 
 const { current } = useAccentColor()
+const isOnline = useOnline()
 const needsDarkText = computed(
   () => ACCENT_COLORS.find((c) => c.id === current.value)?.needsDarkText ?? false
 )
@@ -21,17 +22,26 @@ const triggerSpin = () => {
   <NuxtLink
     to="/"
     class="group flex items-center gap-2 font-semibold text-highlighted"
+    :aria-label="isOnline ? 'maintainers.space home' : 'Offline — maintainers.space home'"
+    :title="isOnline ? undefined : 'Offline'"
     @mouseenter="triggerSpin"
   >
     <span
       class="logo-icon inline-flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary"
       :class="[
         needsDarkText ? 'text-neutral-900' : 'text-inverted',
-        { 'spin-animation': isSpinning }
+        { 'spin-animation': isSpinning && isOnline }
       ]"
       @animationend="isSpinning = false"
     >
-      <svg class="size-5" viewBox="0 0 337 337" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <UIcon v-if="!isOnline" name="i-lucide-wifi-off" class="size-5" />
+      <svg
+        v-else
+        class="size-5"
+        viewBox="0 0 337 337"
+        fill="none"
+        xmlns="http://www.w3.org/2000/svg"
+      >
         <mask
           id="mask0_809_66"
           style="mask-type: alpha"

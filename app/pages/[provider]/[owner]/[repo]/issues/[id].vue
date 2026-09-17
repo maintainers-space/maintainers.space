@@ -9,7 +9,8 @@ const base = computed(() =>
 )
 const id = computed(() => String(route.params.id))
 
-const watchItem = useOfflineRepos().watch
+const offline = useOfflineRepos()
+const watchItem = offline.watch
 const itemKey = computed(() => `issue:${provider.value}:${owner.value}:${name.value}:${id.value}`)
 
 // Any issue you open is remembered so it can be kept offline once its repo is.
@@ -17,7 +18,10 @@ watch(
   itemKey,
   (k) => {
     const [, , , , iid] = k.split(':')
-    if (iid) watchItem('issue', provider.value, owner.value, name.value, iid)
+    if (iid) {
+      watchItem('issue', provider.value, owner.value, name.value, iid)
+      void offline.auto()
+    }
   },
   { immediate: true }
 )
