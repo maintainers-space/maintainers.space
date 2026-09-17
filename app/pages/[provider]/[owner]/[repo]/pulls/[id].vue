@@ -47,49 +47,69 @@ const filesLoading = ref(false)
 const commits = ref<ForgeCommit[] | null>(null)
 const commitsLoading = ref(false)
 const isOnline = useOnline()
+let requestGeneration = 0
 
 watch(
   itemKey,
   () => {
+    requestGeneration++
     files.value = null
+    filesLoading.value = false
     commits.value = null
+    commitsLoading.value = false
   },
   { immediate: true }
 )
 
 async function ensureFiles(): Promise<void> {
-  if (files.value || filesLoading.value || !forge.value?.getPullFiles) return
+  const currentForge = forge.value
+  if (files.value || filesLoading.value || !currentForge?.getPullFiles) return
+  const generation = requestGeneration
+  const currentKey = itemKey.value
+  const currentLocator = locator.value
+  const currentId = id.value
+  const persist = !meta.value?.isPrivate
   filesLoading.value = true
   try {
-    const key = `${itemKey.value}:files`
-    const persist = !meta.value?.isPrivate
+    const key = `${currentKey}:files`
     if (!persist) invalidate(key)
-    files.value = await cached(key, () => forge.value!.getPullFiles!(locator.value, id.value), {
+    const result = await cached(key, () => currentForge.getPullFiles!(currentLocator, currentId), {
       ttl: TTL.MEDIUM,
       persist
     })
+    if (generation === requestGeneration) files.value = result
   } catch {
-    files.value = []
+    if (generation === requestGeneration) files.value = []
   } finally {
-    filesLoading.value = false
+    if (generation === requestGeneration) filesLoading.value = false
   }
 }
 
 async function ensureCommits(): Promise<void> {
-  if (commits.value || commitsLoading.value || !forge.value?.getPullCommits) return
+  const currentForge = forge.value
+  if (commits.value || commitsLoading.value || !currentForge?.getPullCommits) return
+  const generation = requestGeneration
+  const currentKey = itemKey.value
+  const currentLocator = locator.value
+  const currentId = id.value
+  const persist = !meta.value?.isPrivate
   commitsLoading.value = true
   try {
-    const key = `${itemKey.value}:commits`
-    const persist = !meta.value?.isPrivate
+    const key = `${currentKey}:commits`
     if (!persist) invalidate(key)
-    commits.value = await cached(key, () => forge.value!.getPullCommits!(locator.value, id.value), {
-      ttl: TTL.MEDIUM,
-      persist
-    })
+    const result = await cached(
+      key,
+      () => currentForge.getPullCommits!(currentLocator, currentId),
+      {
+        ttl: TTL.MEDIUM,
+        persist
+      }
+    )
+    if (generation === requestGeneration) commits.value = result
   } catch {
-    commits.value = []
+    if (generation === requestGeneration) commits.value = []
   } finally {
-    commitsLoading.value = false
+    if (generation === requestGeneration) commitsLoading.value = false
   }
 }
 
