@@ -1,3 +1,4 @@
+import AxeBuilder from '@axe-core/playwright'
 import { expect, test } from '@playwright/test'
 
 test.beforeEach(async ({ page }) => {
@@ -57,5 +58,78 @@ test.describe('anonymous visitor', () => {
 
     const sitemap = await request.get('/sitemap.xml')
     expect(await sitemap.text()).toContain('<loc>https://maintainers.space/</loc>')
+  })
+})
+
+test.describe('GitHub Markdown alerts', () => {
+  test('renders alerts in an issue and its comments', async ({ page }) => {
+    await page.route('https://api.github.com/repos/octo/alerts', (route) =>
+      route.fulfill({
+        json: {
+          owner: { login: 'octo' },
+          name: 'alerts',
+          full_name: 'octo/alerts',
+          default_branch: 'main',
+          html_url: 'https://github.com/octo/alerts',
+          has_issues: true
+        }
+      })
+    )
+    await page.route('https://api.github.com/repos/octo/alerts/issues/7', (route) =>
+      route.fulfill({
+        json: {
+          number: 7,
+          title: 'Alert rendering',
+          state: 'open',
+          user: { login: 'octo' },
+          body: [
+            '> [!NOTE]',
+            '> This issue uses a GitHub Markdown alert.',
+            '',
+            '> [!IMPORTANT]',
+            '> Important alerts retain Markdown formatting.',
+            '',
+            '> [!WARNING]',
+            '> Warning alerts are supported too.',
+            '',
+            '> [!CAUTION]',
+            '> Caution alerts are also supported.'
+          ].join('\n'),
+          comments: 1,
+          html_url: 'https://github.com/octo/alerts/issues/7'
+        }
+      })
+    )
+    await page.route(/api\.github\.com\/repos\/octo\/alerts\/issues\/7\/comments/, (route) =>
+      route.fulfill({
+        json: [
+          {
+            id: 1,
+            user: { login: 'hubot' },
+            body: '> [!TIP]\n> Alerts also work in comments.'
+          }
+        ]
+      })
+    )
+
+    await page.goto('/github/octo/alerts/issues/7')
+
+    const alerts = page.locator('.github-markdown-alert')
+    await expect(alerts).toHaveCount(5)
+    await expect(alerts.nth(0)).toHaveAttribute('data-github-alert', 'note')
+    await expect(alerts.nth(0)).toContainText('Note')
+    await expect(alerts.nth(0)).toContainText('This issue uses a GitHub Markdown alert.')
+    await expect(alerts.nth(1)).toHaveAttribute('data-github-alert', 'important')
+    await expect(alerts.nth(2)).toHaveAttribute('data-github-alert', 'warning')
+    await expect(alerts.nth(3)).toHaveAttribute('data-github-alert', 'caution')
+    await expect(alerts.nth(4)).toHaveAttribute('data-github-alert', 'tip')
+    await expect(alerts.nth(4)).toContainText('Tip')
+    await expect(alerts.nth(4)).toContainText('Alerts also work in comments.')
+
+    const results = await new AxeBuilder({ page })
+      .include('.github-markdown-alert')
+      .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+      .analyze()
+    expect(results.violations).toEqual([])
   })
 })

@@ -57,3 +57,91 @@
   display: inline;
   margin: 0;
 }
+
+/*
+ * GitHub alerts are standalone `[!TYPE]` blockquote markers. The parser adds
+ * these classes only after Markdown is parsed, so markers in fenced code stay
+ * literal.
+ */
+.prose .github-markdown-alert {
+  --github-markdown-alert-accent: var(--color-blue-800);
+  --github-markdown-alert-background: var(--color-blue-50);
+
+  margin-block: 1rem;
+  border-inline-start: 0.25rem solid var(--github-markdown-alert-accent);
+  border-radius: 0.25rem;
+  background: var(--github-markdown-alert-background);
+  padding: 0.75rem 1rem;
+  font-style: normal;
+  font-weight: inherit;
+}
+
+.prose .github-markdown-alert[data-github-alert='tip'] {
+  --github-markdown-alert-accent: var(--color-green-800);
+  --github-markdown-alert-background: var(--color-green-50);
+}
+
+.prose .github-markdown-alert[data-github-alert='important'] {
+  --github-markdown-alert-accent: var(--color-purple-800);
+  --github-markdown-alert-background: var(--color-purple-50);
+}
+
+.prose .github-markdown-alert[data-github-alert='warning'] {
+  --github-markdown-alert-accent: var(--color-amber-800);
+  --github-markdown-alert-background: var(--color-amber-50);
+}
+
+.prose .github-markdown-alert[data-github-alert='caution'] {
+  --github-markdown-alert-accent: var(--color-red-800);
+  --github-markdown-alert-background: var(--color-red-50);
+}
+
+.dark .prose .github-markdown-alert {
+  --github-markdown-alert-accent: var(--color-blue-400);
+  --github-markdown-alert-background: var(--color-blue-950);
+}
+
+.dark .prose .github-markdown-alert[data-github-alert='tip'] {
+  --github-markdown-alert-accent: var(--color-green-400);
+  --github-markdown-alert-background: var(--color-green-950);
+}
+
+.dark .prose .github-markdown-alert[data-github-alert='important'] {
+  --github-markdown-alert-accent: var(--color-purple-400);
+  --github-markdown-alert-background: var(--color-purple-950);
+}
+
+.dark .prose .github-markdown-alert[data-github-alert='warning'] {
+  --github-markdown-alert-accent: var(--color-amber-400);
+  --github-markdown-alert-background: var(--color-amber-950);
+}
+
+.dark .prose .github-markdown-alert[data-github-alert='caution'] {
+  --github-markdown-alert-accent: var(--color-red-400);
+  --github-markdown-alert-background: var(--color-red-950);
+}
+
+.prose .github-markdown-alert p:first-child {
+  margin-top: 0;
+}
+
+.prose .github-markdown-alert p:last-child {
+  margin-bottom: 0;
+}
+
+.prose .github-markdown-alert p:first-of-type::before,
+.prose .github-markdown-alert p:first-of-type::after {
+  content: none;
+}
+
+.prose .github-markdown-alert__title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--github-markdown-alert-accent);
+  font-weight: 600;
+}
+
+.prose .github-markdown-alert__title + br {
+  display: none;
+}
