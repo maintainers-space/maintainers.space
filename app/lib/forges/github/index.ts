@@ -84,6 +84,7 @@ import {
 } from './mappers'
 
 const API = 'https://api.github.com'
+const GH_MAX_PER_PAGE = 100
 
 function ghHeaders(
   opts?: ForgeReadOptions,
@@ -96,6 +97,20 @@ function ghHeaders(
   const token = opts?.token ?? getForgeToken('github')
   if (token) headers.Authorization = 'Bearer ' + token
   return headers
+}
+
+/** GitHub's REST API caps page sizes at 100, so keep requesting until its short final page. */
+async function ghFetchAllPages<T>(path: string, opts?: ForgeReadOptions): Promise<T[]> {
+  const items: T[] = []
+  for (let page = 1; ; page++) {
+    const batch = await $fetch<T[]>(`${API}${path}`, {
+      headers: ghHeaders(opts),
+      query: { per_page: GH_MAX_PER_PAGE, page },
+      signal: opts?.signal
+    })
+    items.push(...batch)
+    if (batch.length < GH_MAX_PER_PAGE) return items
+  }
 }
 
 async function ghGraphql<T>(
@@ -419,11 +434,10 @@ export const githubProvider: ForgeProvider = {
         headers: ghHeaders(opts),
         signal: opts?.signal
       }),
-      $fetch<GhCommentResponse[]>(`${API}/repos/${repo.owner}/${repo.name}/issues/${id}/comments`, {
-        headers: ghHeaders(opts),
-        query: { per_page: 100 },
-        signal: opts?.signal
-      }).catch(() => [])
+      ghFetchAllPages<GhCommentResponse>(
+        `/repos/${repo.owner}/${repo.name}/issues/${id}/comments`,
+        opts
+      ).catch(() => [])
     ])
     return {
       ...mapIssue(issue),
@@ -456,11 +470,10 @@ export const githubProvider: ForgeProvider = {
         headers: ghHeaders(opts),
         signal: opts?.signal
       }),
-      $fetch<GhCommentResponse[]>(`${API}/repos/${repo.owner}/${repo.name}/issues/${id}/comments`, {
-        headers: ghHeaders(opts),
-        query: { per_page: 100 },
-        signal: opts?.signal
-      }).catch(() => [])
+      ghFetchAllPages<GhCommentResponse>(
+        `/repos/${repo.owner}/${repo.name}/issues/${id}/comments`,
+        opts
+      ).catch(() => [])
     ])
     return {
       ...mapPull(pr),
