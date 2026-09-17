@@ -12,8 +12,6 @@ export interface CachedFetchOptions {
   accept?: string
   /** Bypass the proxy's cache (used once after a full page reload on Search). */
   noCache?: boolean
-  /** Which cached proxy route to use for anonymous reads. @default '/api/search-proxy' */
-  proxyPath?: '/api/search-proxy' | '/api/graph-proxy'
   signal?: AbortSignal
 }
 
@@ -29,7 +27,7 @@ export async function cachedFetch<T>(
       signal: opts.signal
     })) as T
   }
-  return (await $fetch(opts.proxyPath ?? '/api/search-proxy', {
+  return (await $fetch('/api/search-proxy', {
     query: { ...query, url, accept: opts.accept },
     headers: opts.noCache ? { 'Cache-Control': 'no-cache' } : undefined,
     signal: opts.signal

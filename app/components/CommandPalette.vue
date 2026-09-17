@@ -97,7 +97,6 @@ const groups = computed<CommandPaletteGroup<CommandPaletteItem>[]>(() => {
       items: [
         { label: 'Home', icon: 'i-lucide-house', onSelect: () => go('/') },
         { label: 'Search', icon: 'i-lucide-search', kbds: ['/'], onSelect: () => go('/search') },
-        { label: 'Explore', icon: 'i-lucide-compass', onSelect: () => go('/explore') },
         ...(isAuthenticated.value
           ? [
               {

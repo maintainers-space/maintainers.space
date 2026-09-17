@@ -56,12 +56,6 @@ Initial public release of **maintainers.space** — a unified dashboard for inte
 - Cross-provider discussion search and relevance ranking
 - Animated filter suggestions, aggregated warning banners and per-forge caching
 
-### Explore & the social graph
-
-- Cross-forge social graph rendered with force-graph, with person cards and trending
-- Public follow/followers/contributors across providers, fair friend interleaving
-- Cached, long-TTL proxy for social-graph reads
-
 ### Repositories
 
 - Tabbed repo detail pages: code, issues, pull requests, actions and discussions

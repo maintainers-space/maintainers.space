@@ -6,7 +6,7 @@ import type { ContributionEntry } from '~/components/home/ContributionList.vue'
 const { isAuthenticated, profile } = useAuth()
 const { jumpBackIn, clear: clearVisits } = useRepoVisits()
 const home = useHomeFeed()
-const following = useExplore()
+const following = useFollowingRepositories()
 const connectBanner = useDismissible('home-connect-account')
 const overlay = useOverlay()
 const confirmClearHistory = overlay.create(ConfirmModal)
@@ -73,7 +73,7 @@ function quickSearch(): void {
 onMounted(() => {
   if (isAuthenticated.value) {
     home.load()
-    following.load({ scope: 'following', limit: 12 })
+    following.load()
   }
 })
 
@@ -81,7 +81,7 @@ onMounted(() => {
 watch(isAuthenticated, (v) => {
   if (v && !home.loaded.value) {
     home.load()
-    following.load({ scope: 'following', limit: 12 })
+    following.load()
   }
 })
 
@@ -218,14 +218,11 @@ const examples = [
 
         <!-- Projects from people you follow -->
         <section v-if="followingRepos.length" class="space-y-3">
-          <div class="flex items-center justify-between">
-            <div class="flex items-center gap-2">
-              <UIcon name="i-lucide-users" class="size-4 text-muted" />
-              <h2 class="text-sm font-semibold uppercase tracking-wide text-muted">
-                Projects from people you follow
-              </h2>
-            </div>
-            <NuxtLink to="/explore" class="text-xs text-primary hover:underline">Explore</NuxtLink>
+          <div class="flex items-center gap-2">
+            <UIcon name="i-lucide-users" class="size-4 text-muted" />
+            <h2 class="text-sm font-semibold uppercase tracking-wide text-muted">
+              Projects from people you follow
+            </h2>
           </div>
           <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             <HomeRepoMiniCard

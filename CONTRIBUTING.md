@@ -158,7 +158,7 @@ server/         # Nitro server
 lexicons/       # maintainers.space's own atproto lexicon (space.maintainers.forgeAccount)
 ```
 
-Each forge implements the same `ForgeProvider` interface defined in `app/types/forge.ts`, mapping that provider's raw API responses into a common set of types (`ForgeRepo`, `ForgeIssue`, `ForgePull`, and so on) so the rest of the app never has to know which forge it's talking to. Registering a new forge is one entry in `app/lib/forges/index.ts` — every cross-forge surface (search, explore, notifications, timeline, home dashboard) iterates that registry generically rather than hardcoding a provider list.
+Each forge implements the same `ForgeProvider` interface defined in `app/types/forge.ts`, mapping that provider's raw API responses into a common set of types (`ForgeRepo`, `ForgeIssue`, `ForgePull`, and so on) so the rest of the app never has to know which forge it's talking to. Registering a new forge is one entry in `app/lib/forges/index.ts` — every cross-forge surface (search, notifications, timeline, home dashboard) iterates that registry generically rather than hardcoding a provider list.
 
 GitHub, GitLab, Tangled and Bitbucket each live in their own folder (`app/lib/forges/{github,gitlab,tangled,bitbucket}/`), split the same way:
 

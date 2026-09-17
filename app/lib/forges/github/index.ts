@@ -1160,57 +1160,6 @@ export const githubProvider: ForgeProvider = {
       .filter((u): u is ForgeUser => !!u)
   },
 
-  async listUserFollowing(login, opts): Promise<ForgeUser[]> {
-    const data = await cachedFetch<GhUserResponse[]>(
-      `${API}/users/${encodeURIComponent(login)}/following`,
-      { per_page: opts?.limit ?? 100 },
-      {
-        token: opts?.token ?? getForgeToken('github'),
-        headers: ghHeaders(opts),
-        proxyPath: '/api/graph-proxy',
-        signal: opts?.signal
-      }
-    ).catch(() => [])
-    return (data ?? [])
-      .filter((u) => String(u.type) === 'User')
-      .map((u) => mapUser(u))
-      .filter((u): u is ForgeUser => !!u)
-  },
-
-  async listUserFollowers(login, opts): Promise<ForgeUser[]> {
-    const data = await cachedFetch<GhUserResponse[]>(
-      `${API}/users/${encodeURIComponent(login)}/followers`,
-      { per_page: opts?.limit ?? 100 },
-      {
-        token: opts?.token ?? getForgeToken('github'),
-        headers: ghHeaders(opts),
-        proxyPath: '/api/graph-proxy',
-        signal: opts?.signal
-      }
-    ).catch(() => [])
-    return (data ?? [])
-      .filter((u) => String(u.type) === 'User')
-      .map((u) => mapUser(u))
-      .filter((u): u is ForgeUser => !!u)
-  },
-
-  async listContributors(repo, opts): Promise<ForgeUser[]> {
-    const data = await cachedFetch<GhUserResponse[]>(
-      `${API}/repos/${repo.owner}/${repo.name}/contributors`,
-      { per_page: opts?.limit ?? 20, anon: false },
-      {
-        token: opts?.token ?? getForgeToken('github'),
-        headers: ghHeaders(opts),
-        proxyPath: '/api/graph-proxy',
-        signal: opts?.signal
-      }
-    ).catch(() => [])
-    return (data ?? [])
-      .filter((u) => String(u.type) === 'User' && u.login)
-      .map((u) => mapUser(u))
-      .filter((u): u is ForgeUser => !!u)
-  },
-
   async listUserEvents(login, opts): Promise<ForgeContribution[]> {
     const data = await $fetch<GhEventResponse[]>(
       `${API}/users/${encodeURIComponent(login)}/events`,

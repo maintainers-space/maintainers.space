@@ -27,7 +27,6 @@ import type {
 import { getForgeToken } from '~/lib/forges/token-store'
 import { parseActionsRunnerLog } from '~/lib/forges/actions-log'
 import { cachedFetch } from '~/lib/forges/cached-fetch'
-import { deriveContributorsFromCommits } from '~/lib/forges/derive-contributors'
 import type {
   GfActionRunJobResponse,
   GfActionRunListResponse,
@@ -831,43 +830,6 @@ export function createGiteaFamilyProvider(config: GiteaFamilyConfig): ForgeProvi
         { ...opts, token }
       ).catch(() => [])
       return (data ?? []).map(gf.mapUser).filter((u): u is ForgeUser => !!u)
-    },
-
-    async listUserFollowing(login, opts): Promise<ForgeUser[]> {
-      const data = await cachedFetch<GfUserResponse[]>(
-        `${API}/users/${encodeURIComponent(login)}/following`,
-        { limit: opts?.limit ?? 100 },
-        {
-          token: opts?.token ?? getForgeToken(providerId),
-          headers: headers(opts),
-          proxyPath: '/api/graph-proxy',
-          signal: opts?.signal
-        }
-      ).catch(() => [])
-      return (data ?? []).map(gf.mapUser).filter((u): u is ForgeUser => !!u)
-    },
-
-    async listUserFollowers(login, opts): Promise<ForgeUser[]> {
-      const data = await cachedFetch<GfUserResponse[]>(
-        `${API}/users/${encodeURIComponent(login)}/followers`,
-        { limit: opts?.limit ?? 100 },
-        {
-          token: opts?.token ?? getForgeToken(providerId),
-          headers: headers(opts),
-          proxyPath: '/api/graph-proxy',
-          signal: opts?.signal
-        }
-      ).catch(() => [])
-      return (data ?? []).map(gf.mapUser).filter((u): u is ForgeUser => !!u)
-    },
-
-    async listContributors(repo, opts): Promise<ForgeUser[]> {
-      return deriveContributorsFromCommits(
-        providerId,
-        () => provider.getRepo!(repo.owner, repo.name, opts).then((r) => r.defaultBranch),
-        (ref) => provider.listCommits!(repo, ref, { ...opts, limit: 100 }),
-        opts?.limit ?? 8
-      )
     },
 
     async listUserEvents(login, opts): Promise<ForgeContribution[]> {

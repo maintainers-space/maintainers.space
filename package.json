@@ -56,7 +56,6 @@
     "@vueuse/nuxt": "^14.4.0",
     "codemirror": "^6.0.2",
     "dompurify": "^3.4.13",
-    "force-graph": "^1.51.4",
     "h3": "^1.15.11",
     "jose": "^6.2.4",
     "marked": "^18.0.7",

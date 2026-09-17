@@ -65,7 +65,6 @@ export default defineNuxtConfig({
     },
     '/bitbucket/**': { headers: { 'x-robots-tag': 'noindex, nofollow' } },
     '/codeberg/**': { headers: { 'x-robots-tag': 'noindex, nofollow' } },
-    '/explore': { headers: { 'x-robots-tag': 'noindex, nofollow' } },
     '/gitea/**': { headers: { 'x-robots-tag': 'noindex, nofollow' } },
     '/github/**': { headers: { 'x-robots-tag': 'noindex, nofollow' } },
     '/gitlab/**': { headers: { 'x-robots-tag': 'noindex, nofollow' } },
@@ -132,9 +131,9 @@ export default defineNuxtConfig({
       navigateFallbackDenylist: [/^\/oauth\//, /^\/api\//],
       runtimeCaching: [
         {
-          // This server's own read proxies (search, graph, tangled, github
-          // actions-log) — never `/api/auth/**`, whose OAuth redirects must
-          // always hit the network fresh.
+          // This server's own read proxies (search, tangled, github actions-log)
+          // — never `/api/auth/**`, whose OAuth redirects must always hit the
+          // network fresh.
           urlPattern: /^\/api\/(?!auth\/)/,
           handler: 'NetworkFirst',
           options: {
