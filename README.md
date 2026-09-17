@@ -1,6 +1,7 @@
 # maintainers.space
 
 [![Nuxt UI](https://img.shields.io/badge/Made%20with-Nuxt%20UI-00DC82?logo=nuxt&labelColor=020420)](https://ui.nuxt.com)
+[![Netlify Status](https://api.netlify.com/api/v1/badges/7d17e60d-2bfd-4ab5-9242-ac429624bcd6/deploy-status)](https://app.netlify.com/projects/maintainers/deploys)
 
 maintainers.space pulls your work across Git hosts into one place. Repos, issues, pull requests and notifications from GitHub, GitLab, Codeberg, Gitea, Bitbucket and [Tangled](https://tangled.org), all in one dashboard. You sign in with your AT Protocol (Bluesky) identity, and maintainers.space uses that same identity to find your accounts on each of them. Built with [Nuxt](https://nuxt.com) and [Nuxt UI](https://ui.nuxt.com).
 
