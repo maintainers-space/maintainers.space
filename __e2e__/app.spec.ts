@@ -100,16 +100,18 @@ test.describe('GitHub Markdown alerts', () => {
         }
       })
     )
-    await page.route(/api\.github\.com\/repos\/octo\/alerts\/issues\/7\/comments/, (route) =>
-      route.fulfill({
-        json: [
-          {
-            id: 1,
-            user: { login: 'hubot' },
-            body: '> [!TIP]\n> Alerts also work in comments.'
-          }
-        ]
-      })
+    await page.route(
+      /^https:\/\/api\.github\.com\/repos\/octo\/alerts\/issues\/7\/comments(?:\?.*)?$/,
+      (route) =>
+        route.fulfill({
+          json: [
+            {
+              id: 1,
+              user: { login: 'hubot' },
+              body: '> [!TIP]\n> Alerts also work in comments.'
+            }
+          ]
+        })
     )
 
     await page.goto('/github/octo/alerts/issues/7')
