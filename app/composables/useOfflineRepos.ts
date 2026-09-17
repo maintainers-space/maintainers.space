@@ -58,6 +58,8 @@ const _watched = ref<string[]>([])
 let _loaded = false
 /** A visit that arrives during a run gets one deterministic follow-up pass. */
 let _rerunRequested = false
+/** The shared crawl callers await, including any queued follow-up pass. */
+let _run: Promise<void> | null = null
 /**
  * Per-run budget of forge API requests, so one auto() run can never issue an
  * unbounded burst (default 100 repos × several requests each). Decremented as
@@ -117,6 +119,7 @@ function clearAll(): void {
   _maxCount.value = OFFLINE_DEFAULT_MAX_COUNT
   _pinned.value = []
   _watched.value = []
+  _rerunRequested = false
   if (import.meta.client) {
     localStorage.removeItem(SETTINGS_KEY)
     localStorage.removeItem(WATCHED_KEY)
@@ -396,13 +399,7 @@ export function useOfflineRepos() {
     ].filter((r) => r.provider && r.owner && r.name && isCacheable(r))
   }
 
-  /** Seed every candidate (best-effort), with one follow-up for concurrent visits. */
-  async function auto(): Promise<void> {
-    if (!_enabled.value) return
-    if (_running.value) {
-      _rerunRequested = true
-      return
-    }
+  async function seedCandidates(): Promise<void> {
     _running.value = true
     _runBudget = RUN_REQUEST_BUDGET
     _rateLimited = false
@@ -419,11 +416,36 @@ export function useOfflineRepos() {
     } finally {
       _running.value = false
     }
-    await evictExcess()
-    if (_rerunRequested) {
-      _rerunRequested = false
-      await auto()
+  }
+
+  /**
+   * Start one shared crawl. Calls made while it is running await this promise;
+   * a concurrent visit requests one final candidate pass before it resolves.
+   */
+  function run(seed: () => Promise<void>): Promise<void> {
+    const work = (async () => {
+      let next = seed
+      do {
+        _rerunRequested = false
+        await next()
+        next = seedCandidates
+      } while (_rerunRequested)
+      await evictExcess()
+    })()
+    _run = work.finally(() => {
+      _run = null
+    })
+    return _run
+  }
+
+  /** Seed every candidate (best-effort), with one follow-up for concurrent visits. */
+  function auto(): Promise<void> {
+    if (!_enabled.value) return Promise.resolve()
+    if (_run) {
+      _rerunRequested = true
+      return _run
     }
+    return run(seedCandidates)
   }
 
   function setEnabled(enabled: boolean): void {
@@ -455,24 +477,23 @@ export function useOfflineRepos() {
       _pinned.value = [..._pinned.value, repo]
       persist()
     }
-    // `seedRepo` shares auto()'s request budget. A manual pin must establish a
-    // fresh budget when there is no automatic run, otherwise it would always
-    // short-circuit before its first request.
-    if (_running.value) {
-      // The pin is already in `candidates()`; schedule it for the pass after
-      // the in-flight automatic crawl instead of racing its shared budget.
-      void auto()
+    if (_run) {
+      // The pin is already in `candidates()`. Add a pass after the in-flight
+      // crawl, and do not resolve until that pass has seeded it.
+      _rerunRequested = true
+      await _run
       return
     }
-    _running.value = true
-    _runBudget = RUN_REQUEST_BUDGET
-    _rateLimited = false
-    try {
-      await seedRepo(repo, true)
-    } finally {
-      _running.value = false
-    }
-    await evictExcess()
+    await run(async () => {
+      _running.value = true
+      _runBudget = RUN_REQUEST_BUDGET
+      _rateLimited = false
+      try {
+        await seedRepo(repo, true)
+      } finally {
+        _running.value = false
+      }
+    })
   }
 
   /** Stop keeping `repo` offline; existing cached data is left in place. */

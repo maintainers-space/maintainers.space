@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { cacheExists, cached, clearCache, invalidate, prefetch } from './cache'
+import { cacheExists, cached, clearCache, invalidate, invalidateRepoCache, prefetch } from './cache'
 
 afterEach(() => {
   clearCache()
@@ -83,5 +83,17 @@ describe('invalidate', () => {
     expect(await cacheExists('repo-code:a:b')).toBe(true)
     invalidate('repo-code:a:b')
     expect(await cacheExists('repo-code:a:b')).toBe(false)
+  })
+
+  it('drops every cache entry belonging to a private repository', async () => {
+    await prefetch('repo-meta:github:private:repo', async () => ({}))
+    await prefetch('pull:github:private:repo:1:files', async () => [])
+    await prefetch('repo-meta:github:public:repo', async () => ({}))
+
+    invalidateRepoCache('github', 'private', 'repo')
+
+    expect(await cacheExists('repo-meta:github:private:repo')).toBe(false)
+    expect(await cacheExists('pull:github:private:repo:1:files')).toBe(false)
+    expect(await cacheExists('repo-meta:github:public:repo')).toBe(true)
   })
 })

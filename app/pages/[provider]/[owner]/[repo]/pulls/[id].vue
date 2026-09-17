@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import type { ForgeCommit, ForgeFileDiff, ForgePullDetail } from '~/types/forge'
 import { useRepoContext } from '~/composables/useRepoContext'
-import { cached, TTL } from '~/lib/cache'
+import { cached, invalidate, TTL } from '~/lib/cache'
 
 const route = useRoute()
-const { provider, owner, name, forge, locator } = useRepoContext()
+const { provider, owner, name, forge, locator, meta } = useRepoContext()
 const base = computed(() =>
   repoPath({ provider: provider.value, owner: owner.value, name: name.value })
 )
@@ -61,11 +61,13 @@ async function ensureFiles(): Promise<void> {
   if (files.value || filesLoading.value || !forge.value?.getPullFiles) return
   filesLoading.value = true
   try {
-    files.value = await cached(
-      `${itemKey.value}:files`,
-      () => forge.value!.getPullFiles!(locator.value, id.value),
-      { ttl: TTL.MEDIUM }
-    )
+    const key = `${itemKey.value}:files`
+    const persist = !meta.value?.isPrivate
+    if (!persist) invalidate(key)
+    files.value = await cached(key, () => forge.value!.getPullFiles!(locator.value, id.value), {
+      ttl: TTL.MEDIUM,
+      persist
+    })
   } catch {
     files.value = []
   } finally {
@@ -77,11 +79,13 @@ async function ensureCommits(): Promise<void> {
   if (commits.value || commitsLoading.value || !forge.value?.getPullCommits) return
   commitsLoading.value = true
   try {
-    commits.value = await cached(
-      `${itemKey.value}:commits`,
-      () => forge.value!.getPullCommits!(locator.value, id.value),
-      { ttl: TTL.MEDIUM }
-    )
+    const key = `${itemKey.value}:commits`
+    const persist = !meta.value?.isPrivate
+    if (!persist) invalidate(key)
+    commits.value = await cached(key, () => forge.value!.getPullCommits!(locator.value, id.value), {
+      ttl: TTL.MEDIUM,
+      persist
+    })
   } catch {
     commits.value = []
   } finally {

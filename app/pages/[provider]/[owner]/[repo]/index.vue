@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { loadRepoCode } from '~/lib/repo-code'
 import { useRepoContext } from '~/composables/useRepoContext'
-import { cached, TTL } from '~/lib/cache'
+import { cached, invalidate, TTL } from '~/lib/cache'
 
 const { provider, owner, name, forge, locator, meta, defaultBranch } = useRepoContext()
 const base = computed(() =>
@@ -35,11 +35,13 @@ const { data, pending, error, refresh } = useLiveAsyncData<Awaited<
 async function loadDoc(path: string): Promise<string> {
   const f = forge.value
   if (!f?.getBlob) return ''
-  const blob = await cached(
-    `blob:${provider.value}:${owner.value}:${name.value}:${defaultBranch.value}:${path}`,
-    () => f.getBlob!(locator.value, defaultBranch.value, path),
-    { ttl: TTL.MEDIUM }
-  )
+  const key = `blob:${provider.value}:${owner.value}:${name.value}:${defaultBranch.value}:${path}`
+  const persist = !meta.value?.isPrivate
+  if (!persist) invalidate(key)
+  const blob = await cached(key, () => f.getBlob!(locator.value, defaultBranch.value, path), {
+    ttl: TTL.MEDIUM,
+    persist
+  })
   return blob.isBinary ? '' : blob.content
 }
 </script>

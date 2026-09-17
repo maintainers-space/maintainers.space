@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { getForge, isForgeId } from '~/lib/forges'
-import { cacheExists } from '~/lib/cache'
+import { cacheExists, invalidateRepoCache } from '~/lib/cache'
 import type { ForgeRepo } from '~/types/forge'
 import { provideRepoContext, useRepoParams } from '~/composables/useRepoContext'
 
@@ -37,6 +37,12 @@ watch(
   (m) => {
     if (m) {
       record(m)
+      if (m.isPrivate) {
+        // Metadata is the first response that can identify visibility. Remove
+        // any current or legacy IndexedDB entries before child pages load.
+        invalidateRepoCache(m.provider, m.owner, m.name)
+        return
+      }
       // Fill the repo's bounded offline surface after the visible header has
       // loaded; the prefetcher deduplicates these entries with the page's own
       // requests and stays within the configured repository/request limits.
