@@ -2,7 +2,6 @@ User-agent: *
 Allow: /
 Disallow: /*?*
 Disallow: /api/
-Disallow: /explore
 Disallow: /login
 Disallow: /notifications/
 Disallow: /oauth/

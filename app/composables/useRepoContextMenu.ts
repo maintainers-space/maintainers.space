@@ -55,13 +55,6 @@ export function useRepoContextMenu(repo: MaybeRefOrGetter<ForgeRepo>) {
         to: `/search?q=${encodeURIComponent(`owner:${r.owner}`)}`
       }
     ]
-    if (r.language) {
-      discover.push({
-        label: `Explore ${r.language}`,
-        icon: 'i-lucide-code',
-        to: `/explore?lang=${encodeURIComponent(r.language)}`
-      })
-    }
 
     const external: ContextMenuItem[] = [
       {

@@ -29,7 +29,6 @@ import type {
 import { getForgeToken } from '~/lib/forges/token-store'
 import { parseGitlabJobTrace } from '~/lib/forges/actions-log'
 import { cachedFetch } from '~/lib/forges/cached-fetch'
-import { deriveContributorsFromCommits } from '~/lib/forges/derive-contributors'
 import type {
   GlAwardEmojiResponse,
   GlBlobSearchResponse,
@@ -890,47 +889,6 @@ export const gitlabProvider: ForgeProvider = {
       opts
     ).catch(() => [])
     return (data ?? []).map(mapUser).filter((u): u is ForgeUser => !!u)
-  },
-
-  async listUserFollowing(login, opts): Promise<ForgeUser[]> {
-    const uid = await resolveUserId(login, opts)
-    if (uid == null) return []
-    const data = await cachedFetch<GlUserResponse[]>(
-      `${API}/users/${uid}/following`,
-      { per_page: opts?.limit ?? 100 },
-      {
-        token: opts?.token ?? getForgeToken('gitlab'),
-        headers: glHeaders(opts),
-        proxyPath: '/api/graph-proxy',
-        signal: opts?.signal
-      }
-    ).catch(() => [])
-    return (data ?? []).map(mapUser).filter((u): u is ForgeUser => !!u)
-  },
-
-  async listUserFollowers(login, opts): Promise<ForgeUser[]> {
-    const uid = await resolveUserId(login, opts)
-    if (uid == null) return []
-    const data = await cachedFetch<GlUserResponse[]>(
-      `${API}/users/${uid}/followers`,
-      { per_page: opts?.limit ?? 100 },
-      {
-        token: opts?.token ?? getForgeToken('gitlab'),
-        headers: glHeaders(opts),
-        proxyPath: '/api/graph-proxy',
-        signal: opts?.signal
-      }
-    ).catch(() => [])
-    return (data ?? []).map(mapUser).filter((u): u is ForgeUser => !!u)
-  },
-
-  async listContributors(repo, opts): Promise<ForgeUser[]> {
-    return deriveContributorsFromCommits(
-      'gitlab',
-      () => gitlabProvider.getRepo!(repo.owner, repo.name, opts).then((r) => r.defaultBranch),
-      (ref) => gitlabProvider.listCommits!(repo, ref, { ...opts, limit: 100 }),
-      opts?.limit ?? 8
-    )
   },
 
   async listUserEvents(login, opts): Promise<ForgeContribution[]> {

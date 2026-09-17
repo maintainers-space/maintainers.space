@@ -10,6 +10,7 @@ test.describe('anonymous visitor', () => {
 
     await expect(page).toHaveTitle(/maintainers\.space/)
     await expect(page.getByRole('heading', { name: 'One place for every forge.' })).toBeVisible()
+    await expect(page.getByRole('link', { name: 'Explore', exact: true })).toHaveCount(0)
 
     await page.getByRole('link', { name: 'Search', exact: true }).first().click()
     await expect(page).toHaveURL(/\/search$/)

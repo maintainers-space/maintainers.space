@@ -33,14 +33,6 @@ const nav = computed<NavigationMenuItem[]>(() => {
       onSelect: () => {
         open.value = false
       }
-    },
-    {
-      label: 'Explore',
-      icon: 'i-lucide-compass',
-      to: '/explore',
-      onSelect: () => {
-        open.value = false
-      }
     }
   ]
   if (isAuthenticated.value) {
@@ -101,8 +93,6 @@ const nav = computed<NavigationMenuItem[]>(() => {
         </UButton>
 
         <UNavigationMenu :collapsed="collapsed" :items="nav" orientation="vertical" tooltip />
-
-        <ExploreSidebar v-if="!collapsed" />
       </template>
 
       <template #footer="{ collapsed }">

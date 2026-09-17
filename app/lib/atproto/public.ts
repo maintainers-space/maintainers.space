@@ -92,9 +92,9 @@ export interface FollowedAccount {
 }
 
 /**
- * Accounts the given actor follows on the atproto social graph (Bluesky).
- * Best-effort and paginated up to `limit`; returns [] on any failure so callers
- * can treat "no follows" and "appview unreachable" identically.
+ * Accounts the given actor follows on Bluesky. Best-effort and paginated up to
+ * `limit`; returns [] on any failure so callers can treat "no follows" and
+ * "appview unreachable" identically.
  */
 export async function fetchFollows(actor: string, limit = 100): Promise<FollowedAccount[]> {
   let did: string
@@ -124,7 +124,7 @@ export async function fetchFollows(actor: string, limit = 100): Promise<Followed
       if (!cursor || out.length >= limit) break
     }
   } catch {
-    /* best-effort — appview may be blocked or the actor may have no graph */
+    /* best-effort — appview may be blocked or the actor may not follow anyone */
   }
   return out.slice(0, limit)
 }
