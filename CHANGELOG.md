@@ -1,5 +1,15 @@
 # maintainers.space
 
+## 0.2.1
+
+### Patch Changes
+
+- [#14](https://github.com/maintainers-space/maintainers.space/pull/14) [`e755f12`](https://github.com/maintainers-space/maintainers.space/commit/e755f12386b1687dc07d0e98db73ad7ccfd6a5f7) Thanks [@trueberryless-bot](https://github.com/trueberryless-bot)! - Remove the Explore page and its social graph.
+
+- [#11](https://github.com/maintainers-space/maintainers.space/pull/11) [`7bd7410`](https://github.com/maintainers-space/maintainers.space/commit/7bd7410d6558092493012e4e0ccb5be515ce3cee) Thanks [@trueberryless-bot](https://github.com/trueberryless-bot)! - Show all GitHub issue and pull request comments, including threads with more than 100 comments.
+
+- [#13](https://github.com/maintainers-space/maintainers.space/pull/13) [`4d60b88`](https://github.com/maintainers-space/maintainers.space/commit/4d60b88fe419c9c4b1c44b0fad4ccfd49b8f9539) Thanks [@trueberryless-bot](https://github.com/trueberryless-bot)! - Automatically save the browsable surface of recently opened public repositories and clearly mark unavailable offline content.
+
 ## 0.2.0
 
 ### Minor Changes
