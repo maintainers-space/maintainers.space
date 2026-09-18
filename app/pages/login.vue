@@ -145,7 +145,6 @@ async function onSubmit(event: FormSubmitEvent<Schema>) {
           />
           <div class="flex items-center gap-1">
             <UButton to="/privacy" variant="link" color="neutral" label="Privacy" class="px-0" />
-            <UButton to="/terms" variant="link" color="neutral" label="Terms" class="px-0" />
           </div>
         </div>
       </template>
