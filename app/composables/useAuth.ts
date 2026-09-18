@@ -9,7 +9,7 @@ import {
   listStoredSessions
 } from '@atcute/oauth-browser-client'
 import type { ActorIdentifier, Did } from '@atcute/lexicons'
-import { OAUTH_SCOPE } from '~/lib/atproto/oauth'
+import { OAUTH_SCOPE } from '#shared/atproto-oauth'
 import { fetchPublicProfile } from '~/lib/atproto/public'
 import { clearCache } from '~/lib/cache'
 import { clearOfflineState } from '~/composables/useOfflineRepos'
