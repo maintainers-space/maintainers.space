@@ -291,6 +291,35 @@ export const gitlabProvider: ForgeProvider = {
     return (data ?? []).map(mapRepo)
   },
 
+  async listAccessibleRepos(opts) {
+    const token = opts?.token ?? getForgeToken('gitlab')
+    if (!token) return []
+    const canWrite = (p: GlProjectResponse): boolean => {
+      const proj = p.permissions?.project_access?.access_level
+      const grp = p.permissions?.group_access?.access_level
+      if (proj == null && grp == null) return true
+      return Math.max(proj ?? 0, grp ?? 0) >= 30
+    }
+    const projects: GlProjectResponse[] = []
+    for (let page = 1; ; page++) {
+      const batch = await glFetch<GlProjectResponse[]>(
+        `/projects`,
+        {
+          membership: true,
+          min_access_level: 30,
+          per_page: 100,
+          page,
+          order_by: 'last_activity_at',
+          sort: 'desc'
+        },
+        opts
+      )
+      projects.push(...batch)
+      if (batch.length < 100) break
+    }
+    return projects.filter(canWrite).map(mapRepo)
+  },
+
   async listBranches(repo, opts) {
     const data = await glFetch<GlBranchResponse[]>(
       `/projects/${projectId(repo)}/repository/branches`,
@@ -759,6 +788,7 @@ export const gitlabProvider: ForgeProvider = {
       await $fetch(`${API}/projects/${pid}/merge_requests/${id}/approve`, {
         method: 'POST',
         headers: glHeaders(opts),
+        body: input.expectedHead ? { sha: input.expectedHead } : undefined,
         signal: opts?.signal
       })
     }
@@ -811,6 +841,7 @@ export const gitlabProvider: ForgeProvider = {
       {
         method: 'PUT',
         headers: glHeaders(opts),
+        body: opts?.expectedHead ? { sha: opts.expectedHead } : undefined,
         signal: opts?.signal
       }
     )

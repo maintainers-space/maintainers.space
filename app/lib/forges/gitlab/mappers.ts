@@ -275,6 +275,7 @@ export function mapPull(r: GlMergeRequestResponse): ForgePull {
     ),
     sourceBranch: r.source_branch,
     targetBranch: r.target_branch,
+    headSha: r.sha ?? null,
     createdAt: r.created_at ?? null,
     updatedAt: r.updated_at ?? null,
     mergedAt: r.merged_at ?? null,

@@ -476,6 +476,7 @@ export function createGiteaFamilyMappers(providerId: ForgeId, webBase: string) {
       labels: (r.labels ?? []).map(mapLabel),
       sourceBranch: r.head?.ref,
       targetBranch: r.base?.ref,
+      headSha: r.head?.sha ?? null,
       createdAt: r.created_at ?? null,
       updatedAt: r.updated_at ?? null,
       mergedAt: r.merged_at ?? null,

@@ -52,6 +52,14 @@ const nav = computed<NavigationMenuItem[]>(() => {
         onSelect: () => {
           open.value = false
         }
+      },
+      {
+        label: 'Dependencies',
+        icon: 'i-lucide-package',
+        to: '/dependencies',
+        onSelect: () => {
+          open.value = false
+        }
       }
     )
   }

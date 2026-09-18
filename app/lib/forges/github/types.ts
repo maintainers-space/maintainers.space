@@ -37,6 +37,7 @@ export interface GhRepoResponse {
   updated_at?: string | null
   has_issues?: boolean
   has_discussions?: boolean
+  permissions?: { admin?: boolean; push?: boolean; pull?: boolean }
 }
 
 export interface GhIssueResponse {
@@ -68,7 +69,7 @@ export interface GhPullResponse {
   body?: string | null
   comments?: number
   labels?: { name: string; color?: string | null }[]
-  head?: { ref?: string }
+  head?: { ref?: string; sha?: string }
   base?: { ref?: string }
   created_at?: string | null
   updated_at?: string | null
