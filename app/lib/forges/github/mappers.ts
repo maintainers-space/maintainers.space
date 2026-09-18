@@ -13,6 +13,8 @@ import type {
   ForgeFileDiff,
   ForgeIssue,
   ForgePull,
+  ForgePullReview,
+  ForgePullReviewComment,
   ForgePullState,
   ForgeReactionKind,
   ForgeReactionSummary,
@@ -34,6 +36,8 @@ import type {
   GhGraphqlReactionGroup,
   GhIssueResponse,
   GhPullResponse,
+  GhPullReviewCommentResponse,
+  GhPullReviewResponse,
   GhReactionsResponse,
   GhRepoResponse,
   GhUserResponse
@@ -246,6 +250,63 @@ export function mapComment(r: GhCommentResponse): ForgeComment {
     url: r.html_url,
     reactions: mapReactions(r.reactions)
   }
+}
+
+export function mapPullReview(r: GhPullReviewResponse): ForgePullReview {
+  const state = r.state?.toUpperCase()
+  return {
+    id: String(r.id),
+    author: mapUser(r.user),
+    body: r.body ?? null,
+    state:
+      state === 'APPROVED' ||
+      state === 'CHANGES_REQUESTED' ||
+      state === 'COMMENTED' ||
+      state === 'PENDING' ||
+      state === 'DISMISSED'
+        ? state
+        : 'UNKNOWN',
+    submittedAt: r.submitted_at ?? null,
+    url: r.html_url ?? null,
+    comments: []
+  }
+}
+
+export function mapPullReviewComments(
+  comments: GhPullReviewCommentResponse[]
+): ForgePullReviewComment[] {
+  const byId = new Map<string, ForgePullReviewComment>()
+  const roots: ForgePullReviewComment[] = []
+  for (const comment of comments) {
+    // Build the object field-by-field rather than spreading `mapComment`: a plain
+    // ForgeComment carries `replies?: ForgeComment[]`, which is narrower than the
+    // review-comment reply type we need threads to be grouped into.
+    const mapped: ForgePullReviewComment = {
+      id: String(comment.id),
+      author: mapUser(comment.user),
+      body: comment.body ?? '',
+      createdAt: comment.created_at ?? null,
+      url: comment.html_url,
+      reactions: mapReactions(comment.reactions),
+      path: comment.path,
+      line: comment.line ?? undefined,
+      startLine: comment.start_line ?? undefined,
+      diffHunk: comment.diff_hunk ?? null,
+      // A file-level comment has no line/position by design; only call it
+      // outdated when a line comment lost its anchor in the latest diff.
+      isOutdated:
+        comment.subject_type !== 'file' && comment.line == null && comment.position == null,
+      replyToId: comment.in_reply_to_id ? String(comment.in_reply_to_id) : undefined
+    }
+    byId.set(mapped.id, mapped)
+  }
+  for (const comment of comments) {
+    const mapped = byId.get(String(comment.id))!
+    const parent = comment.in_reply_to_id ? byId.get(String(comment.in_reply_to_id)) : undefined
+    if (parent) (parent.replies ??= []).push(mapped)
+    else roots.push(mapped)
+  }
+  return roots
 }
 
 export function mapCommit(r: GhCommitResponse): ForgeCommit {
