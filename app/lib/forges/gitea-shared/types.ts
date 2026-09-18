@@ -59,6 +59,7 @@ export interface GfRepoResponse {
   updated_at?: string | null
   has_issues?: boolean
   has_pull_requests?: boolean
+  permissions?: { admin?: boolean; push?: boolean; pull?: boolean }
 }
 
 export interface GfTopicsResponse {
@@ -105,7 +106,7 @@ export interface GfPullResponse extends GfIssueResponse {
   merged_at?: string | null
   merged?: boolean
   draft?: boolean
-  head?: { ref?: string }
+  head?: { ref?: string; sha?: string }
   base?: { ref?: string }
   additions?: number
   deletions?: number

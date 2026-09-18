@@ -290,6 +290,18 @@ export function createGiteaFamilyProvider(config: GiteaFamilyConfig): ForgeProvi
       return (data ?? []).map(gf.mapRepo)
     },
 
+    async listAccessibleRepos(opts) {
+      const token = opts?.token ?? getForgeToken(providerId)
+      if (!token) return []
+      const repos: GfRepoResponse[] = []
+      for (let page = 1; ; page++) {
+        const batch = await gfFetch<GfRepoResponse[]>(`/user/repos`, { limit: 100, page }, opts)
+        repos.push(...batch)
+        if (batch.length === 0) break
+      }
+      return repos.filter((r) => r.permissions?.push).map(gf.mapRepo)
+    },
+
     async listBranches(repo, opts) {
       const data = await gfFetch<GfBranchResponse[]>(
         `/repos/${repo.owner}/${repo.name}/branches`,
@@ -711,7 +723,10 @@ export function createGiteaFamilyProvider(config: GiteaFamilyConfig): ForgeProvi
 
     async createReview(repo, id, input, opts): Promise<void> {
       const event = input.event === 'APPROVE' ? 'APPROVED' : input.event
-      const body: Record<string, unknown> = { event }
+      const body: Record<string, unknown> = {
+        event,
+        ...(input.expectedHead ? { commit_id: input.expectedHead } : {})
+      }
       if (input.body) body.body = input.body
       if (input.comments?.length) {
         body.comments = input.comments.map((c) => ({
@@ -755,7 +770,10 @@ export function createGiteaFamilyProvider(config: GiteaFamilyConfig): ForgeProvi
           await $fetch(`${API}/repos/${repo.owner}/${repo.name}/pulls/${id}/merge`, {
             method: 'POST',
             headers: headers(opts),
-            body: { Do: method },
+            body: {
+              Do: method,
+              ...(opts?.expectedHead ? { head_commit_id: opts.expectedHead } : {})
+            },
             signal: opts?.signal
           })
           return { merged: true }

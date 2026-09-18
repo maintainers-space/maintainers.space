@@ -261,6 +261,7 @@ export interface ForgePull {
   labels?: ForgeLabel[]
   sourceBranch?: string
   targetBranch?: string
+  headSha?: string | null
   createdAt?: string | null
   updatedAt?: string | null
   mergedAt?: string | null
@@ -338,6 +339,7 @@ export interface ForgeReviewInput {
   event: 'APPROVE' | 'REQUEST_CHANGES' | 'COMMENT'
   body?: string
   comments?: ForgeReviewComment[]
+  expectedHead?: string | null
 }
 
 export type ForgeMergeMethod = 'merge' | 'squash' | 'rebase'
@@ -618,6 +620,8 @@ export interface ForgeProvider {
   getRepo?: (owner: string, repo: string, opts?: ForgeReadOptions) => Promise<ForgeRepo>
   /** List an owner's repositories. */
   listRepos?: (owner: string, opts?: ForgeReadOptions) => Promise<ForgeRepo[]>
+  /** Repositories the authenticated caller can push to; [] when unavailable. */
+  listAccessibleRepos?: (opts?: ForgeReadOptions) => Promise<ForgeRepo[]>
   listBranches?: (repo: RepoLocator, opts?: ForgeReadOptions) => Promise<ForgeBranch[]>
   getTree?: (
     repo: RepoLocator,
@@ -761,7 +765,7 @@ export interface ForgeProvider {
   mergePull?: (
     repo: RepoLocator,
     id: string,
-    opts?: ForgeReadOptions & { method?: ForgeMergeMethod }
+    opts?: ForgeReadOptions & { method?: ForgeMergeMethod; expectedHead?: string | null }
   ) => Promise<ForgeMergeResult>
   /** Whether the authenticated viewer has starred this repository. */
   isStarred?: (repo: RepoLocator, opts?: ForgeReadOptions) => Promise<boolean>

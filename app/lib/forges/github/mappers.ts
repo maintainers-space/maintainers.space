@@ -173,6 +173,7 @@ export function mapPull(r: GhPullResponse): ForgePull {
     labels: (r.labels ?? []).map((l) => ({ name: l.name, color: l.color })),
     sourceBranch: r.head?.ref,
     targetBranch: r.base?.ref,
+    headSha: r.head?.sha ?? null,
     createdAt: r.created_at ?? null,
     updatedAt: r.updated_at ?? null,
     mergedAt: r.merged_at ?? null,

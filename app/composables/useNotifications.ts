@@ -113,10 +113,8 @@ export function useNotifications() {
   const loading = useState<boolean>('inbox-loading', () => false)
   const notes = useState<string[]>('inbox-notes', () => [])
   const loadedOnce = useState<boolean>('inbox-loaded', () => false)
-  const merging = useState<string[]>('inbox-merging', () => [])
 
   const resolvedItems = computed(() => items.value.filter((i) => i.resolved))
-  const dependencyItems = computed(() => items.value.filter((i) => i.isBot && !i.resolved))
   const ciItems = computed(() =>
     items.value.filter((i) => i.kind === 'ci' && !i.isBot && !i.resolved)
   )
@@ -133,7 +131,6 @@ export function useNotifications() {
       .map((x) => x.item)
   })
   const unreadCount = computed(() => inboxItems.value.filter((i) => i.unread).length)
-  const dependencyCount = computed(() => dependencyItems.value.length)
   const resolvedCount = computed(() => resolvedItems.value.length)
 
   /** Collapse repetitive CI-failure notifications into one entry per repo. */
@@ -231,9 +228,6 @@ export function useNotifications() {
     items.value = items.value.filter((i) => !(i.provider === item.provider && i.id === item.id))
   }
 
-  const isMerging = (item: ForgeInboxItem): boolean =>
-    merging.value.includes(`${item.provider}:${item.id}`)
-
   /** Mark a single notification thread as read and drop it from the inbox. */
   async function markRead(item: ForgeInboxItem): Promise<void> {
     const forge = getForge(item.provider)
@@ -294,60 +288,15 @@ export function useNotifications() {
     }
   }
 
-  async function approveAndMerge(item: ForgeInboxItem): Promise<boolean> {
-    const forge = getForge(item.provider)
-    const token = getToken(item.provider)
-    if (!forge?.createReview || !forge.mergePull || !item.repo || !item.number) return false
-    const key = `${item.provider}:${item.id}`
-    const loc = { owner: item.repo.owner, name: item.repo.name }
-    merging.value = [...merging.value, key]
-    try {
-      await forge.createReview(loc, String(item.number), { event: 'APPROVE' }, { token })
-      const res = await forge.mergePull(loc, String(item.number), { token })
-      if (!res.merged) throw new Error(res.message || 'Merge was not completed')
-      if (forge.markNotificationRead)
-        await forge.markNotificationRead(item.id, { token }).catch(() => {})
-      rememberDismissed([item])
-      removeItem(item)
-      toast.add({
-        title: `Merged ${item.repo.fullName} #${item.number}`,
-        color: 'success',
-        icon: 'i-lucide-git-merge'
-      })
-      return true
-    } catch (e) {
-      const hint = describeForgeError(e)
-      toast.add({
-        title: 'Could not approve & merge',
-        description: hint.description,
-        color: 'error',
-        icon: 'i-lucide-circle-alert',
-        actions: hint.to ? [{ label: hint.linkLabel, to: hint.to, target: '_blank' }] : undefined
-      })
-      return false
-    } finally {
-      merging.value = merging.value.filter((k) => k !== key)
-    }
-  }
-
-  async function mergeAll(): Promise<void> {
-    // Sequential: avoids merge races and API rate spikes when clearing a batch.
-    for (const item of dependencyItems.value.slice()) {
-      await approveAndMerge(item)
-    }
-  }
-
   return {
     items,
     inboxItems,
-    dependencyItems,
     resolvedItems,
     ciGroups,
     ciCount,
     loading,
     notes,
     unreadCount,
-    dependencyCount,
     resolvedCount,
     hasSources,
     loadedOnce,
@@ -355,9 +304,6 @@ export function useNotifications() {
     reply,
     markRead,
     markManyRead,
-    completeCiGroup,
-    approveAndMerge,
-    mergeAll,
-    isMerging
+    completeCiGroup
   }
 }

@@ -331,6 +331,28 @@ export const githubProvider: ForgeProvider = {
     return data.map(mapRepo)
   },
 
+  async listAccessibleRepos(opts) {
+    const token = opts?.token ?? getForgeToken('github')
+    if (!token) return []
+    const repos: GhRepoResponse[] = []
+    for (let page = 1; ; page++) {
+      const batch = await $fetch<GhRepoResponse[]>(`${API}/user/repos`, {
+        headers: ghHeaders(opts),
+        query: {
+          per_page: GH_MAX_PER_PAGE,
+          page,
+          affiliation: 'owner,collaborator,organization_member',
+          sort: 'updated',
+          direction: 'desc'
+        },
+        signal: opts?.signal
+      })
+      repos.push(...batch)
+      if (batch.length < GH_MAX_PER_PAGE) break
+    }
+    return repos.filter((r) => r.permissions?.push).map(mapRepo)
+  },
+
   async listBranches(repo, opts) {
     const data = await $fetch<GhBranchResponse[]>(
       `${API}/repos/${repo.owner}/${repo.name}/branches`,
@@ -1030,7 +1052,10 @@ export const githubProvider: ForgeProvider = {
   },
 
   async createReview(repo, id, input, opts): Promise<void> {
-    const body: Record<string, unknown> = { event: input.event }
+    const body: Record<string, unknown> = {
+      event: input.event,
+      ...(input.expectedHead ? { commit_id: input.expectedHead } : {})
+    }
     if (input.body) body.body = input.body
     if (input.comments?.length) {
       body.comments = input.comments.map((c) => ({
@@ -1125,7 +1150,10 @@ export const githubProvider: ForgeProvider = {
           {
             method: 'PUT',
             headers: ghHeaders(opts),
-            body: { merge_method: method },
+            body: {
+              merge_method: method,
+              ...(opts?.expectedHead ? { sha: opts.expectedHead } : {})
+            },
             signal: opts?.signal
           }
         )

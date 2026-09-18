@@ -43,6 +43,10 @@ export interface GlProjectResponse {
   updated_at?: string | null
   issues_enabled?: boolean
   merge_requests_enabled?: boolean
+  permissions?: {
+    project_access?: { access_level?: number }
+    group_access?: { access_level?: number }
+  }
 }
 
 /** Fields shared by merge-request-shaped payloads (MRs and MR-ish todo targets). */
@@ -88,6 +92,7 @@ export interface GlMergeRequestResponse extends GlMrStateFields {
   labels?: (string | GlLabelResponse)[]
   source_branch?: string
   target_branch?: string
+  sha?: string | null
   created_at?: string | null
   updated_at?: string | null
   closed_at?: string | null
