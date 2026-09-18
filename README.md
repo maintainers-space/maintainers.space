@@ -37,7 +37,7 @@ pnpm run test:lighthouse
 
 Playwright traces, screenshots and videos are retained only on failure. CI uploads the Playwright and Lighthouse HTML reports for 14 days.
 
-The pre-commit hook uses the dependency-free `nano-staged` runner to format and lint only staged files. The pre-push hook runs the complete local quality gate, including browser tests. CodeRabbit CLI review is available as an optional final review with `pnpm run review:ai`; it requires separate CodeRabbit authentication and is not a mandatory hook because it sends the diff to an external service.
+The pre-commit hook uses the dependency-free `nano-staged` runner to format and lint only staged files. The pre-push hook runs the complete local quality gate, including browser tests.
 
 ## Release flow
 

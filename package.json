@@ -31,7 +31,6 @@
     "check:quick": "pnpm run lint && pnpm run format:check && pnpm run typecheck && pnpm run test:coverage",
     "check:push": "pnpm run check:quick && pnpm run knip && pnpm run audit && pnpm run test:e2e",
     "check:all": "pnpm run check:push && pnpm run build && pnpm run test:lighthouse",
-    "review:ai": "coderabbit review --light --uncommitted",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "test:watch": "vitest",
