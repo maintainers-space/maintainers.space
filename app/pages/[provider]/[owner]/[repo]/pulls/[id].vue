@@ -47,6 +47,7 @@ const toast = useToast()
 const canWrite = computed(() => !!getToken(provider.value) && !!forge.value?.createComment)
 
 const tab = useRouteTab('tab', ['conversation', 'commits', 'files'] as const, 'conversation')
+const showInfo = ref(false)
 
 const files = ref<ForgeFileDiff[] | null>(null)
 const filesLoading = ref(false)
@@ -138,6 +139,7 @@ async function ensureCommits(): Promise<void> {
 }
 
 const reviewsHaveMore = computed(() => !reviewsLoaded.value && !reviewsError.value)
+const reviewsSupported = computed(() => !!forge.value?.listPullReviews)
 const reviewCommentProgress = computed(() =>
   Object.fromEntries(
     Object.entries(reviewCommentState).map(([reviewId, state]) => [
@@ -287,12 +289,16 @@ function resetReviews(): void {
 // A pull is not complete offline without its changed files and commits. Fetch
 // them after the conversation has rendered rather than making a user open both
 // tabs. The work remains cache-backed and is never attempted while offline.
+// The first page of reviews is fetched here too, so a submitted review summary
+// shows up in the conversation right away instead of waiting for the reader to
+// scroll to an (initially off-screen) sentinel; later pages still lazy-load.
 watch(
   data,
   (pull) => {
     if (pull && isOnline.value) {
       void ensureFiles()
       void ensureCommits()
+      void ensureReviews()
     }
   },
   { immediate: true }
@@ -469,130 +475,152 @@ async function replyToReviewThread(
         </div>
       </div>
 
-      <UTabs v-model="tab" :items="tabItems" :content="false" size="sm" />
-
-      <div v-show="tab === 'conversation'" class="space-y-4">
-        <article class="overflow-hidden rounded-lg border border-default">
-          <header
-            class="flex items-center gap-2 border-b border-default bg-elevated/40 px-4 py-2 text-sm"
-          >
-            <UserLink :user="data.author" />
-            <span v-if="data.createdAt" class="text-muted"
-              >opened {{ formatRelativeTime(data.createdAt) }}</span
-            >
-          </header>
-          <div class="px-4 py-3">
-            <MarkdownBody :content="data.body ?? ''" empty="No description provided." />
-          </div>
-          <ReactionBar :reactions="data.reactions" :target="{ kind: 'pull', threadId: data.id }" />
-        </article>
-        <CommentThread
-          v-if="data.comments.length"
-          :comments="data.comments"
-          thread-kind="pull"
-          :thread-id="data.id"
+      <div class="flex flex-wrap items-center gap-3">
+        <UTabs v-model="tab" :items="tabItems" :content="false" size="sm" />
+        <UButton
+          icon="i-lucide-circle-info"
+          label="Details"
+          color="neutral"
+          variant="ghost"
+          size="sm"
+          class="lg:hidden"
+          :aria-expanded="showInfo"
+          @click="showInfo = !showInfo"
         />
-        <PullReviewList
-          v-if="forge?.listPullReviews"
-          :reviews="reviews"
-          :has-more="reviewsHaveMore"
-          :loading="reviewsLoading"
-          :error="reviewsError"
-          :comment-state="reviewCommentProgress"
-          :can-reply="canReplyToReviewThreads"
-          :reply="replyToReviewThread"
-          @load-more="ensureReviews"
-          @load-comments="ensureReviewComments"
-        />
-
-        <div v-if="canWrite" class="space-y-2">
-          <MarkdownEditor
-            v-model="commentDraft"
-            placeholder="Leave a comment…"
-            @submit="submitComment"
-          />
-          <div class="flex justify-end">
-            <UButton
-              icon="i-lucide-send"
-              label="Comment"
-              :loading="postingComment"
-              :disabled="!commentDraft.trim()"
-              @click="submitComment"
-            />
-          </div>
-        </div>
       </div>
 
-      <div v-show="tab === 'commits'">
-        <div v-if="commitsLoading" class="space-y-2">
-          <USkeleton v-for="i in 3" :key="i" class="h-14 w-full" />
-        </div>
-        <ForgeCommitList
-          v-else-if="commits?.length"
-          :commits="commits"
-          :provider="provider"
-          :owner="owner"
-          :repo="name"
-        />
-        <p
-          v-else
-          class="rounded-lg border border-dashed border-default py-8 text-center text-sm text-muted"
-        >
-          No commits to display.
-        </p>
-      </div>
-
-      <div v-show="tab === 'files'">
-        <div v-if="filesLoading" class="space-y-2">
-          <USkeleton v-for="i in 3" :key="i" class="h-24 w-full" />
-        </div>
-        <template v-else-if="files?.length">
-          <DiffView :files="files" :commentable="canWrite" @comment="onDiffComment" />
-
-          <div v-if="canWrite" class="mt-4 space-y-2 rounded-lg border border-default p-3">
-            <p class="text-sm font-medium text-highlighted">Finish your review</p>
-            <MarkdownEditor
-              v-model="reviewDraft"
-              :rows="3"
-              placeholder="Review summary (optional for approvals)…"
+      <div class="lg:grid lg:grid-cols-[minmax(0,1fr)_19rem] lg:gap-6 items-start">
+        <div class="min-w-0">
+          <div v-show="tab === 'conversation'" class="space-y-4">
+            <article class="overflow-hidden rounded-lg border border-default">
+              <header
+                class="flex items-center gap-2 border-b border-default bg-elevated/40 px-4 py-2 text-sm"
+              >
+                <UserLink :user="data.author" />
+                <span v-if="data.createdAt" class="text-muted"
+                  >opened {{ formatRelativeTime(data.createdAt) }}</span
+                >
+              </header>
+              <div class="px-4 py-3">
+                <MarkdownBody :content="data.body ?? ''" empty="No description provided." />
+              </div>
+              <ReactionBar
+                :reactions="data.reactions"
+                :target="{ kind: 'pull', threadId: data.id }"
+              />
+            </article>
+            <PullConversation
+              v-if="
+                data.comments.length ||
+                (reviewsSupported && (reviews.length || reviewsLoading || reviewsError))
+              "
+              :comments="data.comments"
+              :reviews="reviews"
+              :thread-id="data.id"
+              :provider-label="forge?.label ?? 'the forge'"
+              :has-more="reviewsSupported && reviewsHaveMore"
+              :loading="reviewsSupported && reviewsLoading"
+              :error="reviewsSupported && reviewsError"
+              :comment-state="reviewCommentProgress"
+              :can-reply="canReplyToReviewThreads"
+              :reply="replyToReviewThread"
+              @load-more="ensureReviews"
+              @load-comments="ensureReviewComments"
             />
-            <div class="flex flex-wrap gap-2">
-              <UButton
-                icon="i-lucide-check"
-                color="success"
-                variant="soft"
-                label="Approve"
-                :loading="reviewSubmitting === 'APPROVE'"
-                :disabled="!!reviewSubmitting"
-                @click="submitReview('APPROVE')"
+
+            <div v-if="canWrite" class="space-y-2">
+              <MarkdownEditor
+                v-model="commentDraft"
+                placeholder="Leave a comment…"
+                @submit="submitComment"
               />
-              <UButton
-                icon="i-lucide-message-square"
-                color="neutral"
-                variant="soft"
-                label="Comment"
-                :loading="reviewSubmitting === 'COMMENT'"
-                :disabled="!!reviewSubmitting || !reviewDraft.trim()"
-                @click="submitReview('COMMENT')"
-              />
-              <UButton
-                icon="i-lucide-file-warning"
-                color="warning"
-                variant="soft"
-                label="Request changes"
-                :loading="reviewSubmitting === 'REQUEST_CHANGES'"
-                :disabled="!!reviewSubmitting || !reviewDraft.trim()"
-                @click="submitReview('REQUEST_CHANGES')"
-              />
+              <div class="flex justify-end">
+                <UButton
+                  icon="i-lucide-send"
+                  label="Comment"
+                  :loading="postingComment"
+                  :disabled="!commentDraft.trim()"
+                  @click="submitComment"
+                />
+              </div>
             </div>
           </div>
-        </template>
-        <p
-          v-else
-          class="rounded-lg border border-dashed border-default py-8 text-center text-sm text-muted"
-        >
-          No file changes to display.
-        </p>
+
+          <div v-show="tab === 'commits'">
+            <div v-if="commitsLoading" class="space-y-2">
+              <USkeleton v-for="i in 3" :key="i" class="h-14 w-full" />
+            </div>
+            <ForgeCommitList
+              v-else-if="commits?.length"
+              :commits="commits"
+              :provider="provider"
+              :owner="owner"
+              :repo="name"
+            />
+            <p
+              v-else
+              class="rounded-lg border border-dashed border-default py-8 text-center text-sm text-muted"
+            >
+              No commits to display.
+            </p>
+          </div>
+
+          <div v-show="tab === 'files'">
+            <div v-if="filesLoading" class="space-y-2">
+              <USkeleton v-for="i in 3" :key="i" class="h-24 w-full" />
+            </div>
+            <template v-else-if="files?.length">
+              <DiffView :files="files" :commentable="canWrite" @comment="onDiffComment" />
+
+              <div v-if="canWrite" class="mt-4 space-y-2 rounded-lg border border-default p-3">
+                <p class="text-sm font-medium text-highlighted">Finish your review</p>
+                <MarkdownEditor
+                  v-model="reviewDraft"
+                  :rows="3"
+                  placeholder="Review summary (optional for approvals)…"
+                />
+                <div class="flex flex-wrap gap-2">
+                  <UButton
+                    icon="i-lucide-check"
+                    color="success"
+                    variant="soft"
+                    label="Approve"
+                    :loading="reviewSubmitting === 'APPROVE'"
+                    :disabled="!!reviewSubmitting"
+                    @click="submitReview('APPROVE')"
+                  />
+                  <UButton
+                    icon="i-lucide-message-square"
+                    color="neutral"
+                    variant="soft"
+                    label="Comment"
+                    :loading="reviewSubmitting === 'COMMENT'"
+                    :disabled="!!reviewSubmitting || !reviewDraft.trim()"
+                    @click="submitReview('COMMENT')"
+                  />
+                  <UButton
+                    icon="i-lucide-file-warning"
+                    color="warning"
+                    variant="soft"
+                    label="Request changes"
+                    :loading="reviewSubmitting === 'REQUEST_CHANGES'"
+                    :disabled="!!reviewSubmitting || !reviewDraft.trim()"
+                    @click="submitReview('REQUEST_CHANGES')"
+                  />
+                </div>
+              </div>
+            </template>
+            <p
+              v-else
+              class="rounded-lg border border-dashed border-default py-8 text-center text-sm text-muted"
+            >
+              No file changes to display.
+            </p>
+          </div>
+        </div>
+        <div :class="[showInfo ? 'block' : 'hidden', 'lg:block', 'min-w-0']">
+          <PullMetadata :pull="data" :reviews="reviews" />
+        </div>
       </div>
     </template>
   </div>

@@ -140,3 +140,129 @@ test.describe('GitHub Markdown alerts', () => {
     expect(results.violations).toEqual([])
   })
 })
+
+test.describe('pull request conversation timeline', () => {
+  // Route the GitHub endpoints the PR page touches. GitHub detail/list endpoints
+  // carry query strings, so list endpoints match by regex.
+  async function stubChronoApi(page) {
+    await page.route('https://api.github.com/repos/octo/chrono', (route) =>
+      route.fulfill({
+        json: {
+          owner: { login: 'octo' },
+          name: 'chrono',
+          full_name: 'octo/chrono',
+          default_branch: 'main',
+          html_url: 'https://github.com/octo/chrono',
+          has_issues: true
+        }
+      })
+    )
+    await page.route('https://api.github.com/repos/octo/chrono/pulls/7', (route) =>
+      route.fulfill({
+        json: {
+          number: 7,
+          title: 'Chronological conversation',
+          state: 'open',
+          merged: false,
+          draft: false,
+          user: { login: 'octo' },
+          body: 'The pull request body.',
+          head: { ref: 'feature' },
+          base: { ref: 'main' },
+          created_at: '2024-01-01T00:00:00Z',
+          updated_at: '2024-01-04T00:00:00Z',
+          html_url: 'https://github.com/octo/chrono/pull/7',
+          additions: 1,
+          deletions: 0,
+          changed_files: 1,
+          commits: 1
+        }
+      })
+    )
+    // Two comments around one review — out of chronological order if shown as
+    // `comments, then reviews`.
+    await page.route(
+      /^https:\/\/api\.github\.com\/repos\/octo\/chrono\/issues\/7\/comments(?:\?.*)?$/,
+      (route) =>
+        route.fulfill({
+          json: [
+            {
+              id: 1,
+              user: { login: 'alice' },
+              body: 'first comment',
+              created_at: '2024-01-02T00:00:00Z'
+            },
+            {
+              id: 2,
+              user: { login: 'carol' },
+              body: 'last comment',
+              created_at: '2024-01-04T00:00:00Z'
+            }
+          ]
+        })
+    )
+    await page.route(
+      /^https:\/\/api\.github\.com\/repos\/octo\/chrono\/pulls\/7\/reviews(?:\?.*)?$/,
+      (route) =>
+        route.fulfill({
+          json: [
+            {
+              id: 12,
+              user: { login: 'bob' },
+              body: 'LGTM',
+              state: 'APPROVED',
+              submitted_at: '2024-01-03T00:00:00Z',
+              html_url: 'https://github.com/octo/chrono/pull/7#pullrequestreview-12'
+            }
+          ]
+        })
+    )
+    await page.route(
+      /^https:\/\/api\.github\.com\/repos\/octo\/chrono\/pulls\/7\/reviews\/12\/comments(?:\?.*)?$/,
+      (route) => route.fulfill({ json: [] })
+    )
+    await page.route(
+      /^https:\/\/api\.github\.com\/repos\/octo\/chrono\/pulls\/7\/files(?:\?.*)?$/,
+      (route) => route.fulfill({ json: [] })
+    )
+    await page.route(
+      /^https:\/\/api\.github\.com\/repos\/octo\/chrono\/pulls\/7\/commits(?:\?.*)?$/,
+      (route) => route.fulfill({ json: [] })
+    )
+  }
+
+  test('interleaves comments and reviews chronologically', async ({ page }) => {
+    await stubChronoApi(page)
+    await page.goto('/github/octo/chrono/pulls/7')
+
+    const timeline = page.locator('ol[aria-label*="conversation events"]')
+    await expect(timeline).toBeVisible()
+    // The review summary is fetched with the first page of reviews on load.
+    await expect(timeline.getByText('approved these changes')).toBeVisible({ timeout: 10_000 })
+    // First event is the earlier comment, then the review (submitted in between),
+    // then the later comment — chronological order, not comments-then-reviews.
+    await expect(timeline.locator('li').nth(0)).toContainText('first comment')
+    await expect(timeline.locator('li').nth(1)).toContainText('approved these changes')
+    await expect(timeline.locator('li').nth(1)).toContainText('bob')
+    await expect(timeline.locator('li').nth(2)).toContainText('last comment')
+
+    // The metadata rail surfaces the reviewer and the branch comparison.
+    const rail = page.locator('[aria-label="Pull request metadata"]')
+    await expect(rail).toContainText('Reviewers')
+    await expect(rail).toContainText('bob')
+    await expect(rail).toContainText('feature → main')
+  })
+
+  test('collapses metadata behind the Details button on narrow screens', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 })
+    await stubChronoApi(page)
+    await page.goto('/github/octo/chrono/pulls/7')
+
+    const rail = page.locator('[aria-label="Pull request metadata"]')
+    await expect(rail).toBeHidden()
+
+    await page.getByRole('button', { name: 'Details' }).click()
+    await expect(rail).toBeVisible()
+    await expect(rail).toContainText('feature → main')
+  })
+})
