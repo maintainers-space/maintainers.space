@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { ComponentPublicInstance } from 'vue'
 import type { BadgeProps } from '@nuxt/ui'
 import type { ForgeFileDiff } from '~/types/forge'
 
@@ -65,11 +66,81 @@ function isOpen(path: string): boolean {
   return open[path] ?? true
 }
 
+// A file's diff is only rendered once it has been visited — either it was the
+// first file or it has scrolled close enough to the viewport (or was picked in
+// the file tree). Once rendered it stays, so re-opening a file is instant.
+const activatedPaths = reactive(new Set<string>())
+function isRendered(path: string): boolean {
+  return isOpen(path) && activatedPaths.has(path)
+}
+watch(
+  () => props.files,
+  (files) => {
+    const first = files[0]
+    if (first && !activatedPaths.size) activatedPaths.add(first.path)
+  },
+  { immediate: true }
+)
+
+const activePath = ref<string | null>(null)
+watch(
+  () => props.files,
+  (files) => {
+    const first = files[0]
+    if (first && !activePath.value) activePath.value = first.path
+  },
+  { immediate: true }
+)
+
+const fileRefs = new Map<string, HTMLElement>()
+const activationObservers = new Map<string, ReturnType<typeof useIntersectionObserver>>()
+const activeObservers = new Map<string, ReturnType<typeof useIntersectionObserver>>()
+
+function setFileRef(path: string, element: Element | ComponentPublicInstance | null): void {
+  activationObservers.get(path)?.stop()
+  activationObservers.delete(path)
+  activeObservers.get(path)?.stop()
+  activeObservers.delete(path)
+  if (!element || !(element instanceof HTMLElement)) return
+  fileRefs.set(path, element)
+  activationObservers.set(
+    path,
+    useIntersectionObserver(
+      element,
+      ([entry]) => {
+        if (entry?.isIntersecting) activatedPaths.add(path)
+      },
+      { rootMargin: '900px 0px' }
+    )
+  )
+  // A horizontal band near the top of the viewport marks the file being read.
+  activeObservers.set(
+    path,
+    useIntersectionObserver(
+      element,
+      ([entry]) => {
+        if (entry?.isIntersecting) activePath.value = path
+      },
+      { rootMargin: '-48px 0px -60% 0px' }
+    )
+  )
+}
+
+function jumpTo(path: string): void {
+  activatedPaths.add(path)
+  fileRefs.get(path)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+}
+
+onBeforeUnmount(() => {
+  for (const observer of activationObservers.values()) observer.stop()
+  for (const observer of activeObservers.values()) observer.stop()
+})
+
 const active = ref<{ path: string; line: number } | null>(null)
 const draft = ref('')
 const submitting = ref(false)
 
-function isActive(path: string, line?: number): boolean {
+function isCommentActive(path: string, line?: number): boolean {
   return !!active.value && !!line && active.value.path === path && active.value.line === line
 }
 function openComment(path: string, line?: number): void {
@@ -81,168 +152,194 @@ function suggest(text: string): void {
   const content = text.replace(/^[+ ]/, '')
   draft.value = '```suggestion\n' + content + '\n```\n'
 }
-function cancel(): void {
+function cancelComment(): void {
   active.value = null
   draft.value = ''
 }
-async function submit(): Promise<void> {
+async function submitComment(): Promise<void> {
   if (!active.value || !draft.value.trim()) return
   submitting.value = true
   emit('comment', { path: active.value.path, line: active.value.line, body: draft.value })
   submitting.value = false
-  cancel()
+  cancelComment()
 }
+
+const treeOpen = ref(false)
 </script>
 
 <template>
-  <div class="space-y-4">
-    <div
-      class="flex items-center justify-between rounded-lg border border-default bg-elevated/40 px-3 py-2 text-sm"
-    >
-      <span class="text-muted">
-        <span class="font-medium text-default">{{ totals.files }}</span> changed file{{
-          totals.files === 1 ? '' : 's'
-        }}
-      </span>
-      <DiffStat :additions="totals.additions" :deletions="totals.deletions" :show-files="false" />
-    </div>
-
-    <div
-      v-for="{ file, lines } in parsed"
-      :key="file.path"
-      class="overflow-hidden rounded-lg border border-default"
-    >
-      <button
-        type="button"
-        class="flex w-full items-center gap-2 border-b border-default bg-elevated/40 px-3 py-2 text-left text-sm hover:bg-elevated/70"
-        @click="toggle(file.path)"
+  <div class="lg:grid lg:grid-cols-[15rem_minmax(0,1fr)] lg:gap-4">
+    <aside class="min-w-0" aria-label="Changed files">
+      <UButton
+        icon="i-lucide-list-tree"
+        :label="treeOpen ? 'Hide files' : 'Show files'"
+        color="neutral"
+        variant="ghost"
+        size="sm"
+        class="lg:hidden mb-1"
+        @click="treeOpen = !treeOpen"
+      />
+      <div
+        class="overflow-hidden rounded-lg border border-default bg-elevated/20"
+        :class="[treeOpen ? 'block' : 'hidden', 'lg:block lg:sticky lg:top-20']"
       >
-        <UIcon
-          :name="isOpen(file.path) ? 'i-lucide-chevron-down' : 'i-lucide-chevron-right'"
-          class="size-4 shrink-0 text-muted"
-        />
-        <UBadge
-          :color="STATUS_COLOR[file.status] ?? 'neutral'"
-          variant="subtle"
-          size="xs"
-          class="capitalize"
+        <header class="border-b border-default px-3 py-2 text-sm font-semibold text-highlighted">
+          Files changed
+        </header>
+        <DiffFileTree :files="props.files" :active-path="activePath" @jump="jumpTo" />
+      </div>
+    </aside>
+
+    <div class="min-w-0 space-y-4">
+      <div
+        class="flex items-center justify-between rounded-lg border border-default bg-elevated/40 px-3 py-2 text-sm"
+      >
+        <span class="text-muted">
+          <span class="font-medium text-default">{{ totals.files }}</span> changed file{{
+            totals.files === 1 ? '' : 's'
+          }}
+        </span>
+        <DiffStat :additions="totals.additions" :deletions="totals.deletions" :show-files="false" />
+      </div>
+
+      <div
+        v-for="{ file, lines } in parsed"
+        :key="file.path"
+        :ref="(el) => setFileRef(file.path, el)"
+        class="overflow-hidden rounded-lg border border-default scroll-mt-24"
+      >
+        <button
+          type="button"
+          class="flex w-full items-center gap-2 border-b border-default bg-elevated/40 px-3 py-2 text-left text-sm hover:bg-elevated/70"
+          @click="toggle(file.path)"
         >
-          {{ file.status }}
-        </UBadge>
-        <span class="truncate font-mono text-xs text-default">
-          <span v-if="file.oldPath && file.oldPath !== file.path" class="text-muted"
-            >{{ file.oldPath }} → </span
-          >{{ file.path }}
-        </span>
-        <span class="ml-auto flex shrink-0 items-center gap-2 font-mono text-xs">
-          <span v-if="file.additions" class="text-success">+{{ file.additions }}</span>
-          <span v-if="file.deletions" class="text-error">-{{ file.deletions }}</span>
-        </span>
-      </button>
+          <UIcon
+            :name="isOpen(file.path) ? 'i-lucide-chevron-down' : 'i-lucide-chevron-right'"
+            class="size-4 shrink-0 text-muted"
+          />
+          <UBadge
+            :color="STATUS_COLOR[file.status] ?? 'neutral'"
+            variant="subtle"
+            size="xs"
+            class="capitalize"
+          >
+            {{ file.status }}
+          </UBadge>
+          <span class="truncate font-mono text-xs text-default">
+            <span v-if="file.oldPath && file.oldPath !== file.path" class="text-muted"
+              >{{ file.oldPath }} → </span
+            >{{ file.path }}
+          </span>
+          <span class="ml-auto flex shrink-0 items-center gap-2 font-mono text-xs">
+            <span v-if="file.additions" class="text-success">+{{ file.additions }}</span>
+            <span v-if="file.deletions" class="text-error">-{{ file.deletions }}</span>
+          </span>
+        </button>
 
-      <div v-if="isOpen(file.path)">
-        <p v-if="file.isBinary" class="px-3 py-4 text-center text-xs text-muted">
-          Binary file not shown.
-        </p>
-        <p v-else-if="!lines.length" class="px-3 py-4 text-center text-xs text-muted">
-          No preview available for this change.
-        </p>
-        <div v-else class="overflow-x-auto">
-          <table class="w-full border-collapse font-mono text-xs">
-            <tbody>
-              <template v-for="(line, i) in lines" :key="i">
-                <tr
-                  class="group"
-                  :class="{
-                    'bg-success/10': line.type === 'add',
-                    'bg-error/10': line.type === 'del',
-                    'bg-info/10 text-muted select-none': line.type === 'hunk'
-                  }"
-                >
-                  <td
-                    v-if="commentable"
-                    class="w-7 select-none border-r border-default/60 px-0 text-center align-top"
+        <div v-if="isRendered(file.path)">
+          <p v-if="file.isBinary" class="px-3 py-4 text-center text-xs text-muted">
+            Binary file not shown.
+          </p>
+          <p v-else-if="!lines.length" class="px-3 py-4 text-center text-xs text-muted">
+            No preview available for this change.
+          </p>
+          <div v-else class="overflow-x-auto">
+            <table class="w-full border-collapse font-mono text-xs">
+              <tbody>
+                <template v-for="(line, i) in lines" :key="i">
+                  <tr
+                    class="group"
+                    :class="{
+                      'bg-success/10': line.type === 'add',
+                      'bg-error/10': line.type === 'del',
+                      'bg-info/10 text-muted select-none': line.type === 'hunk'
+                    }"
                   >
-                    <button
-                      v-if="line.newLine"
-                      type="button"
-                      class="mx-auto flex size-4 items-center justify-center rounded bg-primary text-inverted opacity-0 transition group-hover:opacity-100"
-                      title="Add a comment or suggestion"
-                      @click="openComment(file.path, line.newLine)"
+                    <td
+                      v-if="commentable"
+                      class="w-7 select-none border-r border-default/60 px-0 text-center align-top"
                     >
-                      <UIcon name="i-lucide-plus" class="size-3" />
-                    </button>
-                  </td>
-                  <td
-                    class="w-6 select-none border-r border-default/60 px-1 text-center align-top"
-                    :class="{
-                      'text-success': line.type === 'add',
-                      'text-error': line.type === 'del',
-                      'text-muted': line.type !== 'add' && line.type !== 'del'
-                    }"
-                  >
-                    {{ line.type === 'add' ? '+' : line.type === 'del' ? '-' : '' }}
-                  </td>
-                  <td
-                    class="whitespace-pre-wrap break-all px-2 py-0.5"
-                    :class="{
-                      'text-success': line.type === 'add',
-                      'text-error': line.type === 'del'
-                    }"
-                  >
-                    {{
-                      line.type === 'hunk' || line.type === 'ctx' ? line.text : line.text.slice(1)
-                    }}
-                  </td>
-                </tr>
+                      <button
+                        v-if="line.newLine"
+                        type="button"
+                        class="mx-auto flex size-4 items-center justify-center rounded bg-primary text-inverted opacity-0 transition group-hover:opacity-100"
+                        title="Add a comment or suggestion"
+                        @click="openComment(file.path, line.newLine)"
+                      >
+                        <UIcon name="i-lucide-plus" class="size-3" />
+                      </button>
+                    </td>
+                    <td
+                      class="w-6 select-none border-r border-default/60 px-1 text-center align-top"
+                      :class="{
+                        'text-success': line.type === 'add',
+                        'text-error': line.type === 'del',
+                        'text-muted': line.type !== 'add' && line.type !== 'del'
+                      }"
+                    >
+                      {{ line.type === 'add' ? '+' : line.type === 'del' ? '-' : '' }}
+                    </td>
+                    <td
+                      class="whitespace-pre-wrap break-all px-2 py-0.5"
+                      :class="{
+                        'text-success': line.type === 'add',
+                        'text-error': line.type === 'del'
+                      }"
+                    >
+                      {{
+                        line.type === 'hunk' || line.type === 'ctx' ? line.text : line.text.slice(1)
+                      }}
+                    </td>
+                  </tr>
 
-                <tr v-if="isActive(file.path, line.newLine)" :key="`c-${i}`">
-                  <td :colspan="commentable ? 3 : 2" class="bg-default px-3 py-3">
-                    <div class="space-y-2 font-sans">
-                      <div class="flex items-center justify-between">
-                        <p class="text-xs text-muted">
-                          Commenting on line {{ line.newLine }} of
-                          <span class="font-mono">{{ file.path }}</span>
-                        </p>
-                        <UButton
-                          icon="i-lucide-lightbulb"
-                          color="neutral"
-                          variant="ghost"
-                          size="xs"
-                          label="Suggest change"
-                          @click="suggest(line.text)"
+                  <tr v-if="isCommentActive(file.path, line.newLine)" :key="`c-${i}`">
+                    <td :colspan="commentable ? 3 : 2" class="bg-default px-3 py-3">
+                      <div class="space-y-2 font-sans">
+                        <div class="flex items-center justify-between">
+                          <p class="text-xs text-muted">
+                            Commenting on line {{ line.newLine }} of
+                            <span class="font-mono">{{ file.path }}</span>
+                          </p>
+                          <UButton
+                            icon="i-lucide-lightbulb"
+                            color="neutral"
+                            variant="ghost"
+                            size="xs"
+                            label="Suggest change"
+                            @click="suggest(line.text)"
+                          />
+                        </div>
+                        <MarkdownEditor
+                          v-model="draft"
+                          :rows="4"
+                          placeholder="Leave a comment or suggestion…"
+                          @submit="submitComment"
                         />
+                        <div class="flex items-center gap-2">
+                          <UButton
+                            size="xs"
+                            icon="i-lucide-check"
+                            label="Add comment"
+                            :loading="submitting"
+                            :disabled="!draft.trim()"
+                            @click="submitComment"
+                          />
+                          <UButton
+                            size="xs"
+                            color="neutral"
+                            variant="ghost"
+                            label="Cancel"
+                            :disabled="submitting"
+                            @click="cancelComment"
+                          />
+                        </div>
                       </div>
-                      <MarkdownEditor
-                        v-model="draft"
-                        :rows="4"
-                        placeholder="Leave a comment or suggestion…"
-                        @submit="submit"
-                      />
-                      <div class="flex items-center gap-2">
-                        <UButton
-                          size="xs"
-                          icon="i-lucide-check"
-                          label="Add comment"
-                          :loading="submitting"
-                          :disabled="!draft.trim()"
-                          @click="submit"
-                        />
-                        <UButton
-                          size="xs"
-                          color="neutral"
-                          variant="ghost"
-                          label="Cancel"
-                          :disabled="submitting"
-                          @click="cancel"
-                        />
-                      </div>
-                    </div>
-                  </td>
-                </tr>
-              </template>
-            </tbody>
-          </table>
+                    </td>
+                  </tr>
+                </template>
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
     </div>
