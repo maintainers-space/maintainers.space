@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { ForgeComment, ForgePullReview } from '../app/types/forge'
 import { buildPullTimeline } from '../app/utils/pull-conversation'
+import { commentLocation, reviewStateLabel } from '../app/utils/pull-review'
 
 function comment(id: string, createdAt: string): ForgeComment {
   return { id, body: '', createdAt }
@@ -39,5 +40,18 @@ describe('buildPullTimeline', () => {
 
   it('keeps empty inputs empty', () => {
     expect(buildPullTimeline([], [])).toEqual([])
+  })
+})
+
+describe('pull-review helpers', () => {
+  it('maps review states to friendly labels, falling back to reviewed', () => {
+    expect(reviewStateLabel('APPROVED')).toBe('approved these changes')
+    expect(reviewStateLabel('CHANGES_REQUESTED')).toBe('requested changes')
+    expect(reviewStateLabel('WEIRD')).toBe('reviewed')
+  })
+
+  it('describes a thread location as path:line when a line exists', () => {
+    expect(commentLocation({ path: 'src/a.ts', line: 5 } as never)).toBe('src/a.ts:5')
+    expect(commentLocation({ path: 'src/a.ts' } as never)).toBe('src/a.ts')
   })
 })

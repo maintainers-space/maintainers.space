@@ -1,12 +1,15 @@
 <script setup lang="ts">
 import type { ForgePullDetail, ForgePullReview } from '~/types/forge'
+import { REVIEW_STATE_COLOR, REVIEW_STATE_ICON, reviewStateLabel } from '~/utils/pull-review'
 
 const props = withDefaults(
   defineProps<{
     pull: ForgePullDetail
     reviews: ForgePullReview[]
+    reviewsComplete?: boolean
+    providerLabel?: string
   }>(),
-  {}
+  { reviewsComplete: true, providerLabel: 'the forge' }
 )
 
 const reviewers = computed(() => {
@@ -18,24 +21,12 @@ const reviewers = computed(() => {
   return [...latest.entries()].map(([key, r]) => ({ key, user: r.author, state: r.state }))
 })
 
-const REVIEWER_ICON: Record<string, string> = {
-  APPROVED: 'i-lucide-check-circle',
-  CHANGES_REQUESTED: 'i-lucide-x-circle',
-  COMMENTED: 'i-lucide-message-square',
-  PENDING: 'i-lucide-clock',
-  DISMISSED: 'i-lucide-ban',
-  UNKNOWN: 'i-lucide-circle'
+function reviewerIcon(state: string): string {
+  return REVIEW_STATE_ICON[state] ?? 'i-lucide-circle'
 }
-const REVIEWER_COLOR: Record<string, 'success' | 'warning' | 'neutral'> = {
-  APPROVED: 'success',
-  CHANGES_REQUESTED: 'warning',
-  COMMENTED: 'neutral',
-  PENDING: 'neutral',
-  DISMISSED: 'neutral',
-  UNKNOWN: 'neutral'
-}
-function reviewerLabel(state: ForgePullReview['state']): string {
-  return state.replaceAll('_', ' ').toLowerCase()
+function reviewerColorClass(state: string): string {
+  const color = REVIEW_STATE_COLOR[state] ?? 'neutral'
+  return color === 'success' ? 'text-success' : color === 'error' ? 'text-error' : 'text-muted'
 }
 </script>
 
@@ -54,13 +45,17 @@ function reviewerLabel(state: ForgePullReview['state']): string {
         <ul v-else class="mt-2 space-y-1.5">
           <li v-for="r in reviewers" :key="r.key" class="flex items-center gap-2 text-sm">
             <UIcon
-              :name="REVIEWER_ICON[r.state] ?? 'i-lucide-circle'"
-              :class="`size-3.5 ${REVIEWER_COLOR[r.state] === 'success' ? 'text-success' : REVIEWER_COLOR[r.state] === 'warning' ? 'text-warning' : 'text-muted'}`"
+              :name="reviewerIcon(r.state)"
+              :class="reviewerColorClass(r.state)"
+              :title="reviewStateLabel(r.state)"
+              class="size-3.5 shrink-0"
             />
             <UserLink :user="r.user" />
-            <span class="text-xs text-muted">{{ reviewerLabel(r.state) }}</span>
           </li>
         </ul>
+        <p v-if="!reviewsComplete" class="mt-2 text-xs text-muted">
+          More reviews load as you scroll the conversation.
+        </p>
       </section>
 
       <section v-if="pull.labels?.length" class="px-4 py-3">
@@ -83,7 +78,7 @@ function reviewerLabel(state: ForgePullReview['state']): string {
 
       <section class="px-4 py-3">
         <h2 class="flex items-center gap-1.5 text-sm font-semibold text-highlighted">
-          <UIcon name="i-lucide-circle-info" class="size-4 text-muted" />
+          <UIcon name="i-lucide-info" class="size-4 text-muted" />
           About
         </h2>
         <dl class="mt-2 space-y-2 text-sm">
@@ -132,6 +127,20 @@ function reviewerLabel(state: ForgePullReview['state']): string {
                 :additions="pull.stat.additions"
                 :deletions="pull.stat.deletions"
                 :files="pull.stat.filesChanged"
+              />
+            </dd>
+          </div>
+          <div v-if="pull.url" class="flex items-center gap-2">
+            <dt class="w-20 shrink-0 text-muted"></dt>
+            <dd>
+              <UButton
+                :to="pull.url"
+                target="_blank"
+                color="neutral"
+                variant="link"
+                trailing-icon="i-lucide-external-link"
+                :label="`View on ${providerLabel ?? 'the forge'}`"
+                size="xs"
               />
             </dd>
           </div>

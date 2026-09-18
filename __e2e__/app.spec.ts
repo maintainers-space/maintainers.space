@@ -231,13 +231,13 @@ test.describe('pull request conversation timeline', () => {
     await stubChronoApi(page)
     await page.goto('/github/octo/chrono/pulls/7')
 
-    const timeline = page.locator('ol[aria-label*="conversation events"]')
+    const timeline = page.locator('section[aria-label*="conversation events"]')
     await expect(timeline).toBeVisible()
-    await expect(timeline.getByText('approved these changes')).toBeVisible({ timeout: 10_000 })
-    await expect(timeline.locator('li').nth(0)).toContainText('first comment')
-    await expect(timeline.locator('li').nth(1)).toContainText('approved these changes')
-    await expect(timeline.locator('li').nth(1)).toContainText('bob')
-    await expect(timeline.locator('li').nth(2)).toContainText('last comment')
+    // The review (bob's approval) loads with the first review page; assertions on
+    // nth(1) wait for it and pin the review between the two comments.
+    await expect(timeline.locator('article').nth(0)).toContainText('first comment')
+    await expect(timeline.locator('article').nth(1)).toContainText('bob')
+    await expect(timeline.locator('article').nth(2)).toContainText('last comment')
 
     const rail = page.locator('[aria-label="Pull request metadata"]')
     await expect(rail).toContainText('Reviewers')

@@ -1,14 +1,19 @@
 <script setup lang="ts">
 import type { ComponentPublicInstance } from 'vue'
-import type { ForgeComment, ForgePullReview, ForgePullReviewComment } from '~/types/forge'
+import type { ForgeComment, ForgePullReview } from '~/types/forge'
 import { buildPullTimeline, type PullConversationItem } from '~/utils/pull-conversation'
+import {
+  REVIEW_STATE_COLOR,
+  REVIEW_STATE_ICON,
+  commentLocation,
+  reviewStateLabel
+} from '~/utils/pull-review'
 
 const props = withDefaults(
   defineProps<{
     comments: ForgeComment[]
     reviews: ForgePullReview[]
     threadId?: string
-    providerLabel?: string
     hasMore: boolean
     loading: boolean
     commentState: Record<string, { hasMore: boolean; loading: boolean; error: boolean }>
@@ -16,7 +21,7 @@ const props = withDefaults(
     canReply?: boolean
     reply: (reviewId: string, commentId: string, body: string) => Promise<boolean>
   }>(),
-  { error: false, canReply: false, threadId: undefined, providerLabel: 'the forge' }
+  { error: false, canReply: false, threadId: undefined }
 )
 
 const emit = defineEmits<{
@@ -83,6 +88,15 @@ onBeforeUnmount(() => {
   for (const observer of commentObservers.values()) observer.stop()
 })
 
+// Per-review expand/collapse of its inline threads, open by default.
+const threadsOpen = reactive<Record<string, boolean>>({})
+function isThreadsOpen(reviewId: string): boolean {
+  return threadsOpen[reviewId] ?? true
+}
+function toggleThreads(reviewId: string): void {
+  threadsOpen[reviewId] = !isThreadsOpen(reviewId)
+}
+
 const replyTo = ref<{ reviewId: string; commentId: string } | null>(null)
 const replyDraft = ref('')
 const postingReply = ref(false)
@@ -101,237 +115,285 @@ function cancelReply(): void {
 async function submitReply(): Promise<void> {
   if (!replyTo.value || !replyDraft.value.trim() || postingReply.value) return
   const { reviewId, commentId } = replyTo.value
+  const body = replyDraft.value
   postingReply.value = true
   try {
-    const posted = await props.reply(reviewId, commentId, replyDraft.value)
-    if (posted) cancelReply()
+    const posted = await props.reply(reviewId, commentId, body)
+    if (
+      posted &&
+      replyTo.value?.reviewId === reviewId &&
+      replyTo.value.commentId === commentId &&
+      replyDraft.value === body
+    ) {
+      cancelReply()
+    }
   } finally {
     postingReply.value = false
   }
 }
 
-function stateLabel(state: ForgePullReview['state']): string {
-  return (
-    {
-      APPROVED: 'approved these changes',
-      CHANGES_REQUESTED: 'requested changes',
-      COMMENTED: 'reviewed',
-      PENDING: 'has a pending review',
-      DISMISSED: 'had this review dismissed',
-      UNKNOWN: 'reviewed'
-    }[state] ?? 'reviewed'
-  )
+function stateIcon(state: string): string {
+  return REVIEW_STATE_ICON[state] ?? 'i-lucide-circle'
 }
-
-function stateColor(state: ForgePullReview['state']): 'success' | 'warning' | 'neutral' {
-  if (state === 'APPROVED') return 'success'
-  if (state === 'CHANGES_REQUESTED') return 'warning'
-  return 'neutral'
+function stateColorClass(state: string): string {
+  const color = REVIEW_STATE_COLOR[state] ?? 'neutral'
+  return color === 'success' ? 'text-success' : color === 'error' ? 'text-error' : 'text-muted'
 }
-
-function commentLabel(comment: ForgePullReviewComment): string {
-  return comment.line ? `${comment.path}, line ${comment.line}` : comment.path
+function reviewThreadsLabel(review: ForgePullReview): string {
+  const n = review.comments.length
+  return `${n} thread${n === 1 ? '' : 's'}`
 }
 </script>
 
 <template>
-  <ol class="space-y-4" :aria-label="`${timeline.length} conversation events`">
+  <section class="space-y-4" :aria-label="`${timeline.length} conversation events`">
     <template v-for="item in timeline" :key="item.key">
-      <li v-if="item.kind === 'comment'" class="list-none">
-        <article class="overflow-hidden rounded-lg border border-default">
-          <header
-            class="flex items-center gap-2 border-b border-default bg-elevated/40 px-4 py-2 text-sm"
-          >
-            <UserLink :user="item.comment.author" />
-            <span v-if="item.comment.createdAt" class="text-muted"
-              >commented {{ formatRelativeTime(item.comment.createdAt) }}</span
-            >
-          </header>
-          <div class="px-4 py-3">
-            <MarkdownBody :content="item.comment.body" empty="No content." />
-          </div>
-          <ReactionBar
-            v-if="reactionTarget(item.comment.id)"
-            :reactions="item.comment.reactions"
-            :target="reactionTarget(item.comment.id)!"
-          />
-
-          <div
-            v-if="item.comment.replies?.length"
-            class="divide-y divide-default border-t border-default"
-          >
-            <div v-for="reply in item.comment.replies" :key="reply.id">
-              <header class="flex items-center gap-2 px-4 pt-3 text-sm">
-                <UserLink :user="reply.author" />
-                <span v-if="reply.createdAt" class="text-muted"
-                  >replied {{ formatRelativeTime(reply.createdAt) }}</span
-                >
-              </header>
-              <div class="px-4 py-1.5">
-                <MarkdownBody :content="reply.body" empty="No content." />
-              </div>
+      <!-- Top-level comment -->
+      <article
+        v-if="item.kind === 'comment'"
+        class="overflow-hidden rounded-lg border border-default"
+      >
+        <header
+          class="flex items-center gap-2 px-4 py-2 text-sm bg-elevated/40 border-b border-default"
+        >
+          <UIcon name="i-lucide-message-square" class="size-4 text-muted" aria-hidden="true" />
+          <UserLink :user="item.comment.author" />
+          <span v-if="item.comment.createdAt" class="text-muted ml-auto">
+            {{ formatRelativeTime(item.comment.createdAt) }}
+          </span>
+        </header>
+        <div class="px-4 py-3">
+          <MarkdownBody :content="item.comment.body" empty="No content." />
+        </div>
+        <div
+          v-if="item.comment.replies?.length"
+          class="divide-y divide-default border-t border-default"
+        >
+          <div v-for="reply in item.comment.replies" :key="reply.id">
+            <header class="flex items-center gap-2 px-4 pt-3 text-sm">
+              <UIcon name="i-lucide-reply" class="size-4 text-muted" aria-hidden="true" />
+              <UserLink :user="reply.author" />
+              <span v-if="reply.createdAt" class="text-muted ml-auto">
+                {{ formatRelativeTime(reply.createdAt) }}
+              </span>
+            </header>
+            <div class="px-4 py-1.5">
+              <MarkdownBody :content="reply.body" empty="No content." />
             </div>
           </div>
-        </article>
-      </li>
+        </div>
+        <ReactionBar
+          v-if="reactionTarget(item.comment.id)"
+          :reactions="item.comment.reactions"
+          :target="reactionTarget(item.comment.id)!"
+        />
+      </article>
 
-      <li v-else class="list-none">
-        <article class="overflow-hidden rounded-lg border border-default">
-          <header
-            class="flex flex-wrap items-center gap-2 border-b border-default bg-elevated/40 px-4 py-2 text-sm"
-          >
-            <UserLink :user="item.review.author" />
-            <span class="text-muted">{{ stateLabel(item.review.state) }}</span>
-            <UBadge :color="stateColor(item.review.state)" variant="subtle" size="xs">
-              {{ item.review.state.replaceAll('_', ' ').toLowerCase() }}
-            </UBadge>
-            <span v-if="item.review.submittedAt" class="text-muted">
-              {{ formatRelativeTime(item.review.submittedAt) }}
-            </span>
-            <UButton
-              v-if="item.review.url"
-              :to="item.review.url"
-              target="_blank"
-              color="neutral"
-              variant="link"
-              size="xs"
-              trailing-icon="i-lucide-external-link"
-              :label="`View on ${providerLabel}`"
-              class="ml-auto"
-            />
-          </header>
+      <!-- Submitted review with its grouped inline threads -->
+      <article v-else class="overflow-hidden rounded-lg border border-default">
+        <header
+          class="flex items-center gap-2 px-4 py-2 text-sm bg-elevated/40 border-b border-default"
+        >
+          <UIcon
+            :name="stateIcon(item.review.state)"
+            :class="stateColorClass(item.review.state)"
+            :title="reviewStateLabel(item.review.state)"
+            class="size-4 shrink-0"
+            aria-hidden="true"
+          />
+          <span class="sr-only">{{ reviewStateLabel(item.review.state) }}</span>
+          <UserLink :user="item.review.author" />
+          <span v-if="item.review.submittedAt" class="text-muted ml-auto">
+            {{ formatRelativeTime(item.review.submittedAt) }}
+          </span>
+        </header>
 
-          <div v-if="item.review.body" class="px-4 py-3">
-            <MarkdownBody :content="item.review.body" />
-          </div>
+        <div v-if="item.review.body" class="px-4 py-3">
+          <MarkdownBody :content="item.review.body" />
+        </div>
 
-          <div
+        <div
+          v-if="
+            item.review.comments.length ||
+            commentProgress(item.review).loading ||
+            commentProgress(item.review).error ||
+            commentProgress(item.review).hasMore
+          "
+          class="border-t border-default"
+        >
+          <button
             v-if="item.review.comments.length"
-            class="divide-y divide-default border-t border-default"
+            type="button"
+            class="flex w-full items-center gap-2 px-4 py-2 text-left text-xs text-muted hover:bg-elevated/60"
+            :aria-expanded="isThreadsOpen(item.review.id)"
+            @click="toggleThreads(item.review.id)"
           >
-            <section
-              v-for="comment in item.review.comments"
-              :key="comment.id"
-              :aria-label="`Review thread on ${commentLabel(comment)}`"
-              class="space-y-3 px-4 py-3"
-            >
-              <div class="flex flex-wrap items-center gap-2 text-sm">
-                <UserLink :user="comment.author" />
-                <span class="font-mono text-xs text-muted">{{ commentLabel(comment) }}</span>
-                <UBadge v-if="comment.isOutdated" color="warning" variant="subtle" size="xs">
-                  Outdated
-                </UBadge>
-                <span v-if="comment.createdAt" class="text-muted">
-                  commented {{ formatRelativeTime(comment.createdAt) }}
-                </span>
-              </div>
-              <MarkdownBody :content="comment.body" empty="No content." />
+            <UIcon
+              :name="
+                isThreadsOpen(item.review.id) ? 'i-lucide-chevron-down' : 'i-lucide-chevron-right'
+              "
+              class="size-3.5 shrink-0"
+            />
+            <span>{{ isThreadsOpen(item.review.id) ? 'Collapse' : 'Expand' }}</span>
+            <span class="ml-auto">{{ reviewThreadsLabel(item.review) }}</span>
+          </button>
 
-              <div
-                v-for="reply in comment.replies"
-                :key="reply.id"
-                class="border-l-2 border-default pl-3"
+          <template v-if="isThreadsOpen(item.review.id)">
+            <div class="space-y-2 px-2 pb-2">
+              <section
+                v-for="comment in item.review.comments"
+                :key="comment.id"
+                :aria-label="`Review thread on ${commentLocation(comment)}`"
+                class="overflow-hidden rounded-md border border-default/70"
               >
-                <div class="flex flex-wrap items-center gap-2 text-sm">
-                  <UserLink :user="reply.author" />
-                  <span v-if="reply.createdAt" class="text-muted">
-                    replied {{ formatRelativeTime(reply.createdAt) }}
+                <div class="flex items-center gap-2 px-3 py-2 text-sm">
+                  <UIcon
+                    name="i-lucide-message-square"
+                    class="size-4 text-muted"
+                    aria-hidden="true"
+                  />
+                  <UserLink :user="comment.author" />
+                  <span v-if="comment.createdAt" class="text-muted ml-auto">
+                    {{ formatRelativeTime(comment.createdAt) }}
                   </span>
                 </div>
-                <MarkdownBody :content="reply.body" empty="No content." class="pt-1.5" />
-              </div>
-
-              <template v-if="canReply">
-                <MarkdownEditor
-                  v-if="replyTo?.reviewId === item.review.id && replyTo.commentId === comment.id"
-                  v-model="replyDraft"
-                  :rows="3"
-                  :aria-label="`Reply to review thread on ${commentLabel(comment)}`"
-                  placeholder="Reply to this thread…"
-                  @submit="submitReply"
-                />
-                <div class="flex gap-2">
-                  <UButton
-                    v-if="replyTo?.reviewId !== item.review.id || replyTo.commentId !== comment.id"
-                    icon="i-lucide-reply"
-                    label="Reply"
-                    color="neutral"
-                    variant="ghost"
+                <div class="px-3 py-1.5">
+                  <p class="text-xs font-mono text-muted">{{ commentLocation(comment) }}</p>
+                  <UBadge
+                    v-if="comment.isOutdated"
+                    color="warning"
+                    variant="subtle"
                     size="xs"
-                    @click="openReply(item.review.id, comment.id)"
-                  />
-                  <template v-else>
-                    <UButton
-                      icon="i-lucide-send"
-                      label="Reply"
-                      size="xs"
-                      :loading="postingReply"
-                      :disabled="postingReply || !replyDraft.trim()"
-                      @click="submitReply"
-                    />
-                    <UButton
-                      label="Cancel"
-                      color="neutral"
-                      variant="ghost"
-                      size="xs"
-                      :disabled="postingReply"
-                      @click="cancelReply"
-                    />
-                  </template>
+                    class="mt-1"
+                  >
+                    Outdated
+                  </UBadge>
+                  <MarkdownBody class="mt-1" :content="comment.body" empty="No content." />
                 </div>
-              </template>
-            </section>
-          </div>
 
-          <p
-            v-else-if="commentProgress(item.review).loading"
-            class="border-t border-default px-4 py-3 text-sm text-muted"
-            role="status"
-          >
-            Loading review threads…
-          </p>
-          <div
-            v-else-if="commentProgress(item.review).error"
-            class="border-t border-default px-4 py-3"
-          >
-            <p class="text-sm text-muted">Couldn't load the review threads.</p>
-            <UButton
-              size="xs"
-              color="neutral"
-              variant="soft"
-              icon="i-lucide-refresh-cw"
-              label="Retry"
-              @click="emit('loadComments', item.review.id)"
+                <div
+                  v-for="reply in comment.replies"
+                  :key="reply.id"
+                  class="border-t border-default/60"
+                >
+                  <header class="flex items-center gap-2 px-3 pt-2.5 text-sm">
+                    <UIcon name="i-lucide-reply" class="size-4 text-muted" aria-hidden="true" />
+                    <UserLink :user="reply.author" />
+                    <span v-if="reply.createdAt" class="text-muted ml-auto">
+                      {{ formatRelativeTime(reply.createdAt) }}
+                    </span>
+                  </header>
+                  <div class="px-3 py-1.5">
+                    <MarkdownBody :content="reply.body" empty="No content." />
+                  </div>
+                </div>
+
+                <div v-if="canReply" class="border-t border-default/60">
+                  <div class="px-3 pt-1">
+                    <MarkdownEditor
+                      v-if="
+                        replyTo?.reviewId === item.review.id && replyTo.commentId === comment.id
+                      "
+                      v-model="replyDraft"
+                      :rows="3"
+                      :aria-label="`Reply to review thread on ${commentLocation(comment)}`"
+                      placeholder="Reply to this thread…"
+                      @submit="submitReply"
+                    />
+                    <div class="flex gap-2">
+                      <UButton
+                        v-if="
+                          replyTo?.reviewId !== item.review.id || replyTo.commentId !== comment.id
+                        "
+                        icon="i-lucide-reply"
+                        label="Reply"
+                        color="neutral"
+                        variant="ghost"
+                        size="xs"
+                        @click="openReply(item.review.id, comment.id)"
+                      />
+                      <template v-else>
+                        <UButton
+                          icon="i-lucide-send"
+                          label="Reply"
+                          size="xs"
+                          :loading="postingReply"
+                          :disabled="postingReply || !replyDraft.trim()"
+                          @click="submitReply"
+                        />
+                        <UButton
+                          label="Cancel"
+                          color="neutral"
+                          variant="ghost"
+                          size="xs"
+                          :disabled="postingReply"
+                          @click="cancelReply"
+                        />
+                      </template>
+                    </div>
+                  </div>
+                </div>
+              </section>
+            </div>
+
+            <p
+              v-if="commentProgress(item.review).loading"
+              class="px-4 py-3 text-sm text-muted"
+              role="status"
+            >
+              Loading review threads…
+            </p>
+
+            <div
+              v-if="commentProgress(item.review).error"
+              class="flex items-center gap-2 px-4 py-3 text-sm text-muted"
+            >
+              <span>Couldn't load the review threads.</span>
+              <UButton
+                size="xs"
+                color="neutral"
+                variant="soft"
+                icon="i-lucide-refresh-cw"
+                label="Retry"
+                @click="emit('loadComments', item.review.id)"
+              />
+            </div>
+
+            <p
+              v-if="
+                !item.review.comments.length &&
+                !commentProgress(item.review).hasMore &&
+                !commentProgress(item.review).loading &&
+                !commentProgress(item.review).error
+              "
+              class="px-4 py-3 text-sm text-muted"
+            >
+              No inline comments.
+            </p>
+
+            <div
+              v-if="commentProgress(item.review).hasMore && !commentProgress(item.review).loading"
+              :ref="(element) => setCommentSentinel(item.review.id, element)"
+              aria-hidden="true"
+              class="h-px"
             />
-          </div>
-          <p
-            v-else-if="!commentProgress(item.review).hasMore"
-            class="border-t border-default px-4 py-3 text-sm text-muted"
-          >
-            No inline comments.
-          </p>
-          <div
-            v-if="commentProgress(item.review).hasMore"
-            :ref="(element) => setCommentSentinel(item.review.id, element)"
-            aria-hidden="true"
-            class="h-px"
-          />
-        </article>
-      </li>
+          </template>
+        </div>
+      </article>
     </template>
-  </ol>
 
-  <p v-if="loading" class="text-sm text-muted" role="status">Loading more reviews…</p>
-  <div v-else-if="error" class="flex items-center gap-2 text-sm text-muted">
-    <span>Couldn't load reviews.</span>
-    <UButton
-      size="xs"
-      color="neutral"
-      variant="soft"
-      icon="i-lucide-refresh-cw"
-      label="Retry"
-      @click="emit('loadMore')"
-    />
-  </div>
-  <div v-if="hasMore" ref="reviewsSentinel" aria-hidden="true" class="h-px" />
+    <p v-if="loading" class="text-sm text-muted" role="status">Loading more reviews…</p>
+    <div v-else-if="error" class="flex items-center gap-2 text-sm text-muted">
+      <span>Couldn't load reviews.</span>
+      <UButton
+        size="xs"
+        color="neutral"
+        variant="soft"
+        icon="i-lucide-refresh-cw"
+        label="Retry"
+        @click="emit('loadMore')"
+      />
+    </div>
+    <div v-if="hasMore" ref="reviewsSentinel" aria-hidden="true" class="h-px" />
+  </section>
 </template>

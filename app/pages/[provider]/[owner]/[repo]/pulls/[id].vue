@@ -469,24 +469,27 @@ async function replyToReviewThread(
           <span v-if="data.sourceBranch && data.targetBranch" class="font-mono text-xs">
             {{ data.sourceBranch }} → {{ data.targetBranch }}
           </span>
+          <UButton
+            v-if="tab !== 'files'"
+            icon="i-lucide-info"
+            label="Details"
+            color="neutral"
+            variant="ghost"
+            size="sm"
+            class="ml-auto lg:hidden"
+            :aria-expanded="showInfo"
+            @click="showInfo = !showInfo"
+          />
         </div>
       </div>
 
-      <div class="flex flex-wrap items-center gap-3">
-        <UTabs v-model="tab" :items="tabItems" :content="false" size="sm" />
-        <UButton
-          icon="i-lucide-circle-info"
-          label="Details"
-          color="neutral"
-          variant="ghost"
-          size="sm"
-          class="lg:hidden"
-          :aria-expanded="showInfo"
-          @click="showInfo = !showInfo"
-        />
-      </div>
+      <UTabs v-model="tab" :items="tabItems" :content="false" size="sm" />
 
-      <div class="lg:grid lg:grid-cols-[minmax(0,1fr)_19rem] lg:gap-6 items-start">
+      <div
+        :class="
+          tab === 'files' ? '' : 'lg:grid lg:grid-cols-[minmax(0,1fr)_19rem] lg:gap-6 items-start'
+        "
+      >
         <div class="min-w-0">
           <div v-show="tab === 'conversation'" class="space-y-4">
             <article class="overflow-hidden rounded-lg border border-default">
@@ -514,7 +517,6 @@ async function replyToReviewThread(
               :comments="data.comments"
               :reviews="reviews"
               :thread-id="data.id"
-              :provider-label="forge?.label ?? 'the forge'"
               :has-more="reviewsSupported && reviewsHaveMore"
               :loading="reviewsSupported && reviewsLoading"
               :error="reviewsSupported && reviewsError"
@@ -615,8 +617,13 @@ async function replyToReviewThread(
             </p>
           </div>
         </div>
-        <div :class="[showInfo ? 'block' : 'hidden', 'lg:block', 'min-w-0']">
-          <PullMetadata :pull="data" :reviews="reviews" />
+        <div v-if="tab !== 'files'" :class="[showInfo ? 'block' : 'hidden', 'lg:block', 'min-w-0']">
+          <PullMetadata
+            :pull="data"
+            :reviews="reviews"
+            :reviews-complete="!reviewsSupported || reviewsLoaded"
+            :provider-label="forge?.label ?? 'the forge'"
+          />
         </div>
       </div>
     </template>
