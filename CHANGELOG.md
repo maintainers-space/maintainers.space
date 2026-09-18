@@ -1,5 +1,21 @@
 # maintainers.space
 
+## 0.3.0
+
+### Minor Changes
+
+- [#15](https://github.com/maintainers-space/maintainers.space/pull/15) [`db543dc`](https://github.com/maintainers-space/maintainers.space/commit/db543dc3c7b7f66e77d5924e3ee68db014ed2e60) Thanks [@trueberryless-bot](https://github.com/trueberryless-bot)! - Adds GitHub Markdown Alerts across rendered forge comments and Markdown previews.
+
+- [#20](https://github.com/maintainers-space/maintainers.space/pull/20) [`6d14966`](https://github.com/maintainers-space/maintainers.space/commit/6d14966e63a25598b2614227423b3d401f05d154) Thanks [@trueberryless-bot](https://github.com/trueberryless-bot)! - Adds a dedicated Dependency updates page (at `/dependencies`, with its own sidebar entry) that aggregates Renovate and Dependabot pull requests from every repository you can push to, groups them by the dependency and target version they update, and lets you approve and merge a whole group at once. Merging is sequential and non-optimistic, and any PRs that fail are reported per-repository after the batch completes.
+
+- [#18](https://github.com/maintainers-space/maintainers.space/pull/18) [`0af83e4`](https://github.com/maintainers-space/maintainers.space/commit/0af83e49dbd9344758ea3f72a08ff736dcfb4f32) Thanks [@trueberryless-bot](https://github.com/trueberryless-bot)! - Adds pull-request reviews and their inline suggestion threads to the conversation view, with replies and automatic lazy loading on scroll. Removes the redundant diff count from the Files changed tab heading.
+
+### Patch Changes
+
+- [#22](https://github.com/maintainers-space/maintainers.space/pull/22) [`27db313`](https://github.com/maintainers-space/maintainers.space/commit/27db3130ec79f17cfdf25783e5709494b457d8f3) Thanks [@trueberryless-bot](https://github.com/trueberryless-bot)! - Refreshes the sign-in screen with the official logo, swaps the tangled.org PDS suggestion for eurosky.social, and replaces the GitHub footer link with links to the newly expanded Terms of Service and Privacy Policy (which now cover cookies, data deletion and how to report security concerns).
+
+- [#21](https://github.com/maintainers-space/maintainers.space/pull/21) [`d58c3b9`](https://github.com/maintainers-space/maintainers.space/commit/d58c3b998f9714d12a70921745ad4fd36307d560) Thanks [@trueberryless-bot](https://github.com/trueberryless-bot)! - Fixes atproto sign-in on non-production hosts (e.g. the main branch deployment at main.maintainers.space) by serving the OAuth client metadata document per request origin instead of from a hardcoded production file. Each hosted branch now presents a client the user's PDS accepts for that host.
+
 ## 0.2.1
 
 ### Patch Changes
