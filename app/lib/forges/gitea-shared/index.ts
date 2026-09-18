@@ -294,10 +294,6 @@ export function createGiteaFamilyProvider(config: GiteaFamilyConfig): ForgeProvi
       const token = opts?.token ?? getForgeToken(providerId)
       if (!token) return []
       const repos: GfRepoResponse[] = []
-      // Failures reject so callers can distinguish "no writable repos" from an
-      // expired token / rate limit / network error (`[]` only when unauthenticated).
-      // Gitea caps the page size (50 by default), so a `limit: 100` request still
-      // returns a short page mid-list; only an empty page signals the final one.
       for (let page = 1; ; page++) {
         const batch = await gfFetch<GfRepoResponse[]>(`/user/repos`, { limit: 100, page }, opts)
         repos.push(...batch)

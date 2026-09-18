@@ -37,7 +37,6 @@ export interface GhRepoResponse {
   updated_at?: string | null
   has_issues?: boolean
   has_discussions?: boolean
-  /** The requesting user's permission level on this repo (present on authenticated repo lists). */
   permissions?: { admin?: boolean; push?: boolean; pull?: boolean }
 }
 

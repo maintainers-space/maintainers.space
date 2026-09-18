@@ -297,17 +297,10 @@ export const gitlabProvider: ForgeProvider = {
     const canWrite = (p: GlProjectResponse): boolean => {
       const proj = p.permissions?.project_access?.access_level
       const grp = p.permissions?.group_access?.access_level
-      // No permission info returned (self-managed hosts may omit it): trust the
-      // server-side `min_access_level=30` filter rather than dropping the project.
       if (proj == null && grp == null) return true
       return Math.max(proj ?? 0, grp ?? 0) >= 30
     }
-    // `membership` + `min_access_level=30` (Developer) limits the response to
-    // projects the viewer can push to; the client-side check above is a
-    // belt-and-braces fallback for hosts that ignore `min_access_level`.
     const projects: GlProjectResponse[] = []
-    // Failures reject so callers can distinguish "no writable repos" from an
-    // expired token / rate limit / network error (`[]` only when unauthenticated).
     for (let page = 1; ; page++) {
       const batch = await glFetch<GlProjectResponse[]>(
         `/projects`,

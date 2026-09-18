@@ -43,7 +43,6 @@ export interface GlProjectResponse {
   updated_at?: string | null
   issues_enabled?: boolean
   merge_requests_enabled?: boolean
-  /** The requesting user's access level on this project (present on authenticated project lists). */
   permissions?: {
     project_access?: { access_level?: number }
     group_access?: { access_level?: number }
@@ -93,7 +92,6 @@ export interface GlMergeRequestResponse extends GlMrStateFields {
   labels?: (string | GlLabelResponse)[]
   source_branch?: string
   target_branch?: string
-  /** Latest commit SHA on the merge request HEAD. */
   sha?: string | null
   created_at?: string | null
   updated_at?: string | null

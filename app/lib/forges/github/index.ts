@@ -350,8 +350,6 @@ export const githubProvider: ForgeProvider = {
       repos.push(...batch)
       if (batch.length < GH_MAX_PER_PAGE) break
     }
-    // `permissions.push` reflects the signed-in viewer's own write access, including
-    // repos reached through organization/team membership.
     return repos.filter((r) => r.permissions?.push).map(mapRepo)
   },
 
@@ -1054,7 +1052,10 @@ export const githubProvider: ForgeProvider = {
   },
 
   async createReview(repo, id, input, opts): Promise<void> {
-    const body: Record<string, unknown> = { event: input.event }
+    const body: Record<string, unknown> = {
+      event: input.event,
+      ...(input.expectedHead ? { commit_id: input.expectedHead } : {})
+    }
     if (input.body) body.body = input.body
     if (input.comments?.length) {
       body.comments = input.comments.map((c) => ({

@@ -261,7 +261,6 @@ export interface ForgePull {
   labels?: ForgeLabel[]
   sourceBranch?: string
   targetBranch?: string
-  /** Latest commit sha on the PR head, when the provider reports it (used to reject stale merges). */
   headSha?: string | null
   createdAt?: string | null
   updatedAt?: string | null
@@ -340,7 +339,6 @@ export interface ForgeReviewInput {
   event: 'APPROVE' | 'REQUEST_CHANGES' | 'COMMENT'
   body?: string
   comments?: ForgeReviewComment[]
-  /** Expected head SHA, so an approval is bound to a specific revision. */
   expectedHead?: string | null
 }
 
@@ -622,13 +620,7 @@ export interface ForgeProvider {
   getRepo?: (owner: string, repo: string, opts?: ForgeReadOptions) => Promise<ForgeRepo>
   /** List an owner's repositories. */
   listRepos?: (owner: string, opts?: ForgeReadOptions) => Promise<ForgeRepo[]>
-  /**
-   * Repositories the authenticated caller can push to (write/admin access)
-   * across every owner/org they belong to. Used by the dependency-update
-   * aggregator to find bot PRs the viewer may actually approve & merge.
-   * Returns [] when the forge can't enumerate them (e.g. Bitbucket/
-   * Tangled) or no token is present.
-   */
+  /** Repositories the authenticated caller can push to; [] when unavailable. */
   listAccessibleRepos?: (opts?: ForgeReadOptions) => Promise<ForgeRepo[]>
   listBranches?: (repo: RepoLocator, opts?: ForgeReadOptions) => Promise<ForgeBranch[]>
   getTree?: (

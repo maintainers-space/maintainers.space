@@ -8,7 +8,6 @@ import {
 } from '~/lib/dependency-updates'
 import type { ForgePull, ForgeRepo, ForgeReviewInput, RepoLocator } from '~/types/forge'
 
-/** Bounded-concurrency map so cross-repo fan-out stays responsive without rate-spiking. */
 async function mapLimit<T, R>(
   items: T[],
   concurrency: number,
@@ -46,7 +45,6 @@ function errorMessage(e: unknown): string {
   return String(err.data?.message ?? err.message ?? '')
 }
 
-/** True when GitHub rejected an approval because the token owner authored the PR. */
 function isGitHubSelfApprovalRejection(e: unknown): boolean {
   if (errorStatus(e) !== 422) return false
   const errors = (e as { data?: { errors?: { message?: string }[] } }).data?.errors ?? []
@@ -59,16 +57,6 @@ export interface GroupMergeResult {
   failed: Array<{ item: DependencyPr; error: unknown }>
 }
 
-/**
- * Dependency management: aggregate dependency-bot (Renovate/Dependabot) pull
- * requests from every repo the signed-in viewer can push to, group them by
- * *meaning* (dependency + target version), and let the viewer approve & merge
- * a whole group in one action.
- *
- * Merging is deliberately non-optimistic: each PR waits for the provider to
- * confirm before the next one starts, and failures are collected per-PR and
- * reported back rather than aborting the batch.
- */
 export function useDependencyUpdates() {
   const { get: getToken } = useForgeTokens()
   const { did } = useAuth()
@@ -77,7 +65,6 @@ export function useDependencyUpdates() {
   const loading = useState<boolean>('dependency-loading', () => false)
   const loadedOnce = useState<boolean>('dependency-loaded', () => false)
   const notes = useState<string[]>('dependency-notes', () => [])
-  /** PRs currently being approved+merged ("provider:owner/name#number"). */
   const pending = useState<string[]>('dependency-pending', () => [])
 
   const totalCount = computed(() => groups.value.reduce((n, g) => n + g.items.length, 0))
@@ -88,7 +75,6 @@ export function useDependencyUpdates() {
 
   const isPending = (item: DependencyPr): boolean => pending.value.includes(prKey(item))
 
-  /** Forges that can enumerate writable repos and have a connected account. */
   const activeForges = () =>
     forgeList.filter((f) => f.listAccessibleRepos && f.listPulls && !!getToken(f.id))
 
@@ -151,7 +137,6 @@ export function useDependencyUpdates() {
     loadedOnce.value = true
   }
 
-  /** Approve (when supported) and merge a single dependency PR; throws on failure. */
   async function approveAndMerge(item: DependencyPr): Promise<void> {
     const forge = getForge(item.repo.provider)
     if (!forge?.mergePull) throw new Error(`Cannot merge on forge "${item.repo.provider}".`)
@@ -160,8 +145,6 @@ export function useDependencyUpdates() {
     const number = String(item.pull.number ?? item.pull.id)
     if (!number) throw new Error('This update has no pull request number.')
 
-    // Bind approval & merge to a freshly loaded head so a newer commit cannot be
-    // merged by mistake if the PR changed between listing and merging.
     let expectedHead: string | undefined
     if (forge.getPull) {
       const fresh = await forge.getPull(loc, number, { token })
@@ -174,9 +157,6 @@ export function useDependencyUpdates() {
       event: 'APPROVE',
       ...(expectedHead ? { expectedHead } : {})
     }
-    // GitHub forbids approving a pull request the token owner authored (common
-    // for self-hosted Renovate running under a human account). Only that
-    // rejection is non-fatal: the viewer may still be allowed to merge.
     let approvalError: unknown
     if (forge.createReview) {
       try {
@@ -199,13 +179,7 @@ export function useDependencyUpdates() {
     }
   }
 
-  /**
-   * Approve & merge every PR in a group, sequentially and non-optimistically.
-   * Continues past individual failures and reports which PRs had issues.
-   */
   async function mergeGroup(group: DependencyGroup): Promise<GroupMergeResult> {
-    // Skip PRs already being merged (e.g. a per-PR action running) so we never
-    // fire a second approve/merge for the same PR.
     const todos = group.items.filter((item) => !isPending(item))
     const keys = todos.map(prKey)
     pending.value = [...pending.value, ...keys]
@@ -223,13 +197,11 @@ export function useDependencyUpdates() {
       }
     } finally {
       pending.value = pending.value.filter((k) => !keys.includes(k))
-      // Refresh so merged PRs leave the list.
       await load(true).catch(() => {})
     }
     return result
   }
 
-  /** Merge a single PR (used for unparsable, lone updates). */
   function mergeOne(item: DependencyPr): Promise<GroupMergeResult> {
     return mergeGroup({
       key: prKey(item),

@@ -59,7 +59,6 @@ export interface GfRepoResponse {
   updated_at?: string | null
   has_issues?: boolean
   has_pull_requests?: boolean
-  /** The requesting user's permission level on this repo (present on authenticated repo lists). */
   permissions?: { admin?: boolean; push?: boolean; pull?: boolean }
 }
 

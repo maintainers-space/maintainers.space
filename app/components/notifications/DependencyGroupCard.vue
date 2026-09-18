@@ -11,7 +11,6 @@ const toast = useToast()
 
 const open = ref(props.defaultOpen)
 const mergingGroup = ref(false)
-/** True while any PR in this group is mid-merge; disables all group actions. */
 const anyPending = computed(() => props.group.items.some(isPending))
 
 const reposCount = computed(() => new Set(props.group.items.map((i) => i.repo.fullName)).size)
@@ -20,7 +19,6 @@ const subtitle = computed(() => {
   return `${n} PR${n === 1 ? '' : 's'} across ${reposCount.value} ${reposCount.value === 1 ? 'repository' : 'repositories'}`
 })
 
-/** Render a result summary + per-PR failures for one merge batch. */
 function reportResult(result: GroupMergeResult, total: number): void {
   const failed = result.failed.length
   if (!failed) {
