@@ -279,6 +279,30 @@ export interface ForgePullDetail extends ForgePull {
   reactions?: ForgeReactionSummary[]
 }
 
+/** A submitted review, including its summary and any inline discussion threads. */
+export interface ForgePullReview {
+  id: string
+  author?: ForgeUser
+  body?: string | null
+  state: 'APPROVED' | 'CHANGES_REQUESTED' | 'COMMENTED' | 'PENDING' | 'DISMISSED' | 'UNKNOWN'
+  submittedAt?: string | null
+  url?: string | null
+  comments: ForgePullReviewComment[]
+}
+
+/** An inline review comment or suggestion. Replies stay with the comment they address. */
+export interface ForgePullReviewComment extends ForgeComment {
+  path: string
+  /** The current line, if the comment is still anchored in the latest diff. */
+  line?: number
+  startLine?: number
+  diffHunk?: string | null
+  isOutdated?: boolean
+  /** The parent review-comment id when this is a reply. */
+  replyToId?: string
+  replies?: ForgePullReviewComment[]
+}
+
 /** A single pull/merge request waiting in a merge queue (GitHub) or merge train (GitLab). */
 export interface ForgeMergeQueueEntry {
   /** 1-based position in the queue/train. */
@@ -647,6 +671,19 @@ export interface ForgeProvider {
     id: string,
     opts?: ForgeReadOptions
   ) => Promise<ForgeCommit[]>
+  /** Review summaries, fetched in small cursor-based batches for the conversation view. */
+  listPullReviews?: (
+    repo: RepoLocator,
+    id: string,
+    opts?: ForgePageOptions
+  ) => Promise<Paginated<ForgePullReview>>
+  /** Inline comments and suggestions belonging to one review. */
+  listPullReviewComments?: (
+    repo: RepoLocator,
+    id: string,
+    reviewId: string,
+    opts?: ForgePageOptions
+  ) => Promise<Paginated<ForgePullReviewComment>>
   /** Merge queue (GitHub) / merge train (GitLab) state for a branch (default branch if omitted). */
   getMergeQueue?: (
     repo: RepoLocator,
@@ -712,6 +749,14 @@ export interface ForgeProvider {
     input: ForgeReviewInput,
     opts?: ForgeReadOptions
   ) => Promise<void>
+  /** Reply to a threaded inline review comment. */
+  createPullReviewReply?: (
+    repo: RepoLocator,
+    id: string,
+    commentId: string,
+    body: string,
+    opts?: ForgeReadOptions
+  ) => Promise<ForgePullReviewComment>
   addReaction?: (
     repo: RepoLocator,
     target: ForgeReactionTarget,

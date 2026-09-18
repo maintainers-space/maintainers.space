@@ -198,14 +198,14 @@ The project uses `lint-staged` with `simple-git-hooks` to lint and format staged
 
 ## Submitting changes
 
-Before opening a pull request, run `pnpm lint`, `pnpm typecheck`, `pnpm knip` and `pnpm test` locally. CI runs all of these anyway (plus a production build), but it's faster to catch issues before pushing. Then:
+Before opening a pull request, run `pnpm lint`, `pnpm typecheck`, `pnpm knip` and `pnpm test` locally. CI runs all of these anyway (plus a production build), but it's faster to catch issues before pushing. For a complete local run against every check CI gates on, use `pnpm run check:all` (lint, format, type check, coverage, knip, dependency audit, E2E, build and Lighthouse — it is serial by design, so it takes a while but the checks can't collide with each other). Then:
 
 1. Create a feature branch from `main`.
 2. Make your changes with clear, descriptive commits.
 3. Push your branch and open a pull request, filling in the PR template.
 4. Make sure CI passes (lint, format, type check, unused-code check, tests, build).
 
-PR titles are checked against [Conventional Commits](https://www.conventionalcommits.org) (`type(scope): description`, lowercase subject). This repo doesn't squash-merge by default, so keep individual commit messages meaningful too, not just the PR title. Common types are `feat`, `fix`, `docs`, `refactor`, `chore` and `ci`. Scopes like `ui`, `server`, `forge`, `docs`, `deps` and `ci` are recognized but optional.
+PR titles are checked against [Conventional Commits](https://www.conventionalcommits.org) (`type(scope): description`, lowercase subject). This repo doesn't squash-merge by default, so keep individual commit messages meaningful too, not just the PR title. Common types are `feat`, `fix`, `docs`, `refactor`, `chore` and `ci`. Scopes are optional; the recognized set lives in `.github/workflows/semantic-pull-requests.yml` and spans the forge integrations (e.g. `github`, `gitlab`, `codeberg`), product areas (`ui`, `server`, `forge`, `auth`, `notifications`, `timeline`, `search`, `repo`, `pulls`, `profile`, `settings`) and housekeeping (`docs`, `deps`, `ci`).
 
 If your PR addresses an open issue, mention it in the description (`Fixes #123` or a full issue URL) so GitHub links the two and closes the issue automatically on merge.
 

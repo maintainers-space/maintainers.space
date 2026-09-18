@@ -22,3 +22,5 @@ pnpm run test:e2e
 ```
 
 For performance-sensitive or document metadata changes, build first and run `pnpm run test:lighthouse`. Never lower a threshold without recording a concrete, reviewed reason.
+
+To verify everything at once, regardless of test layer, use `pnpm run check:all` — it runs lint, format, type check, coverage, knip, dependency audit, E2E, a fresh build and Lighthouse back-to-back. Prefer it when you need full-confidence verification (e.g. before a PR or in response to a CI failure), and craft a narrower command when you only need one layer. `check:all` is serial and slow; give it a generous timeout (30–60 minutes) and don't run it alongside other checks.
