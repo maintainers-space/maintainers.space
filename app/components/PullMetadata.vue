@@ -9,8 +9,6 @@ const props = withDefaults(
   {}
 )
 
-// The most recent review decision per distinct reviewer, so the rail shows the
-// current picture (one row per person) instead of every historical submission.
 const reviewers = computed(() => {
   const latest = new Map<string, ForgePullReview>()
   for (const review of props.reviews) {
@@ -47,7 +45,6 @@ function reviewerLabel(state: ForgePullReview['state']): string {
     aria-label="Pull request metadata"
   >
     <div class="divide-y divide-default">
-      <!-- Reviewers -->
       <section class="px-4 py-3">
         <h2 class="flex items-center gap-1.5 text-sm font-semibold text-highlighted">
           <UIcon name="i-lucide-users" class="size-4 text-muted" />
@@ -66,7 +63,6 @@ function reviewerLabel(state: ForgePullReview['state']): string {
         </ul>
       </section>
 
-      <!-- Labels -->
       <section v-if="pull.labels?.length" class="px-4 py-3">
         <h2 class="flex items-center gap-1.5 text-sm font-semibold text-highlighted">
           <UIcon name="i-lucide-tags" class="size-4 text-muted" />
@@ -85,7 +81,6 @@ function reviewerLabel(state: ForgePullReview['state']): string {
         </div>
       </section>
 
-      <!-- About -->
       <section class="px-4 py-3">
         <h2 class="flex items-center gap-1.5 text-sm font-semibold text-highlighted">
           <UIcon name="i-lucide-circle-info" class="size-4 text-muted" />

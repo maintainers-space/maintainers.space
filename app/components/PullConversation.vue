@@ -7,9 +7,7 @@ const props = withDefaults(
   defineProps<{
     comments: ForgeComment[]
     reviews: ForgePullReview[]
-    /** Pull id, used to anchor comment reactions. */
     threadId?: string
-    /** Label of the current forge, for the "View on …" link. */
     providerLabel?: string
     hasMore: boolean
     loading: boolean
@@ -35,8 +33,6 @@ function reactionTarget(commentId: string) {
   return { kind: 'pull' as const, threadId: props.threadId, commentId }
 }
 
-// A review with no in-memory state yet must be treated as "has more to load",
-// otherwise its comments would never be requested in the first place.
 function commentProgress(review: ForgePullReview): {
   hasMore: boolean
   loading: boolean
@@ -102,8 +98,6 @@ function cancelReply(): void {
   postingReply.value = false
 }
 
-// Keep the editor open (and the draft intact) until the parent confirms the
-// reply actually posted, so a failed request doesn't silently discard input.
 async function submitReply(): Promise<void> {
   if (!replyTo.value || !replyDraft.value.trim() || postingReply.value) return
   const { reviewId, commentId } = replyTo.value
@@ -143,7 +137,6 @@ function commentLabel(comment: ForgePullReviewComment): string {
 <template>
   <ol class="space-y-4" :aria-label="`${timeline.length} conversation events`">
     <template v-for="item in timeline" :key="item.key">
-      <!-- Top-level comment -->
       <li v-if="item.kind === 'comment'" class="list-none">
         <article class="overflow-hidden rounded-lg border border-default">
           <header
@@ -182,7 +175,6 @@ function commentLabel(comment: ForgePullReviewComment): string {
         </article>
       </li>
 
-      <!-- Submitted review, with its inline threads -->
       <li v-else class="list-none">
         <article class="overflow-hidden rounded-lg border border-default">
           <header

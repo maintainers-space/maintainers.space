@@ -142,8 +142,6 @@ test.describe('GitHub Markdown alerts', () => {
 })
 
 test.describe('pull request conversation timeline', () => {
-  // Route the GitHub endpoints the PR page touches. GitHub detail/list endpoints
-  // carry query strings, so list endpoints match by regex.
   async function stubChronoApi(page) {
     await page.route('https://api.github.com/repos/octo/chrono', (route) =>
       route.fulfill({
@@ -179,8 +177,6 @@ test.describe('pull request conversation timeline', () => {
         }
       })
     )
-    // Two comments around one review — out of chronological order if shown as
-    // `comments, then reviews`.
     await page.route(
       /^https:\/\/api\.github\.com\/repos\/octo\/chrono\/issues\/7\/comments(?:\?.*)?$/,
       (route) =>
@@ -237,16 +233,12 @@ test.describe('pull request conversation timeline', () => {
 
     const timeline = page.locator('ol[aria-label*="conversation events"]')
     await expect(timeline).toBeVisible()
-    // The review summary is fetched with the first page of reviews on load.
     await expect(timeline.getByText('approved these changes')).toBeVisible({ timeout: 10_000 })
-    // First event is the earlier comment, then the review (submitted in between),
-    // then the later comment — chronological order, not comments-then-reviews.
     await expect(timeline.locator('li').nth(0)).toContainText('first comment')
     await expect(timeline.locator('li').nth(1)).toContainText('approved these changes')
     await expect(timeline.locator('li').nth(1)).toContainText('bob')
     await expect(timeline.locator('li').nth(2)).toContainText('last comment')
 
-    // The metadata rail surfaces the reviewer and the branch comparison.
     const rail = page.locator('[aria-label="Pull request metadata"]')
     await expect(rail).toContainText('Reviewers')
     await expect(rail).toContainText('bob')

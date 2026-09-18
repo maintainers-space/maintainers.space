@@ -12,7 +12,6 @@ function review(id: string, submittedAt?: string): ForgePullReview {
 
 describe('buildPullTimeline', () => {
   it('merges comments and reviews by their anchor timestamp', () => {
-    // Chronology: comment(c1) at t1, review(r1) at t2, comment(c2) at t3.
     const result = buildPullTimeline(
       [comment('c1', '2024-01-01T00:00:00Z'), comment('c2', '2024-01-03T00:00:00Z')],
       [review('r1', '2024-01-02T00:00:00Z')]
@@ -23,7 +22,6 @@ describe('buildPullTimeline', () => {
   })
 
   it('holds a review before comments that followed it even when the inputs are not pre-sorted', () => {
-    // The page passes both lists oldest-first, but the merge must not rely on that.
     const result = buildPullTimeline(
       [comment('c2', '2024-01-03T00:00:00Z'), comment('c1', '2024-01-01T00:00:00Z')],
       [review('r1', '2024-01-02T00:00:00Z')]

@@ -289,9 +289,6 @@ function resetReviews(): void {
 // A pull is not complete offline without its changed files and commits. Fetch
 // them after the conversation has rendered rather than making a user open both
 // tabs. The work remains cache-backed and is never attempted while offline.
-// The first page of reviews is fetched here too, so a submitted review summary
-// shows up in the conversation right away instead of waiting for the reader to
-// scroll to an (initially off-screen) sentinel; later pages still lazy-load.
 watch(
   data,
   (pull) => {
