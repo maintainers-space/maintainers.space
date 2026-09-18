@@ -1,0 +1,90 @@
+max-files-changed: 60
+
+🚨 action:
+  - changed-files:
+      - any-glob-to-any-file:
+          - '.github/workflows/**'
+          - '.github/zizmor.yml'
+
+🚧 config:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'nuxt.config.ts'
+          - 'tsconfig.json'
+          - 'knip.ts'
+          - 'vitest.config.ts'
+          - 'playwright.config.ts'
+          - 'lighthouserc.cjs'
+          - 'renovate.json'
+          - '.editorconfig'
+          - '.oxlintrc.json'
+          - '.oxfmtrc.json'
+          - '.gitignore'
+          - '.coderabbit.yaml'
+          - '.github/labeler.yml'
+          - '.github/ISSUE_TEMPLATE/**'
+          - '.github/PULL_REQUEST_TEMPLATE.md'
+
+📦 package:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'package.json'
+          - 'pnpm-lock.yaml'
+          - 'pnpm-workspace.yaml'
+
+🔌 forge:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'app/lib/forges/**'
+          - 'app/lib/atproto/**'
+          - 'server/api/auth/**'
+          - 'server/api/github/**'
+          - 'server/api/tangled/**'
+          - 'server/api/atproto/**'
+          - 'server/utils/oauth-providers.ts'
+
+🖥️ server:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'server/routes/**'
+          - 'server/api/**'
+          - 'server/utils/**'
+
+📝 changeset:
+  - changed-files:
+      - any-glob-to-any-file: '.changeset/**'
+
+🎨 ui:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'app/pages/**'
+          - 'app/components/**'
+          - 'app/composables/**'
+          - 'app/layouts/**'
+          - 'app/middleware/**'
+          - 'app/plugins/**'
+          - 'app/utils/**'
+
+🏯 styles:
+  - changed-files:
+      - any-glob-to-any-file: '**/*.css'
+
+🧪 testing:
+  - changed-files:
+      - any-glob-to-any-file:
+          - '__tests__/**'
+          - '__e2e__/**'
+          - '**/*.test.ts'
+          - '**/*.test.mjs'
+          - '**/*.spec.ts'
+          - 'vitest.config.ts'
+          - 'playwright.config.ts'
+          - 'lighthouserc.cjs'
+
+✒️ documentation:
+  - all:
+      - changed-files:
+          - any-glob-to-any-file:
+              - '**/*.md'
+              - 'docs/**'
+          - all-globs-to-all-files: '!.changeset/**'
