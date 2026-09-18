@@ -198,7 +198,7 @@ The project uses `lint-staged` with `simple-git-hooks` to lint and format staged
 
 ## Submitting changes
 
-Before opening a pull request, run `pnpm lint`, `pnpm typecheck`, `pnpm knip` and `pnpm test` locally. CI runs all of these anyway (plus a production build), but it's faster to catch issues before pushing. Then:
+Before opening a pull request, run `pnpm lint`, `pnpm typecheck`, `pnpm knip` and `pnpm test` locally. CI runs all of these anyway (plus a production build), but it's faster to catch issues before pushing. For a complete local run against every check CI gates on, use `pnpm run check:all` (lint, format, type check, coverage, knip, dependency audit, E2E, build and Lighthouse — it is serial by design, so it takes a while but the checks can't collide with each other). Then:
 
 1. Create a feature branch from `main`.
 2. Make your changes with clear, descriptive commits.

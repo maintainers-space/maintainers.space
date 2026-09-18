@@ -15,6 +15,10 @@ Review the diff as a skeptical maintainer:
 6. Remove redundant comments, unreachable guards, duplicate validation, generated files, debug output and formatting noise. Comments should preserve a constraint, workaround or non-obvious decision rather than narrate the code.
 7. Run `pnpm run check:push`. Run `zizmor --persona pedantic .` for workflow changes and `pnpm run test:lighthouse` for user-facing or performance-sensitive changes.
 
+To verify **everything** before review or push, run `pnpm run check:all`. It runs every local check back-to-back (lint, format, type check, coverage, knip, dependency audit, E2E, fresh build and Lighthouse) — use it only when you must be confident the whole gate passes. For a specific concern, run just the relevant command (e.g. `pnpm run check:quick` for iteration, `pnpm run test:e2e` for browser behavior) instead of the full suite.
+
+`check:all` is intentionally serial and slow. Give it a generous timeout (30–60 minutes) and do not run it concurrently with other checks — running it in parallel with other commands reintroduces the build/port races it was designed to avoid.
+
 If CodeRabbit CLI is already installed and authenticated, the repository owner has approved external review, and the diff contains no secrets, run:
 
 ```bash
