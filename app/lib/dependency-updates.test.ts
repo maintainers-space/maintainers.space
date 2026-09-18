@@ -121,6 +121,12 @@ describe('parseDependencyUpdate', () => {
     expect(p?.to).toBe('1.96.0')
   })
 
+  it('strips a Dependabot directory suffix from the target version', () => {
+    const p = parseDependencyUpdate('Bump foo from 1.0.0 to 1.1.0 in /frontend', 'dependabot')
+    expect(p?.to).toBe('1.1.0')
+    expect(p?.dependency).toBe('foo')
+  })
+
   it('parses a plain Renovate update', () => {
     const p = parseDependencyUpdate('Update dependency astro to v7.3.3', 'renovate')
     expect(p).toMatchObject({ bot: 'renovate', dependency: 'astro', to: '7.3.3' })

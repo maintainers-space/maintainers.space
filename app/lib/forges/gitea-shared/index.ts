@@ -296,10 +296,12 @@ export function createGiteaFamilyProvider(config: GiteaFamilyConfig): ForgeProvi
       const repos: GfRepoResponse[] = []
       // Failures reject so callers can distinguish "no writable repos" from an
       // expired token / rate limit / network error (`[]` only when unauthenticated).
+      // Gitea caps the page size (50 by default), so a `limit: 100` request still
+      // returns a short page mid-list; only an empty page signals the final one.
       for (let page = 1; ; page++) {
         const batch = await gfFetch<GfRepoResponse[]>(`/user/repos`, { limit: 100, page }, opts)
         repos.push(...batch)
-        if (batch.length < 100) break
+        if (batch.length === 0) break
       }
       return repos.filter((r) => r.permissions?.push).map(gf.mapRepo)
     },
@@ -725,7 +727,10 @@ export function createGiteaFamilyProvider(config: GiteaFamilyConfig): ForgeProvi
 
     async createReview(repo, id, input, opts): Promise<void> {
       const event = input.event === 'APPROVE' ? 'APPROVED' : input.event
-      const body: Record<string, unknown> = { event }
+      const body: Record<string, unknown> = {
+        event,
+        ...(input.expectedHead ? { commit_id: input.expectedHead } : {})
+      }
       if (input.body) body.body = input.body
       if (input.comments?.length) {
         body.comments = input.comments.map((c) => ({

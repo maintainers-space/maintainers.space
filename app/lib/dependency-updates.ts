@@ -103,7 +103,7 @@ export function detectDependencyBot(pull: ForgePull): DependencyBot | null {
  * (`build(deps): bump ...`), plus the plain `Bump ... from ... to ...` form.
  */
 const DEPENDABOT_BUMP =
-  /(?:\b(?:build|chore|ci|deps?|fix|refactor|style)(?:\([^)]*\))?:\s*)?bump\s+(.+?)\s+from\s+(.+?)\s+to\s+(.+)$/i
+  /(?:\b(?:build|chore|ci|deps?|fix|refactor|style)(?:\([^)]*\))?:\s*)?bump\s+(.+?)\s+from\s+(.+?)\s+to\s+(.+?)(?:\s+in\s+\/.+)?$/i
 
 /** Renovate's single-dependency title, with or without a conventional prefix. */
 const RENOVATE_UPDATE =
