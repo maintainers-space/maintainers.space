@@ -30,6 +30,27 @@ jobs:
             ui
             server
             forge
+            github
+            gitlab
+            bitbucket
+            codeberg
+            gitea
+            tangled
+            atproto
+            auth
+            home
+            timeline
+            notifications
+            search
+            profile
+            settings
+            repo
+            pulls
+            markdown
+            nav
+            appearance
+            commands
+            offline
             docs
             deps
             ci
