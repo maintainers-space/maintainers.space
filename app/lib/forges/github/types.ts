@@ -101,6 +101,25 @@ export interface GhCommentResponse {
   reactions?: GhReactionsResponse
 }
 
+export interface GhPullReviewResponse {
+  id: number | string
+  user?: GhUserResponse | null
+  body?: string | null
+  state?: string | null
+  submitted_at?: string | null
+  html_url?: string | null
+}
+
+export interface GhPullReviewCommentResponse extends GhCommentResponse {
+  pull_request_review_id?: number | string | null
+  path: string
+  line?: number | null
+  start_line?: number | null
+  position?: number | null
+  diff_hunk?: string | null
+  in_reply_to_id?: number | string | null
+}
+
 export interface GhCommitGitActor {
   name?: string
   email?: string

@@ -1,5 +1,11 @@
 <script setup lang="ts">
-import type { ForgeCommit, ForgeFileDiff, ForgePullDetail } from '~/types/forge'
+import type {
+  ForgeCommit,
+  ForgeFileDiff,
+  ForgePullDetail,
+  ForgePullReview,
+  ForgePullReviewComment
+} from '~/types/forge'
 import { useRepoContext } from '~/composables/useRepoContext'
 import { cached, invalidate, TTL } from '~/lib/cache'
 
@@ -46,6 +52,13 @@ const files = ref<ForgeFileDiff[] | null>(null)
 const filesLoading = ref(false)
 const commits = ref<ForgeCommit[] | null>(null)
 const commitsLoading = ref(false)
+const reviews = ref<ForgePullReview[]>([])
+const reviewsCursor = ref<string>()
+const reviewsLoaded = ref(false)
+const reviewsLoading = ref(false)
+const reviewCommentState = reactive<
+  Record<string, { cursor?: string; initialized: boolean; loading: boolean }>
+>({})
 const isOnline = useOnline()
 let requestGeneration = 0
 
@@ -57,6 +70,11 @@ watch(
     filesLoading.value = false
     commits.value = null
     commitsLoading.value = false
+    reviews.value = []
+    reviewsCursor.value = undefined
+    reviewsLoaded.value = false
+    reviewsLoading.value = false
+    for (const reviewId of Object.keys(reviewCommentState)) delete reviewCommentState[reviewId]
   },
   { immediate: true }
 )
@@ -113,6 +131,139 @@ async function ensureCommits(): Promise<void> {
   }
 }
 
+const reviewsHaveMore = computed(() => !reviewsLoaded.value || !!reviewsCursor.value)
+const reviewCommentProgress = computed(() =>
+  Object.fromEntries(
+    Object.entries(reviewCommentState).map(([reviewId, state]) => [
+      reviewId,
+      { hasMore: !state.initialized || !!state.cursor, loading: state.loading }
+    ])
+  )
+)
+
+function reviewCacheKey(cursor?: string): string {
+  return `${itemKey.value}:reviews:${cursor ?? 'first'}`
+}
+
+function reviewCommentCacheKey(reviewId: string, cursor?: string): string {
+  return `${itemKey.value}:review:${reviewId}:comments:${cursor ?? 'first'}`
+}
+
+async function ensureReviews(): Promise<void> {
+  const currentForge = forge.value
+  if (
+    reviewsLoading.value ||
+    (reviewsLoaded.value && !reviewsCursor.value) ||
+    !currentForge?.listPullReviews
+  ) {
+    return
+  }
+  const generation = requestGeneration
+  const currentLocator = locator.value
+  const currentId = id.value
+  const cursor = reviewsCursor.value
+  const persist = !meta.value?.isPrivate
+  reviewsLoading.value = true
+  try {
+    const key = reviewCacheKey(cursor)
+    if (!persist) invalidate(key)
+    const page = await cached(
+      key,
+      () => currentForge.listPullReviews!(currentLocator, currentId, { cursor, limit: 10 }),
+      { ttl: TTL.MEDIUM, persist }
+    )
+    if (generation !== requestGeneration) return
+    reviews.value.push(...page.items)
+    reviewsCursor.value = page.cursor
+    reviewsLoaded.value = true
+  } catch {
+    if (generation === requestGeneration) {
+      reviewsCursor.value = undefined
+      reviewsLoaded.value = true
+    }
+  } finally {
+    if (generation === requestGeneration) reviewsLoading.value = false
+  }
+}
+
+function findReviewComment(
+  comments: ForgePullReviewComment[],
+  commentId: string
+): ForgePullReviewComment | undefined {
+  for (const comment of comments) {
+    if (comment.id === commentId) return comment
+    const reply = findReviewComment(comment.replies ?? [], commentId)
+    if (reply) return reply
+  }
+  return undefined
+}
+
+function appendReviewComments(review: ForgePullReview, incoming: ForgePullReviewComment[]): void {
+  for (const comment of incoming) {
+    if (findReviewComment(review.comments, comment.id)) continue
+    const parent = comment.replyToId
+      ? findReviewComment(review.comments, comment.replyToId)
+      : undefined
+    if (parent) (parent.replies ??= []).push(comment)
+    else review.comments.push(comment)
+  }
+}
+
+async function ensureReviewComments(reviewId: string): Promise<void> {
+  const currentForge = forge.value
+  const state = (reviewCommentState[reviewId] ??= { initialized: false, loading: false })
+  if (
+    state.loading ||
+    (state.initialized && !state.cursor) ||
+    !currentForge?.listPullReviewComments
+  ) {
+    return
+  }
+  const review = reviews.value.find((item) => item.id === reviewId)
+  if (!review) return
+  const generation = requestGeneration
+  const currentLocator = locator.value
+  const currentId = id.value
+  const cursor = state.cursor
+  const persist = !meta.value?.isPrivate
+  state.loading = true
+  try {
+    const key = reviewCommentCacheKey(reviewId, cursor)
+    if (!persist) invalidate(key)
+    const page = await cached(
+      key,
+      () =>
+        currentForge.listPullReviewComments!(currentLocator, currentId, reviewId, {
+          cursor,
+          limit: 30
+        }),
+      { ttl: TTL.MEDIUM, persist }
+    )
+    if (generation !== requestGeneration) return
+    appendReviewComments(review, page.items)
+    state.cursor = page.cursor
+    state.initialized = true
+  } catch {
+    if (generation === requestGeneration) {
+      state.cursor = undefined
+      state.initialized = true
+    }
+  } finally {
+    if (generation === requestGeneration) state.loading = false
+  }
+}
+
+function resetReviews(): void {
+  // Drop every cached page for this pull's reviews and their threads so a fresh
+  // reload reflects the just-posted review or reply.
+  invalidate(`${itemKey.value}:reviews:`, true)
+  invalidate(`${itemKey.value}:review:`, true)
+  reviews.value = []
+  reviewsCursor.value = undefined
+  reviewsLoaded.value = false
+  for (const reviewId of Object.keys(reviewCommentState)) delete reviewCommentState[reviewId]
+}
+
 // A pull is not complete offline without its changed files and commits. Fetch
 // them after the conversation has rendered rather than making a user open both
 // tabs. The work remains cache-backed and is never attempted while offline.
@@ -145,26 +296,21 @@ const tabItems = computed(() => [
     icon: 'i-lucide-git-commit-horizontal',
     value: 'commits'
   },
-  { label: 'Files changed', icon: 'i-lucide-file-diff', value: 'files' }
-])
-
-const filesStat = computed(() => {
-  const stat = data.value?.stat
-  if (stat && (stat.additions != null || stat.deletions != null)) return stat
-  if (!files.value) return null
-  let additions = 0
-  let deletions = 0
-  for (const f of files.value) {
-    additions += f.additions ?? 0
-    deletions += f.deletions ?? 0
+  {
+    label: 'Files changed',
+    icon: 'i-lucide-file-diff',
+    value: 'files',
+    ui: { trigger: 'pr-files-trigger' }
   }
-  return { additions, deletions }
-})
+])
 
 const commentDraft = ref('')
 const postingComment = ref(false)
 const reviewDraft = ref('')
 const reviewSubmitting = ref<'' | 'APPROVE' | 'REQUEST_CHANGES' | 'COMMENT'>('')
+const canReplyToReviewThreads = computed(
+  () => !!getToken(provider.value) && !!forge.value?.createPullReviewReply
+)
 
 async function submitComment(): Promise<void> {
   if (!forge.value?.createComment || !commentDraft.value.trim()) return
@@ -199,6 +345,7 @@ async function submitReview(event: 'APPROVE' | 'REQUEST_CHANGES' | 'COMMENT'): P
     reviewDraft.value = ''
     toast.add({ title: 'Review submitted', color: 'success', icon: 'i-lucide-check' })
     await refresh()
+    resetReviews()
   } catch (e) {
     const hint = describeForgeError(e)
     toast.add({
@@ -221,10 +368,34 @@ async function onDiffComment(payload: { path: string; line: number; body: string
       comments: [{ path: payload.path, line: payload.line, body: payload.body }]
     })
     toast.add({ title: 'Comment added to the diff', color: 'success', icon: 'i-lucide-check' })
+    resetReviews()
   } catch (e) {
     const hint = describeForgeError(e)
     toast.add({
       title: 'Could not add comment',
+      description: hint.description,
+      color: 'error',
+      icon: 'i-lucide-circle-alert',
+      actions: hint.to ? [{ label: hint.linkLabel, to: hint.to, target: '_blank' }] : undefined
+    })
+  }
+}
+
+async function replyToReviewThread(
+  reviewId: string,
+  commentId: string,
+  body: string
+): Promise<void> {
+  if (!forge.value?.createPullReviewReply || !body.trim()) return
+  try {
+    const reply = await forge.value.createPullReviewReply(locator.value, id.value, commentId, body)
+    const review = reviews.value.find((item) => item.id === reviewId)
+    if (review) appendReviewComments(review, [reply])
+    toast.add({ title: 'Reply posted', color: 'success', icon: 'i-lucide-check' })
+  } catch (e) {
+    const hint = describeForgeError(e)
+    toast.add({
+      title: 'Could not post reply',
       description: hint.description,
       color: 'error',
       icon: 'i-lucide-circle-alert',
@@ -274,17 +445,7 @@ async function onDiffComment(payload: { path: string; line: number; body: string
         </div>
       </div>
 
-      <UTabs v-model="tab" :items="tabItems" :content="false" size="sm">
-        <template #trailing="{ item }">
-          <DiffStat
-            v-if="item.value === 'files' && filesStat"
-            :additions="filesStat.additions"
-            :deletions="filesStat.deletions"
-            :show-files="false"
-            class="ml-1"
-          />
-        </template>
-      </UTabs>
+      <UTabs v-model="tab" :items="tabItems" :content="false" size="sm" />
 
       <div v-show="tab === 'conversation'" class="space-y-4">
         <article class="overflow-hidden rounded-lg border border-default">
@@ -306,6 +467,17 @@ async function onDiffComment(payload: { path: string; line: number; body: string
           :comments="data.comments"
           thread-kind="pull"
           :thread-id="data.id"
+        />
+        <PullReviewList
+          v-if="forge?.listPullReviews"
+          :reviews="reviews"
+          :has-more="reviewsHaveMore"
+          :loading="reviewsLoading"
+          :comment-state="reviewCommentProgress"
+          :can-reply="canReplyToReviewThreads"
+          @load-more="ensureReviews"
+          @load-comments="ensureReviewComments"
+          @reply="replyToReviewThread"
         />
 
         <div v-if="canWrite" class="space-y-2">
@@ -400,3 +572,25 @@ async function onDiffComment(payload: { path: string; line: number; body: string
     </template>
   </div>
 </template>
+
+<style>
+/* The redundant +/− stat used to sit in the Files changed tab heading. Now that
+   it lives in the tab body, selecting the tab settles its label into place with
+   a brief nudge instead of a hard jump. The animation restarts each time the
+   tab is activated (data-state flips back to "active"). The `.pr-files-trigger`
+   class is unique to this page's Files changed tab. */
+.pr-files-trigger[data-state='active'] [data-slot='label'] {
+  animation: pr-files-settle 0.25s ease-out;
+}
+
+@keyframes pr-files-settle {
+  from {
+    transform: translateX(-2px);
+    opacity: 0.75;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+</style>
