@@ -292,7 +292,10 @@ export function mapPullReviewComments(
       line: comment.line ?? undefined,
       startLine: comment.start_line ?? undefined,
       diffHunk: comment.diff_hunk ?? null,
-      isOutdated: comment.line == null && comment.position == null,
+      // A file-level comment has no line/position by design; only call it
+      // outdated when a line comment lost its anchor in the latest diff.
+      isOutdated:
+        comment.subject_type !== 'file' && comment.line == null && comment.position == null,
       replyToId: comment.in_reply_to_id ? String(comment.in_reply_to_id) : undefined
     }
     byId.set(mapped.id, mapped)

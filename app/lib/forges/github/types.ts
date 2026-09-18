@@ -118,6 +118,8 @@ export interface GhPullReviewCommentResponse extends GhCommentResponse {
   position?: number | null
   diff_hunk?: string | null
   in_reply_to_id?: number | string | null
+  /** Whether this comment is anchored to a line ('line') or to the file itself ('file'). */
+  subject_type?: 'line' | 'file' | null
 }
 
 export interface GhCommitGitActor {

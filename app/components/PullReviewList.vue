@@ -2,25 +2,37 @@
 import type { ComponentPublicInstance } from 'vue'
 import type { ForgePullReview, ForgePullReviewComment } from '~/types/forge'
 
-const props = defineProps<{
-  reviews: ForgePullReview[]
-  hasMore: boolean
-  loading: boolean
-  commentState: Record<string, { hasMore: boolean; loading: boolean }>
-  canReply?: boolean
-}>()
+const props = withDefaults(
+  defineProps<{
+    reviews: ForgePullReview[]
+    hasMore: boolean
+    loading: boolean
+    commentState: Record<string, { hasMore: boolean; loading: boolean; error: boolean }>
+    error?: boolean
+    canReply?: boolean
+    reply: (reviewId: string, commentId: string, body: string) => Promise<boolean>
+  }>(),
+  { error: false, canReply: false }
+)
 
 const emit = defineEmits<{
   loadMore: []
   loadComments: [reviewId: string]
-  reply: [reviewId: string, commentId: string, body: string]
 }>()
 
 // A review with no in-memory state yet must be treated as "has more to load",
 // otherwise its comments would never be requested in the first place.
-function commentProgress(review: ForgePullReview): { hasMore: boolean; loading: boolean } {
+function commentProgress(review: ForgePullReview): {
+  hasMore: boolean
+  loading: boolean
+  error: boolean
+} {
   const state = props.commentState[review.id]
-  return { hasMore: !state || state.hasMore, loading: !!state?.loading }
+  return {
+    hasMore: !state || state.hasMore,
+    loading: !!state?.loading,
+    error: !!state?.error
+  }
 }
 
 const reviewsSentinel = ref<HTMLElement | null>(null)
@@ -62,6 +74,7 @@ onBeforeUnmount(() => {
 
 const replyTo = ref<{ reviewId: string; commentId: string } | null>(null)
 const replyDraft = ref('')
+const postingReply = ref(false)
 
 function openReply(reviewId: string, commentId: string): void {
   replyTo.value = { reviewId, commentId }
@@ -71,12 +84,21 @@ function openReply(reviewId: string, commentId: string): void {
 function cancelReply(): void {
   replyTo.value = null
   replyDraft.value = ''
+  postingReply.value = false
 }
 
-function submitReply(): void {
-  if (!replyTo.value || !replyDraft.value.trim()) return
-  emit('reply', replyTo.value.reviewId, replyTo.value.commentId, replyDraft.value)
-  cancelReply()
+// Keep the editor open (and the draft intact) until the parent confirms the
+// reply actually posted, so a failed request doesn't silently discard input.
+async function submitReply(): Promise<void> {
+  if (!replyTo.value || !replyDraft.value.trim() || postingReply.value) return
+  const { reviewId, commentId } = replyTo.value
+  postingReply.value = true
+  try {
+    const posted = await props.reply(reviewId, commentId, replyDraft.value)
+    if (posted) cancelReply()
+  } finally {
+    postingReply.value = false
+  }
 }
 
 function stateLabel(state: ForgePullReview['state']): string {
@@ -197,7 +219,8 @@ function commentLabel(comment: ForgePullReviewComment): string {
                   icon="i-lucide-send"
                   label="Reply"
                   size="xs"
-                  :disabled="!replyDraft.trim()"
+                  :loading="postingReply"
+                  :disabled="postingReply || !replyDraft.trim()"
                   @click="submitReply"
                 />
                 <UButton
@@ -205,6 +228,7 @@ function commentLabel(comment: ForgePullReviewComment): string {
                   color="neutral"
                   variant="ghost"
                   size="xs"
+                  :disabled="postingReply"
                   @click="cancelReply"
                 />
               </template>
@@ -220,6 +244,17 @@ function commentLabel(comment: ForgePullReviewComment): string {
       >
         Loading review threads…
       </p>
+      <div v-else-if="commentProgress(review).error" class="border-t border-default px-4 py-3">
+        <p class="text-sm text-muted">Couldn't load the review threads.</p>
+        <UButton
+          size="xs"
+          color="neutral"
+          variant="soft"
+          icon="i-lucide-refresh-cw"
+          label="Retry"
+          @click="emit('loadComments', review.id)"
+        />
+      </div>
       <p
         v-else-if="!commentProgress(review).hasMore"
         class="border-t border-default px-4 py-3 text-sm text-muted"
@@ -235,6 +270,17 @@ function commentLabel(comment: ForgePullReviewComment): string {
     </article>
 
     <p v-if="loading" class="text-sm text-muted" role="status">Loading more reviews…</p>
+    <div v-else-if="error" class="flex items-center gap-2 text-sm text-muted">
+      <span>Couldn't load reviews.</span>
+      <UButton
+        size="xs"
+        color="neutral"
+        variant="soft"
+        icon="i-lucide-refresh-cw"
+        label="Retry"
+        @click="emit('loadMore')"
+      />
+    </div>
     <p v-else-if="reviews.length && !hasMore" class="text-sm text-muted">All reviews loaded.</p>
     <div v-if="hasMore" ref="reviewsSentinel" aria-hidden="true" class="h-px" />
   </section>

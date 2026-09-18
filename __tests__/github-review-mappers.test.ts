@@ -69,4 +69,11 @@ describe('mapPullReviewComments', () => {
     expect(threads[0]!.isOutdated).toBe(true)
     expect(threads[0]!.line).toBeUndefined()
   })
+
+  it('does not mark file-level comments as outdated', () => {
+    const threads = mapPullReviewComments([
+      { id: 8, body: 'nit on this file', path: 'b.ts', subject_type: 'file', user: {} }
+    ])
+    expect(threads[0]!.isOutdated).toBe(false)
+  })
 })

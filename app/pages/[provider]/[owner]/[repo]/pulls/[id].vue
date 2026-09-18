@@ -56,16 +56,21 @@ const reviews = ref<ForgePullReview[]>([])
 const reviewsCursor = ref<string>()
 const reviewsLoaded = ref(false)
 const reviewsLoading = ref(false)
+const reviewsError = ref(false)
 const reviewCommentState = reactive<
-  Record<string, { cursor?: string; initialized: boolean; loading: boolean }>
+  Record<string, { cursor?: string; initialized: boolean; loading: boolean; error: boolean }>
 >({})
 const isOnline = useOnline()
 let requestGeneration = 0
+// Bumped on every write that invalidates the review cache so an in-flight fetch
+// started before the write can never append or repopulate a stale page.
+let reviewEpoch = 0
 
 watch(
   itemKey,
   () => {
     requestGeneration++
+    reviewEpoch++
     files.value = null
     filesLoading.value = false
     commits.value = null
@@ -74,6 +79,7 @@ watch(
     reviewsCursor.value = undefined
     reviewsLoaded.value = false
     reviewsLoading.value = false
+    reviewsError.value = false
     for (const reviewId of Object.keys(reviewCommentState)) delete reviewCommentState[reviewId]
   },
   { immediate: true }
@@ -131,22 +137,28 @@ async function ensureCommits(): Promise<void> {
   }
 }
 
-const reviewsHaveMore = computed(() => !reviewsLoaded.value || !!reviewsCursor.value)
+const reviewsHaveMore = computed(() => !reviewsLoaded.value && !reviewsError.value)
 const reviewCommentProgress = computed(() =>
   Object.fromEntries(
     Object.entries(reviewCommentState).map(([reviewId, state]) => [
       reviewId,
-      { hasMore: !state.initialized || !!state.cursor, loading: state.loading }
+      {
+        hasMore: (!state.initialized || !!state.cursor) && !state.error,
+        loading: state.loading,
+        error: state.error
+      }
     ])
   )
 )
 
+// Review cache keys embed the epoch so a fetch that started before a mutation
+// wrote to the cache can never surface as the post-mutation value.
 function reviewCacheKey(cursor?: string): string {
-  return `${itemKey.value}:reviews:${cursor ?? 'first'}`
+  return `${itemKey.value}:reviews:${reviewEpoch}:${cursor ?? 'first'}`
 }
 
 function reviewCommentCacheKey(reviewId: string, cursor?: string): string {
-  return `${itemKey.value}:review:${reviewId}:comments:${cursor ?? 'first'}`
+  return `${itemKey.value}:review:${reviewId}:comments:${reviewEpoch}:${cursor ?? 'first'}`
 }
 
 async function ensureReviews(): Promise<void> {
@@ -159,6 +171,7 @@ async function ensureReviews(): Promise<void> {
     return
   }
   const generation = requestGeneration
+  const epoch = reviewEpoch
   const currentLocator = locator.value
   const currentId = id.value
   const cursor = reviewsCursor.value
@@ -172,17 +185,15 @@ async function ensureReviews(): Promise<void> {
       () => currentForge.listPullReviews!(currentLocator, currentId, { cursor, limit: 10 }),
       { ttl: TTL.MEDIUM, persist }
     )
-    if (generation !== requestGeneration) return
+    if (generation !== requestGeneration || epoch !== reviewEpoch) return
+    reviewsError.value = false
     reviews.value.push(...page.items)
     reviewsCursor.value = page.cursor
-    reviewsLoaded.value = true
+    reviewsLoaded.value = !page.cursor
   } catch {
-    if (generation === requestGeneration) {
-      reviewsCursor.value = undefined
-      reviewsLoaded.value = true
-    }
+    if (generation === requestGeneration && epoch === reviewEpoch) reviewsError.value = true
   } finally {
-    if (generation === requestGeneration) reviewsLoading.value = false
+    if (generation === requestGeneration && epoch === reviewEpoch) reviewsLoading.value = false
   }
 }
 
@@ -211,7 +222,11 @@ function appendReviewComments(review: ForgePullReview, incoming: ForgePullReview
 
 async function ensureReviewComments(reviewId: string): Promise<void> {
   const currentForge = forge.value
-  const state = (reviewCommentState[reviewId] ??= { initialized: false, loading: false })
+  const state = (reviewCommentState[reviewId] ??= {
+    initialized: false,
+    loading: false,
+    error: false
+  })
   if (
     state.loading ||
     (state.initialized && !state.cursor) ||
@@ -222,6 +237,7 @@ async function ensureReviewComments(reviewId: string): Promise<void> {
   const review = reviews.value.find((item) => item.id === reviewId)
   if (!review) return
   const generation = requestGeneration
+  const epoch = reviewEpoch
   const currentLocator = locator.value
   const currentId = id.value
   const cursor = state.cursor
@@ -239,21 +255,23 @@ async function ensureReviewComments(reviewId: string): Promise<void> {
         }),
       { ttl: TTL.MEDIUM, persist }
     )
-    if (generation !== requestGeneration) return
+    if (generation !== requestGeneration || epoch !== reviewEpoch) return
+    state.error = false
     appendReviewComments(review, page.items)
     state.cursor = page.cursor
     state.initialized = true
   } catch {
-    if (generation === requestGeneration) {
-      state.cursor = undefined
-      state.initialized = true
-    }
+    if (generation === requestGeneration && epoch === reviewEpoch) state.error = true
   } finally {
-    if (generation === requestGeneration) state.loading = false
+    if (generation === requestGeneration && epoch === reviewEpoch) state.loading = false
   }
 }
 
 function resetReviews(): void {
+  // Bump the epoch before clearing so any review fetch already in flight is
+  // discarded (guarded by epoch in ensureReviews/ensureReviewComments) rather
+  // than appending its stale page or repopulating the cache under a new key.
+  reviewEpoch++
   // Drop every cached page for this pull's reviews and their threads so a fresh
   // reload reflects the just-posted review or reply.
   invalidate(`${itemKey.value}:reviews:`, true)
@@ -261,6 +279,8 @@ function resetReviews(): void {
   reviews.value = []
   reviewsCursor.value = undefined
   reviewsLoaded.value = false
+  reviewsLoading.value = false
+  reviewsError.value = false
   for (const reviewId of Object.keys(reviewCommentState)) delete reviewCommentState[reviewId]
 }
 
@@ -381,17 +401,20 @@ async function onDiffComment(payload: { path: string; line: number; body: string
   }
 }
 
+// Returns whether the reply posted, so PullReviewList can keep the draft open
+// and editable when a network error means the user's text shouldn't be lost.
 async function replyToReviewThread(
   reviewId: string,
   commentId: string,
   body: string
-): Promise<void> {
-  if (!forge.value?.createPullReviewReply || !body.trim()) return
+): Promise<boolean> {
+  if (!forge.value?.createPullReviewReply || !body.trim()) return false
   try {
     const reply = await forge.value.createPullReviewReply(locator.value, id.value, commentId, body)
     const review = reviews.value.find((item) => item.id === reviewId)
     if (review) appendReviewComments(review, [reply])
     toast.add({ title: 'Reply posted', color: 'success', icon: 'i-lucide-check' })
+    return true
   } catch (e) {
     const hint = describeForgeError(e)
     toast.add({
@@ -401,6 +424,7 @@ async function replyToReviewThread(
       icon: 'i-lucide-circle-alert',
       actions: hint.to ? [{ label: hint.linkLabel, to: hint.to, target: '_blank' }] : undefined
     })
+    return false
   }
 }
 </script>
@@ -473,11 +497,12 @@ async function replyToReviewThread(
           :reviews="reviews"
           :has-more="reviewsHaveMore"
           :loading="reviewsLoading"
+          :error="reviewsError"
           :comment-state="reviewCommentProgress"
           :can-reply="canReplyToReviewThreads"
+          :reply="replyToReviewThread"
           @load-more="ensureReviews"
           @load-comments="ensureReviewComments"
-          @reply="replyToReviewThread"
         />
 
         <div v-if="canWrite" class="space-y-2">
