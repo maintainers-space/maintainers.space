@@ -32,17 +32,22 @@ test.describe('anonymous visitor', () => {
     await page.goto('/login')
 
     await expect(page.getByRole('heading', { name: 'Sign in with atproto' })).toBeVisible()
-    await page.getByRole('button', { name: 'bsky.social' }).click()
-    await expect(page.getByLabel('Handle or DID')).toHaveValue('you.bsky.social')
+    await page.getByRole('button', { name: 'eurosky.social' }).click()
+    await expect(page.getByLabel('Handle or DID')).toHaveValue('you.eurosky.social')
+    await expect(page.getByRole('link', { name: 'Privacy' })).toBeVisible()
+    await expect(page.getByRole('link', { name: 'Terms' })).toBeVisible()
   })
 
-  test('publishes privacy and terms information', async ({ page }) => {
+  test('publishes privacy and terms information and cross-links them', async ({ page }) => {
     await page.goto('/privacy')
     await expect(page.getByRole('heading', { name: 'Your identity' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Cookies' })).toBeVisible()
+    await expect(page.getByRole('link', { name: 'Terms of Service' })).toBeVisible()
 
     await page.goto('/terms')
     await expect(page.getByRole('heading', { name: 'The software' })).toBeVisible()
-    await expect(page.getByRole('link', { name: 'Privacy' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Contact' })).toBeVisible()
+    await expect(page.getByRole('link', { name: 'Privacy Policy' }).first()).toBeVisible()
   })
 
   test('limits crawlers to stable public pages', async ({ request }) => {
