@@ -33,6 +33,8 @@ pnpm run build
 pnpm run test:lighthouse
 ```
 
+`pnpm run check:all` runs every local check back-to-back in a fixed sequential order — lint, format, typecheck, unit tests with coverage, knip, dependency audit, end-to-end tests, a fresh production build and the Lighthouse audit. It is intentionally serial (`&&`) so the checks can't interfere with each other's build output, test state or the `:3000` port; it just takes a while because the build, E2E and Lighthouse each need a full browser/production run.
+
 Playwright traces, screenshots and videos are retained only on failure. CI uploads the Playwright and Lighthouse HTML reports for 14 days.
 
 The pre-commit hook uses the dependency-free `nano-staged` runner to format and lint only staged files. The pre-push hook runs the complete local quality gate, including browser tests.
