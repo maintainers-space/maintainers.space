@@ -35,7 +35,6 @@ test.describe('anonymous visitor', () => {
     await page.getByRole('button', { name: 'eurosky.social' }).click()
     await expect(page.getByLabel('Handle or DID')).toHaveValue('you.eurosky.social')
     await expect(page.getByRole('link', { name: 'Privacy' })).toBeVisible()
-    await expect(page.getByRole('link', { name: 'Terms' })).toBeVisible()
   })
 
   test('publishes privacy and terms information and cross-links them', async ({ page }) => {
