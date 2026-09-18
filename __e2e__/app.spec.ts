@@ -143,7 +143,7 @@ test.describe('GitHub Markdown alerts', () => {
 
 test.describe('dependency updates page', () => {
   test('prompts anonymous visitors to sign in, accessibly', async ({ page }) => {
-    await page.goto('/notifications/dependencies')
+    await page.goto('/dependencies')
 
     await expect(page.getByRole('heading', { name: 'Dependency updates' })).toBeVisible()
     await expect(

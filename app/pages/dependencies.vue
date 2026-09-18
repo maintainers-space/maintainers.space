@@ -12,14 +12,7 @@ onMounted(() => {
     <template #header>
       <UDashboardNavbar title="Dependency updates">
         <template #leading>
-          <UButton
-            to="/notifications"
-            icon="i-lucide-arrow-left"
-            color="neutral"
-            variant="ghost"
-            size="sm"
-            aria-label="Back to notifications"
-          />
+          <UDashboardSidebarCollapse />
         </template>
         <template #trailing>
           <UBadge v-if="groups.length" color="primary" variant="subtle" size="sm">

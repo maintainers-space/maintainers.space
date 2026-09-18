@@ -105,6 +105,11 @@ const groups = computed<CommandPaletteGroup<CommandPaletteItem>[]>(() => {
                 onSelect: () => go('/notifications')
               },
               {
+                label: 'Dependency updates',
+                icon: 'i-lucide-package',
+                onSelect: () => go('/dependencies')
+              },
+              {
                 label: 'Linked accounts',
                 icon: 'i-lucide-link',
                 onSelect: () => go('/settings/accounts')

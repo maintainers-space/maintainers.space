@@ -113,7 +113,7 @@ function resolvedMeta(item: ForgeInboxItem): { icon: string; class: string } {
 
           <NuxtLink
             v-if="dependencyCount"
-            to="/notifications/dependencies"
+            to="/dependencies"
             class="flex items-center gap-3 rounded-lg border border-default bg-elevated/30 px-4 py-3 transition hover:bg-elevated/60"
           >
             <div
