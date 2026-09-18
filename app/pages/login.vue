@@ -21,7 +21,7 @@ const state = reactive<Partial<Schema>>({ handle: '' })
 const loading = ref(false)
 const networkHint = ref(false)
 
-const suggestions = ['bsky.social', 'npmx.social', 'tangled.org']
+const suggestions = ['bsky.social', 'npmx.social', 'eurosky.social']
 
 function useSuggestion(host: string): void {
   const current = (state.handle ?? '').split('.')[0]?.replace(/^@/, '') ?? ''
@@ -54,7 +54,7 @@ async function onSubmit(event: FormSubmitEvent<Schema>) {
       <span
         class="inline-flex size-9 items-center justify-center rounded-lg bg-primary text-neutral-900"
       >
-        <UIcon name="i-lucide-git-merge" class="size-5" />
+        <BrandMark class="size-5" />
       </span>
       <span class="text-2xl font-semibold tracking-tight text-highlighted">maintainers.space</span>
     </NuxtLink>
@@ -143,15 +143,9 @@ async function onSubmit(event: FormSubmitEvent<Schema>) {
             icon="i-lucide-arrow-left"
             class="px-0"
           />
-          <UButton
-            to="https://github.com"
-            target="_blank"
-            variant="link"
-            color="neutral"
-            label="GitHub"
-            icon="i-simple-icons-github"
-            class="px-0"
-          />
+          <div class="flex items-center gap-1">
+            <UButton to="/privacy" variant="link" color="neutral" label="Privacy" class="px-0" />
+          </div>
         </div>
       </template>
     </UCard>
