@@ -136,3 +136,19 @@ test.describe('GitHub Markdown alerts', () => {
     expect(results.violations).toEqual([])
   })
 })
+
+test.describe('dependency updates page', () => {
+  test('prompts anonymous visitors to sign in, accessibly', async ({ page }) => {
+    await page.goto('/notifications/dependencies')
+
+    await expect(page.getByRole('heading', { name: 'Dependency updates' })).toBeVisible()
+    await expect(
+      page.getByRole('paragraph').filter({ hasText: 'Sign in to aggregate dependency updates' })
+    ).toBeVisible()
+
+    const results = await new AxeBuilder({ page })
+      .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+      .analyze()
+    expect(results.violations).toEqual([])
+  })
+})

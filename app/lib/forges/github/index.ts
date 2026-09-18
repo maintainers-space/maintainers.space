@@ -327,6 +327,30 @@ export const githubProvider: ForgeProvider = {
     return data.map(mapRepo)
   },
 
+  async listAccessibleRepos(opts) {
+    const token = opts?.token ?? getForgeToken('github')
+    if (!token) return []
+    const repos: GhRepoResponse[] = []
+    for (let page = 1; ; page++) {
+      const batch = await $fetch<GhRepoResponse[]>(`${API}/user/repos`, {
+        headers: ghHeaders(opts),
+        query: {
+          per_page: GH_MAX_PER_PAGE,
+          page,
+          affiliation: 'owner,collaborator,organization_member',
+          sort: 'updated',
+          direction: 'desc'
+        },
+        signal: opts?.signal
+      })
+      repos.push(...batch)
+      if (batch.length < GH_MAX_PER_PAGE) break
+    }
+    // `permissions.push` reflects the signed-in viewer's own write access, including
+    // repos reached through organization/team membership.
+    return repos.filter((r) => r.permissions?.push).map(mapRepo)
+  },
+
   async listBranches(repo, opts) {
     const data = await $fetch<GhBranchResponse[]>(
       `${API}/repos/${repo.owner}/${repo.name}/branches`,
@@ -1074,7 +1098,10 @@ export const githubProvider: ForgeProvider = {
           {
             method: 'PUT',
             headers: ghHeaders(opts),
-            body: { merge_method: method },
+            body: {
+              merge_method: method,
+              ...(opts?.expectedHead ? { sha: opts.expectedHead } : {})
+            },
             signal: opts?.signal
           }
         )
