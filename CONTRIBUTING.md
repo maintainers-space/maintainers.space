@@ -205,7 +205,7 @@ Before opening a pull request, run `pnpm lint`, `pnpm typecheck`, `pnpm knip` an
 3. Push your branch and open a pull request, filling in the PR template.
 4. Make sure CI passes (lint, format, type check, unused-code check, tests, build).
 
-PR titles are checked against [Conventional Commits](https://www.conventionalcommits.org) (`type(scope): description`, lowercase subject). This repo doesn't squash-merge by default, so keep individual commit messages meaningful too, not just the PR title. Common types are `feat`, `fix`, `docs`, `refactor`, `chore` and `ci`. Scopes like `ui`, `server`, `forge`, `docs`, `deps` and `ci` are recognized but optional.
+PR titles are checked against [Conventional Commits](https://www.conventionalcommits.org) (`type(scope): description`, lowercase subject). This repo doesn't squash-merge by default, so keep individual commit messages meaningful too, not just the PR title. Common types are `feat`, `fix`, `docs`, `refactor`, `chore` and `ci`. Scopes are optional; the recognized set lives in `.github/workflows/semantic-pull-requests.yml` and spans the forge integrations (e.g. `github`, `gitlab`, `codeberg`), product areas (`ui`, `server`, `forge`, `auth`, `notifications`, `timeline`, `search`, `repo`, `pulls`, `profile`, `settings`) and housekeeping (`docs`, `deps`, `ci`).
 
 If your PR addresses an open issue, mention it in the description (`Fixes #123` or a full issue URL) so GitHub links the two and closes the issue automatically on merge.
 
