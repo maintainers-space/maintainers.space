@@ -43,7 +43,7 @@ function reviewerColorClass(state: string): string {
 
 <template>
   <div
-    class="lg:sticky lg:top-16 overflow-hidden rounded-lg border border-default bg-elevated/20"
+    class="lg:sticky lg:top-1 overflow-hidden rounded-lg border border-default bg-elevated/20"
     aria-label="Pull request metadata"
   >
     <div class="divide-y divide-default">

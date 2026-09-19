@@ -30,14 +30,15 @@ const emit = defineEmits<{
   loadComments: [reviewId: string]
 }>()
 
-const KINDS: { value: 'comment' | 'review' | 'thread'; label: string }[] = [
-  { value: 'comment', label: 'Comments' },
-  { value: 'review', label: 'Reviews' },
-  { value: 'thread', label: 'Threads' }
-]
+const KIND_LABEL: Record<string, string> = {
+  comment: 'Comments',
+  review: 'Reviews',
+  thread: 'Threads'
+}
 const enabled = ref<Set<string>>(new Set(['comment', 'review', 'thread']))
 const filterOpen = ref(false)
 const descending = ref(false)
+const expandedDiffs = reactive(new Set<string>())
 
 function toggleKind(kind: string): void {
   if (enabled.value.has(kind)) enabled.value.delete(kind)
@@ -50,7 +51,6 @@ function deselectAll(): void {
 const allEnabled = computed(() =>
   ['comment', 'review', 'thread'].every((k) => enabled.value.has(k))
 )
-const filterLabel = computed(() => (allEnabled.value ? 'All activity' : 'Filtered'))
 
 const timeline = computed<PullConversationItem[]>(() =>
   buildPullTimeline(props.comments, props.reviews, descending.value)
@@ -87,29 +87,19 @@ interface DiffLine {
   text: string
   add: boolean
   del: boolean
-  newLine?: number
 }
-
 function diffLines(hunk?: string | null): DiffLine[] {
   if (!hunk) return []
-  let newLine = 0
-  return hunk.split('\n').map((line): DiffLine => {
-    if (line.startsWith('@@')) {
-      const m = line.match(/\+(\d+)/)
-      if (m) newLine = Number(m[1])
-      return { text: line, add: false, del: false }
-    }
-    if (line.startsWith('+')) {
-      const cur = newLine
-      newLine += 1
-      return { text: line, add: true, del: false, newLine: cur }
-    }
-    if (line.startsWith('-')) {
-      return { text: line, add: false, del: true }
-    }
-    newLine += 1
-    return { text: line, add: false, del: false }
-  })
+  return hunk.split('\n').map((line): DiffLine => ({
+    text: line,
+    add: line.startsWith('+') && !line.startsWith('+++'),
+    del: line.startsWith('-') && !line.startsWith('---')
+  }))
+}
+const DIFF_PREVIEW = 5
+function previewableLines(key: string, lines: DiffLine[]): DiffLine[] {
+  if (expandedDiffs.has(key)) return lines
+  return lines.slice(0, DIFF_PREVIEW)
 }
 
 const reviewsSentinel = ref<HTMLElement | null>(null)
@@ -157,13 +147,11 @@ function openReply(reviewId: string, commentId: string): void {
   replyTo.value = { reviewId, commentId }
   replyDraft.value = ''
 }
-
 function cancelReply(): void {
   replyTo.value = null
   replyDraft.value = ''
   postingReply.value = false
 }
-
 async function submitReply(): Promise<void> {
   if (!replyTo.value || !replyDraft.value.trim() || postingReply.value) return
   const { reviewId, commentId } = replyTo.value
@@ -184,21 +172,18 @@ async function submitReply(): Promise<void> {
   }
 }
 
-function stateIcon(state: string): string {
-  return REVIEW_STATE_ICON[state] ?? 'i-lucide-circle'
-}
 function stateColorClass(state: string): string {
   const color = REVIEW_STATE_COLOR[state] ?? 'neutral'
-  return color === 'success' ? 'text-success' : color === 'error' ? 'text-error' : 'text-muted'
+  return color === 'success' ? 'text-success' : color === 'error' ? 'text-error' : 'text-default'
 }
 </script>
 
 <template>
-  <div class="space-y-3">
+  <div class="space-y-4">
     <div v-if="timeline.length" class="flex flex-wrap items-center gap-2">
       <UPopover v-model:open="filterOpen">
         <UButton
-          :label="filterLabel"
+          :label="allEnabled ? 'All activity' : 'Filtered'"
           :aria-label="'Filter activity'"
           icon="i-lucide-sliders-horizontal"
           color="neutral"
@@ -206,8 +191,8 @@ function stateColorClass(state: string): string {
           size="sm"
         />
         <template #content>
-          <div class="w-60 p-2">
-            <div class="flex items-center justify-between border-b border-default px-1 pb-1.5">
+          <div class="w-56 p-2">
+            <div class="flex items-center justify-between px-1 pb-1.5">
               <p class="text-sm font-semibold text-highlighted">Filter activity</p>
               <UButton
                 label="Deselect all"
@@ -219,23 +204,22 @@ function stateColorClass(state: string): string {
             </div>
             <div class="space-y-1 py-1">
               <label
-                v-for="k in KINDS"
-                :key="k.value"
+                v-for="(label, kind) in KIND_LABEL"
+                :key="kind"
                 class="flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-1 hover:bg-elevated/40"
               >
                 <input
                   type="checkbox"
                   class="accent-primary"
-                  :checked="enabled.has(k.value)"
-                  @change="toggleKind(k.value)"
+                  :checked="enabled.has(kind)"
+                  @change="toggleKind(kind)"
                 />
-                <span class="text-sm text-default">{{ k.label }}</span>
+                <span class="text-sm text-default">{{ label }}</span>
               </label>
             </div>
           </div>
         </template>
       </UPopover>
-
       <UButton
         :icon="descending ? 'i-lucide-arrow-down' : 'i-lucide-arrow-up'"
         color="neutral"
@@ -247,18 +231,16 @@ function stateColorClass(state: string): string {
       />
     </div>
 
-    <ul class="pr-timeline space-y-3" aria-label="conversation timeline">
-      <li v-for="item in filtered" :key="item.key" class="pr-timeline-entry">
-        <div v-if="item.kind === 'review'" class="pr-timeline-avatar flex-center">
+    <ul class="pr-timeline" aria-label="conversation timeline">
+      <li v-for="item in filtered" :key="item.key" class="pr-timeline-row">
+        <div v-if="item.kind === 'review'" class="pr-timeline-icon">
           <span
-            class="flex size-7 items-center justify-center rounded-full border border-default bg-elevated/60"
+            class="flex size-7 items-center justify-center rounded-full bg-elevated border border-default"
           >
             <UIcon
-              :name="stateIcon(item.review.state)"
+              :name="REVIEW_STATE_ICON[item.review.state] ?? 'i-lucide-circle'"
               :class="stateColorClass(item.review.state)"
-              class="size-4"
-              :title="reviewStateLabel(item.review.state)"
-              aria-hidden="true"
+              class="size-4.5"
             />
           </span>
         </div>
@@ -270,29 +252,18 @@ function stateColorClass(state: string): string {
             size="md"
             class="rounded-full"
           />
-          <span
-            v-else
-            class="rounded-full border-2 border-default bg-elevated/40"
-            aria-hidden="true"
-          />
         </div>
 
         <div class="pr-timeline-main">
           <template v-if="item.kind === 'review'">
-            <div class="flex flex-wrap items-center gap-2 text-sm">
+            <p class="flex items-center gap-2 text-sm">
+              <span class="sr-only">{{ reviewStateLabel(item.review.state) }}</span>
               <span class="font-semibold text-highlighted">{{
                 userHandle(item.review.author)
               }}</span>
-              <span class="sr-only">{{ reviewStateLabel(item.review.state) }}</span>
-              <UIcon
-                :name="stateIcon(item.review.state)"
-                :class="stateColorClass(item.review.state)"
-                class="size-4 shrink-0"
-                aria-hidden="true"
-              />
               <span class="text-muted ml-auto">{{ formatRelativeTime(item.at) }}</span>
-            </div>
-            <div v-if="item.review.body" class="pr-timeline-box mt-1">
+            </p>
+            <div v-if="item.review.body" class="pr-box mt-1">
               <MarkdownBody :content="item.review.body" />
             </div>
             <div :ref="(el) => setCommentSentinel(item.review.id, el)" class="mt-1">
@@ -329,41 +300,47 @@ function stateColorClass(state: string): string {
             </div>
           </template>
 
-          <div
-            v-else
-            class="pr-timeline-box"
-            :class="item.kind === 'thread' ? 'pr-timeline-thread' : ''"
-          >
-            <header class="flex items-center gap-2">
-              <span class="min-w-0 truncate text-sm font-semibold text-highlighted">
-                {{ userHandle(item.comment.author) }}
-              </span>
-              <span class="text-muted ml-auto text-sm">{{ formatRelativeTime(item.at) }}</span>
-            </header>
+          <div v-else class="pr-box" :class="item.kind === 'thread' ? 'pr-box-thread' : ''">
+            <p class="pr-box-header">
+              <span class="pr-box-author">{{ userHandle(item.comment.author) }}</span>
+              <span class="pr-box-time">{{ formatRelativeTime(item.at) }}</span>
+            </p>
 
             <template v-if="item.kind === 'thread'">
-              <p class="pr-timeline-path text-xs font-mono text-muted">
-                {{ commentLocation(item.comment) }}
-              </p>
-              <div v-if="diffLines(item.comment.diffHunk).length" class="pr-timeline-code">
+              <p class="pr-thread-path">{{ commentLocation(item.comment) }}</p>
+              <div v-if="diffLines(item.comment.diffHunk).length" class="pr-diff">
                 <div
-                  v-for="(line, i) in diffLines(item.comment.diffHunk)"
+                  v-for="(line, i) in previewableLines(item.key, diffLines(item.comment.diffHunk))"
                   :key="i"
-                  class="pr-timeline-code-line"
+                  class="pr-diff-line"
                   :class="{ 'text-success': line.add, 'text-error': line.del }"
                 >
-                  <span class="w-4">{{ line.add ? '+' : line.del ? '-' : '' }}</span>
-                  <span>{{ line.add || line.del ? line.text.slice(1) : line.text }}</span>
+                  <span class="w-3.5 shrink-0 text-muted">{{
+                    line.add ? '+' : line.del ? '-' : ''
+                  }}</span>
+                  <span class="min-w-0 break-all">{{
+                    line.add || line.del ? line.text.slice(1) : line.text
+                  }}</span>
                 </div>
+                <button
+                  v-if="diffLines(item.comment.diffHunk).length > DIFF_PREVIEW"
+                  type="button"
+                  class="pr-diff-more"
+                  @click="expandedDiffs.add(item.key)"
+                >
+                  Show {{ diffLines(item.comment.diffHunk).length - DIFF_PREVIEW }} more line{{
+                    diffLines(item.comment.diffHunk).length - DIFF_PREVIEW === 1 ? '' : 's'
+                  }}
+                </button>
               </div>
-              <div class="pr-timeline-body">
-                <UBadge v-if="item.comment.isOutdated" color="warning" variant="subtle" size="xs">
-                  Outdated
-                </UBadge>
+              <div class="pr-body">
+                <UBadge v-if="item.comment.isOutdated" color="warning" variant="subtle" size="xs"
+                  >Outdated</UBadge
+                >
                 <MarkdownBody :content="item.comment.body" empty="No content." />
               </div>
 
-              <div v-for="reply in item.comment.replies" :key="reply.id" class="pr-timeline-reply">
+              <div v-for="reply in item.comment.replies" :key="reply.id" class="pr-reply">
                 <UAvatar
                   v-if="reply.author?.avatarUrl"
                   :src="reply.author.avatarUrl"
@@ -372,26 +349,26 @@ function stateColorClass(state: string): string {
                   class="shrink-0 rounded-full"
                 />
                 <div class="min-w-0">
-                  <header class="flex items-center gap-2">
-                    <span class="min-w-0 truncate text-sm font-semibold text-highlighted">
-                      {{ reply.author ? userHandle(reply.author) : '' }}
-                    </span>
-                    <span class="text-muted ml-auto text-xs">
-                      {{ formatRelativeTime(reply.createdAt) }}
-                    </span>
-                  </header>
-                  <div class="pr-timeline-body">
+                  <p class="pr-box-header">
+                    <span class="pr-box-author">{{
+                      reply.author ? userHandle(reply.author) : ''
+                    }}</span>
+                    <span class="pr-box-time text-xs">{{
+                      formatRelativeTime(reply.createdAt)
+                    }}</span>
+                  </p>
+                  <div class="pr-body">
                     <MarkdownBody :content="reply.body" empty="No content." />
                   </div>
                 </div>
               </div>
             </template>
 
-            <div v-else class="pr-timeline-body">
+            <div v-else class="pr-body">
               <MarkdownBody :content="item.comment.body" empty="No content." />
             </div>
 
-            <div v-if="item.kind === 'thread'" class="pr-timeline-body">
+            <div v-if="item.kind === 'thread'" class="pr-body">
               <MarkdownEditor
                 v-if="replyTo?.reviewId === item.review.id && replyTo.commentId === item.comment.id"
                 v-model="replyDraft"
@@ -446,7 +423,6 @@ function stateColorClass(state: string): string {
     <p v-if="timeline.length && !filtered.length" class="text-sm text-muted">
       No activity matches the current filter.
     </p>
-
     <p v-if="loading" class="text-sm text-muted" role="status">Loading more reviews…</p>
     <div v-else-if="error" class="flex items-center gap-2 text-sm text-muted">
       <span>Couldn't load reviews.</span>
@@ -477,56 +453,86 @@ function stateColorClass(state: string): string {
   background: color-mix(in srgb, var(--ui-border) 60%, transparent);
   border-radius: 1px;
 }
-.pr-timeline-entry {
+.pr-timeline-row {
   position: relative;
   display: flex;
   gap: 1rem;
 }
-.pr-timeline-avatar {
+.pr-timeline-avatar,
+.pr-timeline-icon {
   z-index: 1;
   width: 2rem;
   display: flex;
   align-items: flex-start;
   justify-content: center;
-}
-.pr-timeline-avatar.flex-center {
-  align-items: center;
-  align-self: center;
+  align-self: flex-start;
 }
 .pr-timeline-main {
+  min-width: 0;
   width: 100%;
 }
-.pr-timeline-box {
+.pr-box {
+  min-width: 0;
   border: 1px solid var(--ui-border);
   border-radius: 0.5rem;
-  padding: 0.5rem 0.75rem;
+  padding: 0.625rem 0.75rem;
+  overflow: hidden;
 }
-.pr-timeline-thread {
-  background: color-mix(in srgb, var(--ui-bg-muted) 30%, transparent);
+.pr-box-thread {
+  background: color-mix(in srgb, var(--ui-bg-muted) 35%, transparent);
   border-color: var(--ui-border-muted);
 }
-.pr-timeline-body {
-  margin-top: 0.375rem;
+.pr-box-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
 }
-.pr-timeline-path {
-  margin-top: 0.375rem;
+.pr-box-author {
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 600;
+  font-size: 0.875rem;
 }
-.pr-timeline-code {
-  margin-top: 0.375rem;
+.pr-box-time {
+  color: var(--ui-text-dimmed);
+  font-size: 0.8125rem;
+  margin-left: auto;
+}
+.pr-body {
+  margin-top: 0.5rem;
+}
+.pr-thread-path {
+  margin-top: 0.5rem;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--ui-text-dimmed);
+}
+.pr-diff {
+  margin-top: 0.5rem;
   border: 1px solid var(--ui-border-muted);
   border-radius: 0.375rem;
   background: var(--ui-bg-muted);
   font-family: var(--font-mono);
   font-size: 0.75rem;
+  max-width: 100%;
   overflow-x: auto;
 }
-.pr-timeline-code-line {
+.pr-diff-line {
   display: flex;
-  gap: 0.5rem;
-  white-space: pre;
+  gap: 0.375rem;
+  white-space: nowrap;
+  padding: 0 0.5rem;
   line-height: 1.5;
 }
-.pr-timeline-reply {
+.pr-diff-more {
+  margin-top: 0.375rem;
+  color: var(--ui-text-dimmed);
+  font-size: 0.75rem;
+  text-decoration: underline;
+}
+.pr-reply {
   display: flex;
   gap: 0.5rem;
   margin-left: 1.25rem;

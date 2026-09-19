@@ -47,7 +47,6 @@ const toast = useToast()
 const canWrite = computed(() => !!getToken(provider.value) && !!forge.value?.createComment)
 
 const tab = useRouteTab('tab', ['conversation', 'commits', 'files'] as const, 'conversation')
-const showInfo = ref(false)
 
 const files = ref<ForgeFileDiff[] | null>(null)
 const filesLoading = ref(false)
@@ -192,6 +191,7 @@ async function ensureReviews(): Promise<void> {
     reviews.value.push(...page.items)
     reviewsCursor.value = page.cursor
     reviewsLoaded.value = !page.cursor
+    for (const review of page.items) void ensureReviewComments(review.id)
   } catch {
     if (generation === requestGeneration && epoch === reviewEpoch) reviewsError.value = true
   } finally {
@@ -458,6 +458,13 @@ async function replyToReviewThread(
     />
 
     <template v-else-if="data">
+      <div id="pr-metadata-popover" popover class="pr-metadata-popover">
+        <PullMetadata
+          :pull="data"
+          :reviews="reviews"
+          :reviews-complete="!reviewsSupported || reviewsLoaded"
+        />
+      </div>
       <div class="space-y-2 border-b border-default pb-4">
         <h1 class="text-xl font-semibold text-highlighted">
           {{ data.title }}
@@ -469,17 +476,15 @@ async function replyToReviewThread(
           <span v-if="data.sourceBranch && data.targetBranch" class="font-mono text-xs">
             {{ data.sourceBranch }} → {{ data.targetBranch }}
           </span>
-          <UButton
+          <button
             v-if="tab !== 'files'"
-            icon="i-lucide-info"
-            label="Details"
-            color="neutral"
-            variant="ghost"
-            size="sm"
-            class="ml-auto lg:hidden"
-            :aria-expanded="showInfo"
-            @click="showInfo = !showInfo"
-          />
+            type="button"
+            popovertarget="pr-metadata-popover"
+            class="ml-auto lg:hidden inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm text-default hover:bg-elevated"
+          >
+            <UIcon name="i-lucide-info" class="size-4" />
+            Details
+          </button>
         </div>
       </div>
 
@@ -613,7 +618,7 @@ async function replyToReviewThread(
             </p>
           </div>
         </div>
-        <div v-if="tab !== 'files'" :class="[showInfo ? 'block' : 'hidden', 'lg:block', 'min-w-0']">
+        <div v-if="tab !== 'files'" class="hidden lg:block min-w-0">
           <PullMetadata
             :pull="data"
             :reviews="reviews"
@@ -644,5 +649,14 @@ async function replyToReviewThread(
     transform: translateX(0);
     opacity: 1;
   }
+}
+
+.pr-metadata-popover {
+  max-width: 24rem;
+  max-height: min(70vh, 32rem);
+  overflow-y: auto;
+  border: 1px solid var(--ui-border);
+  border-radius: 0.5rem;
+  background: var(--ui-bg);
 }
 </style>

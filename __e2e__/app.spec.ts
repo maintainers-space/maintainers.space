@@ -228,6 +228,7 @@ test.describe('pull request conversation timeline', () => {
   }
 
   test('interleaves comments and reviews chronologically', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 900 })
     await stubChronoApi(page)
     await page.goto('/github/octo/chrono/pulls/7')
 
@@ -239,25 +240,28 @@ test.describe('pull request conversation timeline', () => {
     await expect(timeline.locator('li').nth(1)).toContainText('bob')
     await expect(timeline.locator('li').nth(2)).toContainText('last comment')
 
-    const rail = page.locator('[aria-label="Pull request metadata"]')
+    const rail = page.locator('[aria-label="Pull request metadata"]:visible')
     await expect(rail).toContainText('Reviewers')
     await expect(rail).toContainText('bob')
     await expect(rail).toContainText('Branch')
     await expect(rail).toContainText('feature')
   })
 
-  test('collapses metadata behind the Details button on narrow screens', async ({ page }) => {
+  test('opens metadata in a dismissible popover on narrow screens', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 })
     await stubChronoApi(page)
     await page.goto('/github/octo/chrono/pulls/7')
 
-    const rail = page.locator('[aria-label="Pull request metadata"]')
-    await expect(rail).toBeHidden()
+    const popover = page.locator('#pr-metadata-popover')
+    await expect(popover).toBeHidden()
 
     await page.getByRole('button', { name: 'Details' }).click()
-    await expect(rail).toBeVisible()
-    await expect(rail).toContainText('Branch')
-    await expect(rail).toContainText('feature')
+    await expect(popover).toBeVisible()
+    await expect(popover).toContainText('Branch')
+    await expect(popover).toContainText('feature')
+
+    await page.keyboard.press('Escape')
+    await expect(popover).toBeHidden()
   })
 })
 
