@@ -38,5 +38,5 @@ export function buildPullTimeline(
     }
   }
   items.sort((a, b) => anchorAt(a.at) - anchorAt(b.at))
-  return descending ? items.reverse() : items
+  return descending ? items.toReversed() : items
 }

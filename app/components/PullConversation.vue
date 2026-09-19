@@ -1,17 +1,13 @@
 <script setup lang="ts">
 import type { ComponentPublicInstance } from 'vue'
-import type {
-  ForgeComment,
-  ForgePullReview,
-  ForgePullReviewComment,
-  ForgeUser
-} from '~/types/forge'
+import type { ForgeComment, ForgePullReview, ForgeUser } from '~/types/forge'
 import { buildPullTimeline, type PullConversationItem } from '~/utils/pull-conversation'
 import {
   REVIEW_STATE_COLOR,
   REVIEW_STATE_ICON,
   commentLocation,
-  reviewStateLabel
+  reviewStateLabel,
+  userHandle
 } from '~/utils/pull-review'
 
 const props = withDefaults(
@@ -34,28 +30,33 @@ const emit = defineEmits<{
   loadComments: [reviewId: string]
 }>()
 
-const FILTERS = [
-  { value: 'all', label: 'All activity' },
+const KINDS: { value: 'comment' | 'review' | 'thread'; label: string }[] = [
   { value: 'comment', label: 'Comments' },
   { value: 'review', label: 'Reviews' },
   { value: 'thread', label: 'Threads' }
-] as const
-const filter = ref<(typeof FILTERS)[number]['value']>('all')
+]
+const enabled = ref<Set<string>>(new Set(['comment', 'review', 'thread']))
 const filterOpen = ref(false)
-
-function selectFilter(value: (typeof FILTERS)[number]['value']): void {
-  filter.value = value
-  filterOpen.value = false
-}
 const descending = ref(false)
+
+function toggleKind(kind: string): void {
+  if (enabled.value.has(kind)) enabled.value.delete(kind)
+  else enabled.value.add(kind)
+  enabled.value = new Set(enabled.value)
+}
+function deselectAll(): void {
+  enabled.value = new Set()
+}
+const allEnabled = computed(() =>
+  ['comment', 'review', 'thread'].every((k) => enabled.value.has(k))
+)
+const filterLabel = computed(() => (allEnabled.value ? 'All activity' : 'Filtered'))
 
 const timeline = computed<PullConversationItem[]>(() =>
   buildPullTimeline(props.comments, props.reviews, descending.value)
 )
 const filtered = computed<PullConversationItem[]>(() =>
-  filter.value === 'all'
-    ? timeline.value
-    : timeline.value.filter((item) => item.kind === filter.value)
+  timeline.value.filter((item) => enabled.value.has(item.kind))
 )
 
 function authorFor(item: PullConversationItem): ForgeUser | undefined {
@@ -80,6 +81,35 @@ function commentProgress(review: ForgePullReview): {
     loading: !!state?.loading,
     error: !!state?.error
   }
+}
+
+interface DiffLine {
+  text: string
+  add: boolean
+  del: boolean
+  newLine?: number
+}
+
+function diffLines(hunk?: string | null): DiffLine[] {
+  if (!hunk) return []
+  let newLine = 0
+  return hunk.split('\n').map((line): DiffLine => {
+    if (line.startsWith('@@')) {
+      const m = line.match(/\+(\d+)/)
+      if (m) newLine = Number(m[1])
+      return { text: line, add: false, del: false }
+    }
+    if (line.startsWith('+')) {
+      const cur = newLine
+      newLine += 1
+      return { text: line, add: true, del: false, newLine: cur }
+    }
+    if (line.startsWith('-')) {
+      return { text: line, add: false, del: true }
+    }
+    newLine += 1
+    return { text: line, add: false, del: false }
+  })
 }
 
 const reviewsSentinel = ref<HTMLElement | null>(null)
@@ -168,7 +198,7 @@ function stateColorClass(state: string): string {
     <div v-if="timeline.length" class="flex flex-wrap items-center gap-2">
       <UPopover v-model:open="filterOpen">
         <UButton
-          :label="FILTERS.find((f) => f.value === filter)?.label ?? 'All activity'"
+          :label="filterLabel"
           :aria-label="'Filter activity'"
           icon="i-lucide-sliders-horizontal"
           color="neutral"
@@ -176,52 +206,67 @@ function stateColorClass(state: string): string {
           size="sm"
         />
         <template #content>
-          <ul class="space-y-0.5 p-1">
-            <li v-for="f in FILTERS" :key="f.value">
-              <button
-                type="button"
-                class="flex w-full items-center gap-2 rounded-md px-2 py-1 text-left text-sm"
-                :class="
-                  filter === f.value
-                    ? 'bg-elevated/70 text-highlighted'
-                    : 'text-default hover:bg-elevated/40'
-                "
-                @click="selectFilter(f.value)"
+          <div class="w-60 p-2">
+            <div class="flex items-center justify-between border-b border-default px-1 pb-1.5">
+              <p class="text-sm font-semibold text-highlighted">Filter activity</p>
+              <UButton
+                label="Deselect all"
+                color="neutral"
+                variant="ghost"
+                size="xs"
+                @click="deselectAll"
+              />
+            </div>
+            <div class="space-y-1 py-1">
+              <label
+                v-for="k in KINDS"
+                :key="k.value"
+                class="flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-1 hover:bg-elevated/40"
               >
-                <UIcon
-                  v-if="filter === f.value"
-                  name="i-lucide-check"
-                  class="size-3.5 text-muted"
+                <input
+                  type="checkbox"
+                  class="accent-primary"
+                  :checked="enabled.has(k.value)"
+                  @change="toggleKind(k.value)"
                 />
-                <span>{{ f.label }}</span>
-              </button>
-            </li>
-          </ul>
+                <span class="text-sm text-default">{{ k.label }}</span>
+              </label>
+            </div>
+          </div>
         </template>
       </UPopover>
 
       <UButton
         :icon="descending ? 'i-lucide-arrow-down' : 'i-lucide-arrow-up'"
-        :label="descending ? 'Newest first' : 'Oldest first'"
         color="neutral"
         variant="ghost"
         size="sm"
+        :title="descending ? 'Newest first' : 'Oldest first'"
+        :aria-label="`Sort ${descending ? 'descending' : 'ascending'}`"
         @click="descending = !descending"
       />
     </div>
 
     <ul class="pr-timeline space-y-3" aria-label="conversation timeline">
-      <li
-        v-for="item in filtered"
-        :key="item.key"
-        class="pr-timeline-entry"
-        :aria-label="`${item.kind} by ${userLabel(authorFor(item))}`"
-      >
-        <div class="pr-timeline-avatar">
+      <li v-for="item in filtered" :key="item.key" class="pr-timeline-entry">
+        <div v-if="item.kind === 'review'" class="pr-timeline-avatar flex-center">
+          <span
+            class="flex size-7 items-center justify-center rounded-full border border-default bg-elevated/60"
+          >
+            <UIcon
+              :name="stateIcon(item.review.state)"
+              :class="stateColorClass(item.review.state)"
+              class="size-4"
+              :title="reviewStateLabel(item.review.state)"
+              aria-hidden="true"
+            />
+          </span>
+        </div>
+        <div v-else class="pr-timeline-avatar">
           <UAvatar
             v-if="authorFor(item)?.avatarUrl"
             :src="authorFor(item)?.avatarUrl ?? undefined"
-            :alt="userLabel(authorFor(item))"
+            :alt="userHandle(authorFor(item))"
             size="md"
             class="rounded-full"
           />
@@ -232,61 +277,121 @@ function stateColorClass(state: string): string {
           />
         </div>
 
-        <div class="pr-timeline-main min-w-0">
-          <header class="flex flex-wrap items-center gap-2 text-sm">
-            <UserLink :user="authorFor(item)" :avatar="false" />
-            <template v-if="item.kind === 'review'">
+        <div class="pr-timeline-main">
+          <template v-if="item.kind === 'review'">
+            <div class="flex flex-wrap items-center gap-2 text-sm">
+              <span class="font-semibold text-highlighted">{{
+                userHandle(item.review.author)
+              }}</span>
+              <span class="sr-only">{{ reviewStateLabel(item.review.state) }}</span>
               <UIcon
                 :name="stateIcon(item.review.state)"
                 :class="stateColorClass(item.review.state)"
-                :title="reviewStateLabel(item.review.state)"
                 class="size-4 shrink-0"
                 aria-hidden="true"
               />
-              <span class="sr-only">{{ reviewStateLabel(item.review.state) }}</span>
-            </template>
-            <span v-if="item.at" class="text-muted">· {{ formatRelativeTime(item.at) }}</span>
-          </header>
-
-          <div v-if="item.kind === 'review' && item.review.body" class="pr-timeline-body">
-            <MarkdownBody :content="item.review.body" />
-          </div>
-
-          <div v-if="item.kind === 'comment'" class="pr-timeline-body">
-            <MarkdownBody :content="item.comment.body" empty="No content." />
-          </div>
-
-          <div v-if="item.kind === 'thread'">
-            <p class="pr-timeline-anchor text-xs font-mono text-muted">
-              {{ commentLocation(item.comment) }}
-            </p>
-            <div class="pr-timeline-body">
-              <UBadge
-                v-if="item.comment.isOutdated"
-                color="warning"
-                variant="subtle"
-                size="xs"
-                class="mb-1"
+              <span class="text-muted ml-auto">{{ formatRelativeTime(item.at) }}</span>
+            </div>
+            <div v-if="item.review.body" class="pr-timeline-box mt-1">
+              <MarkdownBody :content="item.review.body" />
+            </div>
+            <div :ref="(el) => setCommentSentinel(item.review.id, el)" class="mt-1">
+              <p
+                v-if="commentProgress(item.review).loading"
+                class="text-xs text-muted"
+                role="status"
               >
-                Outdated
-              </UBadge>
+                Loading threads…
+              </p>
+              <div
+                v-else-if="commentProgress(item.review).error"
+                class="flex items-center gap-2 text-xs text-muted"
+              >
+                <span>Couldn't load the review threads.</span>
+                <UButton
+                  size="xs"
+                  color="neutral"
+                  variant="soft"
+                  icon="i-lucide-refresh-cw"
+                  label="Retry"
+                  @click="emit('loadComments', item.review.id)"
+                />
+              </div>
+              <UButton
+                v-else-if="commentProgress(item.review).hasMore"
+                size="xs"
+                color="neutral"
+                variant="ghost"
+                icon="i-lucide-plus"
+                label="Load more threads"
+                @click="emit('loadComments', item.review.id)"
+              />
+            </div>
+          </template>
+
+          <div
+            v-else
+            class="pr-timeline-box"
+            :class="item.kind === 'thread' ? 'pr-timeline-thread' : ''"
+          >
+            <header class="flex items-center gap-2">
+              <span class="min-w-0 truncate text-sm font-semibold text-highlighted">
+                {{ userHandle(item.comment.author) }}
+              </span>
+              <span class="text-muted ml-auto text-sm">{{ formatRelativeTime(item.at) }}</span>
+            </header>
+
+            <template v-if="item.kind === 'thread'">
+              <p class="pr-timeline-path text-xs font-mono text-muted">
+                {{ commentLocation(item.comment) }}
+              </p>
+              <div v-if="diffLines(item.comment.diffHunk).length" class="pr-timeline-code">
+                <div
+                  v-for="(line, i) in diffLines(item.comment.diffHunk)"
+                  :key="i"
+                  class="pr-timeline-code-line"
+                  :class="{ 'text-success': line.add, 'text-error': line.del }"
+                >
+                  <span class="w-4">{{ line.add ? '+' : line.del ? '-' : '' }}</span>
+                  <span>{{ line.add || line.del ? line.text.slice(1) : line.text }}</span>
+                </div>
+              </div>
+              <div class="pr-timeline-body">
+                <UBadge v-if="item.comment.isOutdated" color="warning" variant="subtle" size="xs">
+                  Outdated
+                </UBadge>
+                <MarkdownBody :content="item.comment.body" empty="No content." />
+              </div>
+
+              <div v-for="reply in item.comment.replies" :key="reply.id" class="pr-timeline-reply">
+                <UAvatar
+                  v-if="reply.author?.avatarUrl"
+                  :src="reply.author.avatarUrl"
+                  :alt="userHandle(reply.author)"
+                  size="sm"
+                  class="shrink-0 rounded-full"
+                />
+                <div class="min-w-0">
+                  <header class="flex items-center gap-2">
+                    <span class="min-w-0 truncate text-sm font-semibold text-highlighted">
+                      {{ reply.author ? userHandle(reply.author) : '' }}
+                    </span>
+                    <span class="text-muted ml-auto text-xs">
+                      {{ formatRelativeTime(reply.createdAt) }}
+                    </span>
+                  </header>
+                  <div class="pr-timeline-body">
+                    <MarkdownBody :content="reply.body" empty="No content." />
+                  </div>
+                </div>
+              </div>
+            </template>
+
+            <div v-else class="pr-timeline-body">
               <MarkdownBody :content="item.comment.body" empty="No content." />
             </div>
 
-            <div v-for="reply in item.comment.replies" :key="reply.id" class="pr-timeline-reply">
-              <header class="flex items-center gap-2 text-sm">
-                <UIcon name="i-lucide-reply" class="size-4 text-muted" aria-hidden="true" />
-                <UserLink :user="reply.author" :avatar="false" />
-                <span v-if="reply.createdAt" class="text-muted">
-                  · {{ formatRelativeTime(reply.createdAt) }}
-                </span>
-              </header>
-              <div class="pr-timeline-body">
-                <MarkdownBody :content="reply.body" empty="No content." />
-              </div>
-            </div>
-
-            <div v-if="canReply" class="pr-timeline-body">
+            <div v-if="item.kind === 'thread'" class="pr-timeline-body">
               <MarkdownEditor
                 v-if="replyTo?.reviewId === item.review.id && replyTo.commentId === item.comment.id"
                 v-model="replyDraft"
@@ -327,49 +432,20 @@ function stateColorClass(state: string): string {
                 </template>
               </div>
             </div>
-          </div>
 
-          <ReactionBar
-            v-if="item.kind === 'comment' && reactionTarget(item.comment.id)"
-            :reactions="item.comment.reactions"
-            :target="reactionTarget(item.comment.id)!"
-          />
-
-          <div
-            v-if="item.kind === 'review'"
-            :ref="(el) => setCommentSentinel(item.review.id, el)"
-            class="border-t border-default/60 pt-1"
-          >
-            <p v-if="commentProgress(item.review).loading" class="text-xs text-muted" role="status">
-              Loading threads…
-            </p>
-            <div
-              v-else-if="commentProgress(item.review).error"
-              class="flex items-center gap-2 text-xs text-muted"
-            >
-              <span>Couldn't load the review threads.</span>
-              <UButton
-                size="xs"
-                color="neutral"
-                variant="soft"
-                icon="i-lucide-refresh-cw"
-                label="Retry"
-                @click="emit('loadComments', item.review.id)"
-              />
-            </div>
-            <UButton
-              v-else-if="commentProgress(item.review).hasMore"
-              size="xs"
-              color="neutral"
-              variant="ghost"
-              icon="i-lucide-plus"
-              label="Load more threads"
-              @click="emit('loadComments', item.review.id)"
+            <ReactionBar
+              v-if="item.kind === 'comment' && reactionTarget(item.comment.id)"
+              :reactions="item.comment.reactions"
+              :target="reactionTarget(item.comment.id)!"
             />
           </div>
         </div>
       </li>
     </ul>
+
+    <p v-if="timeline.length && !filtered.length" class="text-sm text-muted">
+      No activity matches the current filter.
+    </p>
 
     <p v-if="loading" class="text-sm text-muted" role="status">Loading more reviews…</p>
     <div v-else-if="error" class="flex items-center gap-2 text-sm text-muted">
@@ -410,23 +486,50 @@ function stateColorClass(state: string): string {
   z-index: 1;
   width: 2rem;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
+}
+.pr-timeline-avatar.flex-center {
+  align-items: center;
+  align-self: center;
 }
 .pr-timeline-main {
   width: 100%;
 }
-.pr-timeline-body {
-  margin-top: 0.125rem;
+.pr-timeline-box {
+  border: 1px solid var(--ui-border);
+  border-radius: 0.5rem;
+  padding: 0.5rem 0.75rem;
 }
-.pr-timeline-anchor {
-  margin-top: 0.125rem;
+.pr-timeline-thread {
+  background: color-mix(in srgb, var(--ui-bg-muted) 30%, transparent);
+  border-color: var(--ui-border-muted);
+}
+.pr-timeline-body {
+  margin-top: 0.375rem;
+}
+.pr-timeline-path {
+  margin-top: 0.375rem;
+}
+.pr-timeline-code {
+  margin-top: 0.375rem;
+  border: 1px solid var(--ui-border-muted);
+  border-radius: 0.375rem;
+  background: var(--ui-bg-muted);
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  overflow-x: auto;
+}
+.pr-timeline-code-line {
+  display: flex;
+  gap: 0.5rem;
+  white-space: pre;
+  line-height: 1.5;
 }
 .pr-timeline-reply {
   display: flex;
   gap: 0.5rem;
-  border-inline-start: 2px solid var(--ui-border);
-  padding-inline-start: 0.5rem;
-  margin-top: 0.5rem;
+  margin-left: 1.25rem;
+  margin-top: 0.625rem;
 }
 </style>

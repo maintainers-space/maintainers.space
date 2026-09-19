@@ -34,3 +34,11 @@ export function reviewStateLabel(state: string): string {
 export function commentLocation(comment: ForgePullReviewComment): string {
   return comment.line ? `${comment.path}:${comment.line}` : comment.path
 }
+
+export function userHandle(user?: { displayName?: string | null; login?: string } | null): string {
+  if (!user) return ''
+  const login = user.login ?? ''
+  const handle = login.startsWith('@') ? login : `@${login}`
+  if (user.displayName && user.displayName !== login) return `${user.displayName} ${handle}`
+  return handle
+}

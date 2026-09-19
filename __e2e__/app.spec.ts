@@ -347,7 +347,8 @@ test.describe('pull request conversation thread grouping', () => {
               body: 'inline suggestion',
               path: 'src/a.ts',
               line: 5,
-              created_at: '2024-01-01T12:00:00Z'
+              created_at: '2024-01-01T12:00:00Z',
+              diff_hunk: '@@ -0,0 +1,2 @@\n+const answer = 42\n+console.log(answer)'
             },
             {
               id: 200,
@@ -381,18 +382,23 @@ test.describe('pull request conversation thread grouping', () => {
     const threadEntry = timeline.locator('li').nth(2)
     await expect(threadEntry).toContainText('inline suggestion')
     await expect(threadEntry).toContainText('got it, thanks')
+    await expect(threadEntry).toContainText('const answer = 42')
     await expect(timeline.locator('li').nth(3)).toContainText('late comment')
 
-    // Filter to threads only.
+    // Filter down to threads only (multiselect: deselect the other kinds).
     await page.getByRole('button', { name: 'Filter activity' }).click()
-    await page.getByRole('button', { name: 'Threads' }).click()
+    await page.getByRole('checkbox', { name: 'Comments' }).uncheck()
+    await page.getByRole('checkbox', { name: 'Reviews' }).uncheck()
+    await page.getByRole('button', { name: 'Filter activity' }).click()
     await expect(timeline.locator('li')).toHaveCount(1)
     await expect(timeline.locator('li').nth(0)).toContainText('inline suggestion')
 
-    // Clear the filter and flip to newest first.
+    // Re-enable everything and flip to newest first.
     await page.getByRole('button', { name: 'Filter activity' }).click()
-    await page.getByRole('button', { name: 'All activity' }).click()
-    await page.getByRole('button', { name: 'Oldest first' }).click()
+    await page.getByRole('checkbox', { name: 'Comments' }).check()
+    await page.getByRole('checkbox', { name: 'Reviews' }).check()
+    await page.getByRole('button', { name: 'Filter activity' }).click()
+    await page.getByRole('button', { name: 'Sort ascending' }).click()
     await expect(timeline.locator('li').nth(0)).toContainText('late comment')
     await expect(timeline.locator('li').nth(3)).toContainText('early comment')
   })
