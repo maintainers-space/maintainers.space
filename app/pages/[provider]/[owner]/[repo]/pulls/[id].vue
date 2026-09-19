@@ -138,6 +138,7 @@ async function ensureCommits(): Promise<void> {
 }
 
 const reviewsHaveMore = computed(() => !reviewsLoaded.value && !reviewsError.value)
+const reviewsSupported = computed(() => !!forge.value?.listPullReviews)
 const reviewCommentProgress = computed(() =>
   Object.fromEntries(
     Object.entries(reviewCommentState).map(([reviewId, state]) => [
@@ -190,6 +191,7 @@ async function ensureReviews(): Promise<void> {
     reviews.value.push(...page.items)
     reviewsCursor.value = page.cursor
     reviewsLoaded.value = !page.cursor
+    for (const review of page.items) void ensureReviewComments(review.id)
   } catch {
     if (generation === requestGeneration && epoch === reviewEpoch) reviewsError.value = true
   } finally {
@@ -293,6 +295,7 @@ watch(
     if (pull && isOnline.value) {
       void ensureFiles()
       void ensureCommits()
+      void ensureReviews()
     }
   },
   { immediate: true }
@@ -455,6 +458,13 @@ async function replyToReviewThread(
     />
 
     <template v-else-if="data">
+      <div id="pr-metadata-popover" popover class="pr-metadata-popover">
+        <PullMetadata
+          :pull="data"
+          :reviews="reviews"
+          :reviews-complete="!reviewsSupported || reviewsLoaded"
+        />
+      </div>
       <div class="space-y-2 border-b border-default pb-4">
         <h1 class="text-xl font-semibold text-highlighted">
           {{ data.title }}
@@ -466,133 +476,155 @@ async function replyToReviewThread(
           <span v-if="data.sourceBranch && data.targetBranch" class="font-mono text-xs">
             {{ data.sourceBranch }} → {{ data.targetBranch }}
           </span>
+          <button
+            v-if="tab !== 'files'"
+            type="button"
+            popovertarget="pr-metadata-popover"
+            class="ml-auto lg:hidden inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm text-default hover:bg-elevated"
+          >
+            <UIcon name="i-lucide-info" class="size-4" />
+            Details
+          </button>
         </div>
       </div>
 
       <UTabs v-model="tab" :items="tabItems" :content="false" size="sm" />
 
-      <div v-show="tab === 'conversation'" class="space-y-4">
-        <article class="overflow-hidden rounded-lg border border-default">
-          <header
-            class="flex items-center gap-2 border-b border-default bg-elevated/40 px-4 py-2 text-sm"
-          >
-            <UserLink :user="data.author" />
-            <span v-if="data.createdAt" class="text-muted"
-              >opened {{ formatRelativeTime(data.createdAt) }}</span
-            >
-          </header>
-          <div class="px-4 py-3">
-            <MarkdownBody :content="data.body ?? ''" empty="No description provided." />
-          </div>
-          <ReactionBar :reactions="data.reactions" :target="{ kind: 'pull', threadId: data.id }" />
-        </article>
-        <CommentThread
-          v-if="data.comments.length"
-          :comments="data.comments"
-          thread-kind="pull"
-          :thread-id="data.id"
-        />
-        <PullReviewList
-          v-if="forge?.listPullReviews"
-          :reviews="reviews"
-          :has-more="reviewsHaveMore"
-          :loading="reviewsLoading"
-          :error="reviewsError"
-          :comment-state="reviewCommentProgress"
-          :can-reply="canReplyToReviewThreads"
-          :reply="replyToReviewThread"
-          @load-more="ensureReviews"
-          @load-comments="ensureReviewComments"
-        />
-
-        <div v-if="canWrite" class="space-y-2">
-          <MarkdownEditor
-            v-model="commentDraft"
-            placeholder="Leave a comment…"
-            @submit="submitComment"
-          />
-          <div class="flex justify-end">
-            <UButton
-              icon="i-lucide-send"
-              label="Comment"
-              :loading="postingComment"
-              :disabled="!commentDraft.trim()"
-              @click="submitComment"
+      <div :class="tab === 'files' ? '' : 'lg:grid lg:grid-cols-[minmax(0,1fr)_19rem] lg:gap-6'">
+        <div class="min-w-0">
+          <div v-show="tab === 'conversation'" class="space-y-4">
+            <article class="overflow-hidden rounded-lg border border-default">
+              <header
+                class="flex items-center gap-2 border-b border-default bg-elevated/40 px-4 py-2 text-sm"
+              >
+                <UserLink :user="data.author" />
+                <span v-if="data.createdAt" class="text-muted"
+                  >opened {{ formatRelativeTime(data.createdAt) }}</span
+                >
+              </header>
+              <div class="px-4 py-3">
+                <MarkdownBody :content="data.body ?? ''" empty="No description provided." />
+              </div>
+              <ReactionBar
+                :reactions="data.reactions"
+                :target="{ kind: 'pull', threadId: data.id }"
+              />
+            </article>
+            <PullConversation
+              v-if="
+                data.comments.length ||
+                (reviewsSupported && (reviews.length || reviewsLoading || reviewsError))
+              "
+              :comments="data.comments"
+              :reviews="reviews"
+              :thread-id="data.id"
+              :has-more="reviewsSupported && reviewsHaveMore"
+              :loading="reviewsSupported && reviewsLoading"
+              :error="reviewsSupported && reviewsError"
+              :comment-state="reviewCommentProgress"
+              :can-reply="canReplyToReviewThreads"
+              :reply="replyToReviewThread"
+              @load-more="ensureReviews"
+              @load-comments="ensureReviewComments"
             />
-          </div>
-        </div>
-      </div>
 
-      <div v-show="tab === 'commits'">
-        <div v-if="commitsLoading" class="space-y-2">
-          <USkeleton v-for="i in 3" :key="i" class="h-14 w-full" />
-        </div>
-        <ForgeCommitList
-          v-else-if="commits?.length"
-          :commits="commits"
-          :provider="provider"
-          :owner="owner"
-          :repo="name"
-        />
-        <p
-          v-else
-          class="rounded-lg border border-dashed border-default py-8 text-center text-sm text-muted"
-        >
-          No commits to display.
-        </p>
-      </div>
-
-      <div v-show="tab === 'files'">
-        <div v-if="filesLoading" class="space-y-2">
-          <USkeleton v-for="i in 3" :key="i" class="h-24 w-full" />
-        </div>
-        <template v-else-if="files?.length">
-          <DiffView :files="files" :commentable="canWrite" @comment="onDiffComment" />
-
-          <div v-if="canWrite" class="mt-4 space-y-2 rounded-lg border border-default p-3">
-            <p class="text-sm font-medium text-highlighted">Finish your review</p>
-            <MarkdownEditor
-              v-model="reviewDraft"
-              :rows="3"
-              placeholder="Review summary (optional for approvals)…"
-            />
-            <div class="flex flex-wrap gap-2">
-              <UButton
-                icon="i-lucide-check"
-                color="success"
-                variant="soft"
-                label="Approve"
-                :loading="reviewSubmitting === 'APPROVE'"
-                :disabled="!!reviewSubmitting"
-                @click="submitReview('APPROVE')"
+            <div v-if="canWrite" class="space-y-2">
+              <MarkdownEditor
+                v-model="commentDraft"
+                placeholder="Leave a comment…"
+                @submit="submitComment"
               />
-              <UButton
-                icon="i-lucide-message-square"
-                color="neutral"
-                variant="soft"
-                label="Comment"
-                :loading="reviewSubmitting === 'COMMENT'"
-                :disabled="!!reviewSubmitting || !reviewDraft.trim()"
-                @click="submitReview('COMMENT')"
-              />
-              <UButton
-                icon="i-lucide-file-warning"
-                color="warning"
-                variant="soft"
-                label="Request changes"
-                :loading="reviewSubmitting === 'REQUEST_CHANGES'"
-                :disabled="!!reviewSubmitting || !reviewDraft.trim()"
-                @click="submitReview('REQUEST_CHANGES')"
-              />
+              <div class="flex justify-end">
+                <UButton
+                  icon="i-lucide-send"
+                  label="Comment"
+                  :loading="postingComment"
+                  :disabled="!commentDraft.trim()"
+                  @click="submitComment"
+                />
+              </div>
             </div>
           </div>
-        </template>
-        <p
-          v-else
-          class="rounded-lg border border-dashed border-default py-8 text-center text-sm text-muted"
-        >
-          No file changes to display.
-        </p>
+
+          <div v-show="tab === 'commits'">
+            <div v-if="commitsLoading" class="space-y-2">
+              <USkeleton v-for="i in 3" :key="i" class="h-14 w-full" />
+            </div>
+            <ForgeCommitList
+              v-else-if="commits?.length"
+              :commits="commits"
+              :provider="provider"
+              :owner="owner"
+              :repo="name"
+            />
+            <p
+              v-else
+              class="rounded-lg border border-dashed border-default py-8 text-center text-sm text-muted"
+            >
+              No commits to display.
+            </p>
+          </div>
+
+          <div v-show="tab === 'files'">
+            <div v-if="filesLoading" class="space-y-2">
+              <USkeleton v-for="i in 3" :key="i" class="h-24 w-full" />
+            </div>
+            <template v-else-if="files?.length">
+              <DiffView :files="files" :commentable="canWrite" @comment="onDiffComment" />
+
+              <div v-if="canWrite" class="mt-4 space-y-2 rounded-lg border border-default p-3">
+                <p class="text-sm font-medium text-highlighted">Finish your review</p>
+                <MarkdownEditor
+                  v-model="reviewDraft"
+                  :rows="3"
+                  placeholder="Review summary (optional for approvals)…"
+                />
+                <div class="flex flex-wrap gap-2">
+                  <UButton
+                    icon="i-lucide-check"
+                    color="success"
+                    variant="soft"
+                    label="Approve"
+                    :loading="reviewSubmitting === 'APPROVE'"
+                    :disabled="!!reviewSubmitting"
+                    @click="submitReview('APPROVE')"
+                  />
+                  <UButton
+                    icon="i-lucide-message-square"
+                    color="neutral"
+                    variant="soft"
+                    label="Comment"
+                    :loading="reviewSubmitting === 'COMMENT'"
+                    :disabled="!!reviewSubmitting || !reviewDraft.trim()"
+                    @click="submitReview('COMMENT')"
+                  />
+                  <UButton
+                    icon="i-lucide-file-warning"
+                    color="warning"
+                    variant="soft"
+                    label="Request changes"
+                    :loading="reviewSubmitting === 'REQUEST_CHANGES'"
+                    :disabled="!!reviewSubmitting || !reviewDraft.trim()"
+                    @click="submitReview('REQUEST_CHANGES')"
+                  />
+                </div>
+              </div>
+            </template>
+            <p
+              v-else
+              class="rounded-lg border border-dashed border-default py-8 text-center text-sm text-muted"
+            >
+              No file changes to display.
+            </p>
+          </div>
+        </div>
+        <div v-if="tab !== 'files'" class="hidden lg:block min-w-0">
+          <PullMetadata
+            :pull="data"
+            :reviews="reviews"
+            :reviews-complete="!reviewsSupported || reviewsLoaded"
+          />
+        </div>
       </div>
     </template>
   </div>
@@ -617,5 +649,14 @@ async function replyToReviewThread(
     transform: translateX(0);
     opacity: 1;
   }
+}
+
+.pr-metadata-popover {
+  max-width: 24rem;
+  max-height: min(70vh, 32rem);
+  overflow-y: auto;
+  border: 1px solid var(--ui-border);
+  border-radius: 0.5rem;
+  background: var(--ui-bg);
 }
 </style>
