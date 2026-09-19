@@ -7,10 +7,21 @@ const props = withDefaults(
     pull: ForgePullDetail
     reviews: ForgePullReview[]
     reviewsComplete?: boolean
-    providerLabel?: string
   }>(),
-  { reviewsComplete: true, providerLabel: 'the forge' }
+  { reviewsComplete: true }
 )
+
+const toast = useToast()
+
+const branchName = computed(() => props.pull.sourceBranch?.split(':').pop())
+
+function copyBranch(): void {
+  const name = branchName.value
+  if (!name) return
+  void navigator.clipboard.writeText(name).then(() => {
+    toast.add({ title: 'Branch copied', icon: 'i-lucide-copy', color: 'success' })
+  })
+}
 
 const reviewers = computed(() => {
   const latest = new Map<string, ForgePullReview>()
@@ -32,7 +43,7 @@ function reviewerColorClass(state: string): string {
 
 <template>
   <div
-    class="overflow-hidden rounded-lg border border-default bg-elevated/20"
+    class="lg:sticky lg:top-24 overflow-hidden rounded-lg border border-default bg-elevated/20"
     aria-label="Pull request metadata"
   >
     <div class="divide-y divide-default">
@@ -94,11 +105,22 @@ function reviewerColorClass(state: string): string {
               <StateBadge :state="pull.state" kind="pull" size="xs" />
             </dd>
           </div>
-          <div v-if="pull.sourceBranch && pull.targetBranch" class="flex items-center gap-2">
-            <dt class="w-20 shrink-0 text-muted">Branches</dt>
-            <dd class="min-w-0 font-mono text-xs text-muted">
-              <code class="truncate">{{ pull.sourceBranch }} → {{ pull.targetBranch }}</code>
+          <div v-if="branchName" class="flex items-center gap-2">
+            <dt class="w-20 shrink-0 text-muted">Branch</dt>
+            <dd class="min-w-0">
+              <code class="block w-full truncate font-mono text-xs text-muted">{{
+                branchName
+              }}</code>
             </dd>
+            <button
+              type="button"
+              class="shrink-0 text-muted hover:text-highlighted"
+              :title="`Copy branch ${branchName}`"
+              aria-label="Copy branch name"
+              @click="copyBranch"
+            >
+              <UIcon name="i-lucide-copy" class="size-4" />
+            </button>
           </div>
           <div v-if="pull.createdAt" class="flex items-center gap-2">
             <dt class="w-20 shrink-0 text-muted">Created</dt>
@@ -127,20 +149,6 @@ function reviewerColorClass(state: string): string {
                 :additions="pull.stat.additions"
                 :deletions="pull.stat.deletions"
                 :files="pull.stat.filesChanged"
-              />
-            </dd>
-          </div>
-          <div v-if="pull.url" class="flex items-center gap-2">
-            <dt class="w-20 shrink-0 text-muted"></dt>
-            <dd>
-              <UButton
-                :to="pull.url"
-                target="_blank"
-                color="neutral"
-                variant="link"
-                trailing-icon="i-lucide-external-link"
-                :label="`View on ${providerLabel ?? 'the forge'}`"
-                size="xs"
               />
             </dd>
           </div>

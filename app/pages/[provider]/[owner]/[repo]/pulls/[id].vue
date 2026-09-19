@@ -485,11 +485,7 @@ async function replyToReviewThread(
 
       <UTabs v-model="tab" :items="tabItems" :content="false" size="sm" />
 
-      <div
-        :class="
-          tab === 'files' ? '' : 'lg:grid lg:grid-cols-[minmax(0,1fr)_19rem] lg:gap-6 items-start'
-        "
-      >
+      <div :class="tab === 'files' ? '' : 'lg:grid lg:grid-cols-[minmax(0,1fr)_19rem] lg:gap-6'">
         <div class="min-w-0">
           <div v-show="tab === 'conversation'" class="space-y-4">
             <article class="overflow-hidden rounded-lg border border-default">
@@ -622,7 +618,6 @@ async function replyToReviewThread(
             :pull="data"
             :reviews="reviews"
             :reviews-complete="!reviewsSupported || reviewsLoaded"
-            :provider-label="forge?.label ?? 'the forge'"
           />
         </div>
       </div>

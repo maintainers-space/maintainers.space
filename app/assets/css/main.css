@@ -145,3 +145,20 @@
 .prose .github-markdown-alert__title + br {
   display: none;
 }
+
+.prose blockquote {
+  font-style: normal;
+  border-inline-start: 0.25rem solid var(--ui-text-dimmed);
+  color: var(--ui-text-dimmed);
+}
+
+.prose img {
+  max-width: 100%;
+  height: auto;
+}
+
+.prose table {
+  display: block;
+  overflow-x: auto;
+  white-space: nowrap;
+}

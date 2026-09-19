@@ -9,8 +9,6 @@ export const REVIEW_STATE_LABEL: Record<string, string> = {
   UNKNOWN: 'reviewed'
 }
 
-// Review state has a distinct icon and colour so the conversation reads at a
-// glance (green check = approved, red × = changes requested), mirroring GitHub.
 export const REVIEW_STATE_ICON: Record<string, string> = {
   APPROVED: 'i-lucide-circle-check',
   CHANGES_REQUESTED: 'i-lucide-circle-x',
@@ -33,7 +31,6 @@ export function reviewStateLabel(state: string): string {
   return REVIEW_STATE_LABEL[state] ?? 'reviewed'
 }
 
-/** Short "path:line" anchor for an inline thread. */
 export function commentLocation(comment: ForgePullReviewComment): string {
   return comment.line ? `${comment.path}:${comment.line}` : comment.path
 }

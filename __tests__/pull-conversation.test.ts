@@ -7,8 +7,12 @@ function comment(id: string, createdAt: string): ForgeComment {
   return { id, body: '', createdAt }
 }
 
-function review(id: string, submittedAt?: string): ForgePullReview {
-  return { id, state: 'COMMENTED', submittedAt, comments: [] }
+function review(
+  id: string,
+  submittedAt?: string,
+  comments: ForgePullReview['comments'] = []
+): ForgePullReview {
+  return { id, state: 'COMMENTED', submittedAt, comments }
 }
 
 describe('buildPullTimeline', () => {
@@ -40,6 +44,26 @@ describe('buildPullTimeline', () => {
 
   it('keeps empty inputs empty', () => {
     expect(buildPullTimeline([], [])).toEqual([])
+  })
+
+  it('flattens a review into its summary plus one entry per inline thread', () => {
+    const reviewed = review('r1', '2024-01-02T00:00:00Z', [
+      { id: 't1', body: 'check this', path: 'src/a.ts', line: 5, createdAt: '2024-01-02T00:00:30Z' }
+    ])
+    const result = buildPullTimeline([comment('c1', '2024-01-01T00:00:00Z')], [reviewed])
+    expect(result.map((i) => i.key)).toEqual(['comment:c1', 'review:r1', 'thread:r1:t1'])
+    expect(result[2]!.kind).toBe('thread')
+    expect(result[2]!.comment!.path).toBe('src/a.ts')
+  })
+
+  it('reverses top-level entries when ascending then descending', () => {
+    const reviewed = review('r1', '2024-01-02T00:00:00Z', [
+      { id: 't1', body: '', path: 'src/a.ts', createdAt: '2024-01-02T00:00:30Z' }
+    ])
+    const input = [comment('c1', '2024-01-01T00:00:00Z')]
+    const asc = buildPullTimeline(input, [reviewed]).map((i) => i.key)
+    const desc = buildPullTimeline(input, [reviewed], true).map((i) => i.key)
+    expect(desc).toEqual([...asc].toReversed())
   })
 })
 

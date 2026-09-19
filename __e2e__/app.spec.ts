@@ -231,18 +231,19 @@ test.describe('pull request conversation timeline', () => {
     await stubChronoApi(page)
     await page.goto('/github/octo/chrono/pulls/7')
 
-    const timeline = page.locator('section[aria-label*="conversation events"]')
+    const timeline = page.locator('ul[aria-label="conversation timeline"]')
     await expect(timeline).toBeVisible()
     // The review (bob's approval) loads with the first review page; assertions on
     // nth(1) wait for it and pin the review between the two comments.
-    await expect(timeline.locator('article').nth(0)).toContainText('first comment')
-    await expect(timeline.locator('article').nth(1)).toContainText('bob')
-    await expect(timeline.locator('article').nth(2)).toContainText('last comment')
+    await expect(timeline.locator('li').nth(0)).toContainText('first comment')
+    await expect(timeline.locator('li').nth(1)).toContainText('bob')
+    await expect(timeline.locator('li').nth(2)).toContainText('last comment')
 
     const rail = page.locator('[aria-label="Pull request metadata"]')
     await expect(rail).toContainText('Reviewers')
     await expect(rail).toContainText('bob')
-    await expect(rail).toContainText('feature → main')
+    await expect(rail).toContainText('Branch')
+    await expect(rail).toContainText('feature')
   })
 
   test('collapses metadata behind the Details button on narrow screens', async ({ page }) => {
@@ -255,7 +256,145 @@ test.describe('pull request conversation timeline', () => {
 
     await page.getByRole('button', { name: 'Details' }).click()
     await expect(rail).toBeVisible()
-    await expect(rail).toContainText('feature → main')
+    await expect(rail).toContainText('Branch')
+    await expect(rail).toContainText('feature')
+  })
+})
+
+test.describe('pull request conversation thread grouping', () => {
+  test('renders each review thread as an entry with nested replies, and filters/sorts', async ({
+    page
+  }) => {
+    await page.setViewportSize({ width: 1280, height: 900 })
+    const repo = 'https://api.github.com/repos/octo/thready'
+    await page.route(repo, (route) =>
+      route.fulfill({
+        json: {
+          owner: { login: 'octo' },
+          name: 'thready',
+          full_name: 'octo/thready',
+          default_branch: 'main',
+          html_url: 'https://github.com/octo/thready',
+          has_issues: true
+        }
+      })
+    )
+    await page.route(`${repo}/pulls/7`, (route) =>
+      route.fulfill({
+        json: {
+          number: 7,
+          title: 'Thready',
+          state: 'open',
+          merged: false,
+          draft: false,
+          user: { login: 'octo' },
+          body: 'body',
+          head: { ref: 'feature' },
+          base: { ref: 'main' },
+          created_at: '2024-01-01T00:00:00Z',
+          html_url: `${repo}/pull/7`,
+          additions: 1,
+          deletions: 0,
+          changed_files: 1,
+          commits: 1
+        }
+      })
+    )
+    await page.route(
+      /^https:\/\/api\.github\.com\/repos\/octo\/thready\/issues\/7\/comments(?:\?.*)?$/,
+      (route) =>
+        route.fulfill({
+          json: [
+            {
+              id: 1,
+              user: { login: 'alice' },
+              body: 'early comment',
+              created_at: '2024-01-01T10:00:00Z'
+            },
+            {
+              id: 2,
+              user: { login: 'carol' },
+              body: 'late comment',
+              created_at: '2024-01-01T14:00:00Z'
+            }
+          ]
+        })
+    )
+    await page.route(
+      /^https:\/\/api\.github\.com\/repos\/octo\/thready\/pulls\/7\/reviews(?:\?.*)?$/,
+      (route) =>
+        route.fulfill({
+          json: [
+            {
+              id: 12,
+              user: { login: 'bob' },
+              body: 'LGTM',
+              state: 'APPROVED',
+              submitted_at: '2024-01-01T11:00:00Z',
+              html_url: `${repo}/pull/7#pullrequestreview-12`
+            }
+          ]
+        })
+    )
+    await page.route(
+      /^https:\/\/api\.github\.com\/repos\/octo\/thready\/pulls\/7\/reviews\/12\/comments(?:\?.*)?$/,
+      (route) =>
+        route.fulfill({
+          json: [
+            {
+              id: 100,
+              user: { login: 'bob' },
+              body: 'inline suggestion',
+              path: 'src/a.ts',
+              line: 5,
+              created_at: '2024-01-01T12:00:00Z'
+            },
+            {
+              id: 200,
+              user: { login: 'alice' },
+              body: 'got it, thanks',
+              path: 'src/a.ts',
+              line: 5,
+              created_at: '2024-01-01T13:00:00Z',
+              in_reply_to_id: 100
+            }
+          ]
+        })
+    )
+    await page.route(
+      /^https:\/\/api\.github\.com\/repos\/octo\/thready\/pulls\/7\/files(?:\?.*)?$/,
+      (route) => route.fulfill({ json: [] })
+    )
+    await page.route(
+      /^https:\/\/api\.github\.com\/repos\/octo\/thready\/pulls\/7\/commits(?:\?.*)?$/,
+      (route) => route.fulfill({ json: [] })
+    )
+
+    await page.goto('/github/octo/thready/pulls/7')
+
+    const timeline = page.locator('ul[aria-label="conversation timeline"]')
+    await expect(timeline).toBeVisible()
+    await expect(timeline).toHaveCount(1)
+    // Ascending order: comment, review, thread (with nested reply), comment.
+    await expect(timeline.locator('li').nth(0)).toContainText('early comment')
+    await expect(timeline.locator('li').nth(1)).toContainText('bob')
+    const threadEntry = timeline.locator('li').nth(2)
+    await expect(threadEntry).toContainText('inline suggestion')
+    await expect(threadEntry).toContainText('got it, thanks')
+    await expect(timeline.locator('li').nth(3)).toContainText('late comment')
+
+    // Filter to threads only.
+    await page.getByRole('button', { name: 'Filter activity' }).click()
+    await page.getByRole('button', { name: 'Threads' }).click()
+    await expect(timeline.locator('li')).toHaveCount(1)
+    await expect(timeline.locator('li').nth(0)).toContainText('inline suggestion')
+
+    // Clear the filter and flip to newest first.
+    await page.getByRole('button', { name: 'Filter activity' }).click()
+    await page.getByRole('button', { name: 'All activity' }).click()
+    await page.getByRole('button', { name: 'Oldest first' }).click()
+    await expect(timeline.locator('li').nth(0)).toContainText('late comment')
+    await expect(timeline.locator('li').nth(3)).toContainText('early comment')
   })
 })
 
