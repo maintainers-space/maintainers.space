@@ -135,6 +135,11 @@ jobs:
       - name: Test with coverage thresholds
         run: pnpm run test:coverage
 
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: false
   build:
     name: 🏗️ Build
     runs-on: ubuntu-latest
@@ -226,6 +231,33 @@ jobs:
           path: .lighthouseci/reports
           retention-days: 14
 
+  chromatic:
+    name: 🎨 Chromatic
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0 # Required for Chromatic to compare commits
+
+      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Publish to Chromatic
+        uses: chromaui/action@v11
+        with:
+          projectToken: ${{ secrets.CHROMATIC_PROJECT_TOKEN }}
+          buildScriptName: storybook:build
+
   quality-gate:
     name: ✅ Quality gate
     if: ${{ always() }}
@@ -238,6 +270,7 @@ jobs:
       - build
       - browser
       - lighthouse
+      - chromatic
     runs-on: ubuntu-latest
     steps:
       - name: Require every CI job to pass
