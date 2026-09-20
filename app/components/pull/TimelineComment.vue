@@ -19,7 +19,7 @@ function reactionTarget(commentId: string, threadId?: string) {
     <header
       class="flex items-center gap-2 border-b border-default bg-elevated/40 px-4 py-2 text-sm"
     >
-      <UserLink :user="comment.author" />
+      <UserLink :user="comment.author" :avatar="false" />
       <UBadge
         v-if="isAuthor"
         label="Author"
@@ -45,7 +45,7 @@ function reactionTarget(commentId: string, threadId?: string) {
     <div v-if="comment.replies?.length" class="divide-y divide-default border-t border-default">
       <div v-for="reply in comment.replies" :key="reply.id">
         <header class="flex items-center gap-2 px-4 pt-3 text-sm">
-          <UserLink :user="reply.author" />
+          <UserLink :user="reply.author" :avatar="false" />
           <span v-if="reply.createdAt" class="ml-auto text-xs text-dimmed">{{
             formatRelativeTime(reply.createdAt)
           }}</span>

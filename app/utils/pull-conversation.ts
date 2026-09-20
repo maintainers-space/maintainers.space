@@ -50,8 +50,23 @@ export function buildPullTimeline(
   for (const event of events) {
     items.push({ key: `event:${event.id}`, kind: 'event', event, at: event.createdAt })
   }
-  items.sort((a, b) => anchorAt(a.at) - anchorAt(b.at))
-  return descending ? items.toReversed() : items
+  // Assign a stable insertion order to preserve tie-breaks when timestamps match
+  items.forEach((item, index) => {
+    ;(item as any)._index = index
+  })
+
+  items.sort((a, b) => {
+    const timeA = anchorAt(a.at)
+    const timeB = anchorAt(b.at)
+    if (timeA !== timeB) {
+      return descending ? timeB - timeA : timeA - timeB
+    }
+    // If times are equal, ALWAYS put the parent review before the thread
+    // Or just preserve original insertion order (review was pushed before its threads)
+    return ((a as any)._index ?? 0) - ((b as any)._index ?? 0)
+  })
+
+  return items
 }
 
 export function filterTimeline(

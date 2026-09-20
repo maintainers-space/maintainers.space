@@ -113,28 +113,28 @@ describe('filterTimeline', () => {
   )
 
   it('returns everything for the all filter', () => {
-    expect(filterTimeline(items, 'all').map((i) => i.kind)).toEqual([
-      'comment',
-      'review',
-      'thread',
-      'event'
-    ])
+    expect(
+      filterTimeline(items, ['comment', 'review', 'thread', 'event']).map((i) => i.kind)
+    ).toEqual(['comment', 'review', 'thread', 'event'])
   })
 
   it('returns only comments', () => {
-    expect(filterTimeline(items, 'comments').map((i) => i.kind)).toEqual(['comment'])
+    expect(filterTimeline(items, ['comment']).map((i) => i.kind)).toEqual(['comment'])
   })
 
   it('returns only reviews', () => {
-    expect(filterTimeline(items, 'reviews').map((i) => i.kind)).toEqual(['review'])
+    expect(filterTimeline(items, ['review']).map((i) => i.kind)).toEqual(['review'])
   })
 
   it('returns only threads', () => {
-    expect(filterTimeline(items, 'threads').map((i) => i.kind)).toEqual(['thread'])
+    expect(filterTimeline(items, ['thread']).map((i) => i.kind)).toEqual(['thread'])
   })
 
   it('returns reviews and events for history', () => {
-    expect(filterTimeline(items, 'history').map((i) => i.kind)).toEqual(['review', 'event'])
+    expect(filterTimeline(items, ['review', 'event']).map((i) => i.kind)).toEqual([
+      'review',
+      'event'
+    ])
   })
 })
 

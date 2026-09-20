@@ -290,7 +290,7 @@ async function ensureReviewComments(reviewId: string): Promise<void> {
   } catch {
     if (generation === requestGeneration && epoch === reviewEpoch) state.error = true
   } finally {
-    if (generation === requestGeneration && epoch === reviewEpoch) state.loading = false
+    state.loading = false
   }
 }
 

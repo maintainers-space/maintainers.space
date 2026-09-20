@@ -49,7 +49,18 @@ function parseDiffLines(hunk?: string | null): DiffLine[] {
   return result
 }
 
-const allLines = computed(() => parseDiffLines(props.comment.diffHunk))
+const allLines = computed(() => {
+  const parsed = parseDiffLines(props.comment.diffHunk)
+  const targetLine = props.comment.line ?? props.comment.startLine
+  if (!targetLine) return parsed
+
+  const targetIndex = parsed.findIndex((l) => l.newLine === targetLine || l.oldLine === targetLine)
+  if (targetIndex === -1) return parsed
+
+  const start = Math.max(0, targetIndex - 3)
+  const end = Math.min(parsed.length, targetIndex + 4)
+  return parsed.slice(start, end)
+})
 
 function openReply(): void {
   replyOpen.value = true
@@ -107,42 +118,46 @@ async function submitReply(): Promise<void> {
     <!-- Diff snippet -->
     <div v-if="allLines.length" class="border-b border-default/60">
       <div class="overflow-x-auto bg-muted/30 font-mono text-xs leading-relaxed">
-        <div
-          v-for="(line, i) in allLines"
-          :key="i"
-          class="flex"
-          :class="{
-            'bg-success/10 text-success': line.type === 'add',
-            'bg-error/10 text-error': line.type === 'del',
-            'bg-elevated text-dimmed': line.type === 'hunk'
-          }"
-        >
-          <template v-if="line.type === 'hunk'">
-            <!-- Expand icons could go here in a future iteration -->
-            <div class="flex w-12 shrink-0 border-r border-default/40 items-center justify-center">
-              <UIcon name="i-lucide-unfold-vertical" class="size-3 opacity-50" />
-            </div>
-            <span class="px-2">{{ line.text }}</span>
-          </template>
-          <template v-else>
-            <!-- Line numbers -->
-            <div
-              class="w-6 shrink-0 border-r border-default/40 pr-1 text-right select-none text-dimmed opacity-70"
-            >
-              {{ line.oldLine ?? ' ' }}
-            </div>
-            <div
-              class="w-6 shrink-0 border-r border-default/40 pr-1 text-right select-none text-dimmed opacity-70"
-            >
-              {{ line.newLine ?? ' ' }}
-            </div>
-            <!-- Sign -->
-            <div class="w-4 shrink-0 text-center select-none opacity-80">
-              {{ line.type === 'add' ? '+' : line.type === 'del' ? '-' : ' ' }}
-            </div>
-            <!-- Code -->
-            <span class="min-w-0 whitespace-pre break-all px-1">{{ line.text.slice(1) }}</span>
-          </template>
+        <div class="min-w-max">
+          <div
+            v-for="(line, i) in allLines"
+            :key="i"
+            class="flex"
+            :class="{
+              'bg-success/10 text-success': line.type === 'add',
+              'bg-error/10 text-error': line.type === 'del',
+              'bg-elevated text-dimmed': line.type === 'hunk'
+            }"
+          >
+            <template v-if="line.type === 'hunk'">
+              <!-- Expand icons could go here in a future iteration -->
+              <div
+                class="flex w-12 shrink-0 border-r border-default/40 items-center justify-center"
+              >
+                <UIcon name="i-lucide-unfold-vertical" class="size-3 opacity-50" />
+              </div>
+              <span class="px-2">{{ line.text }}</span>
+            </template>
+            <template v-else>
+              <!-- Line numbers -->
+              <div
+                class="w-6 shrink-0 border-r border-default/40 pr-1 text-right select-none text-dimmed opacity-70"
+              >
+                {{ line.oldLine ?? ' ' }}
+              </div>
+              <div
+                class="w-6 shrink-0 border-r border-default/40 pr-1 text-right select-none text-dimmed opacity-70"
+              >
+                {{ line.newLine ?? ' ' }}
+              </div>
+              <!-- Sign -->
+              <div class="w-4 shrink-0 text-center select-none opacity-80">
+                {{ line.type === 'add' ? '+' : line.type === 'del' ? '-' : ' ' }}
+              </div>
+              <!-- Code -->
+              <span class="min-w-0 whitespace-pre px-1">{{ line.text.slice(1) }}</span>
+            </template>
+          </div>
         </div>
       </div>
     </div>
@@ -150,7 +165,7 @@ async function submitReply(): Promise<void> {
     <!-- Main comment -->
     <div class="space-y-2 px-3 py-2.5">
       <div class="flex items-center gap-2 text-sm">
-        <UserLink :user="comment.author" class="font-medium text-highlighted" />
+        <UserLink :user="comment.author" :avatar="false" class="font-medium text-highlighted" />
         <span v-if="comment.createdAt" class="ml-auto text-xs text-dimmed">{{
           formatRelativeTime(comment.createdAt)
         }}</span>
@@ -165,7 +180,7 @@ async function submitReply(): Promise<void> {
     >
       <div v-for="reply in comment.replies" :key="reply.id" class="space-y-1 px-3 py-2.5">
         <div class="flex items-center gap-2 text-sm">
-          <UserLink :user="reply.author" class="font-medium text-highlighted" />
+          <UserLink :user="reply.author" :avatar="false" class="font-medium text-highlighted" />
           <span v-if="reply.createdAt" class="ml-auto text-xs text-dimmed">{{
             formatRelativeTime(reply.createdAt)
           }}</span>

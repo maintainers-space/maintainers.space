@@ -148,7 +148,7 @@ async function handleReply(reviewId: string, commentId: string, body: string): P
       <USelectMenu
         v-model="activeFilters"
         :options="FILTER_OPTIONS"
-        value-attribute="value"
+        value-key="value"
         multiple
         placeholder="Filter activity..."
         size="sm"
@@ -168,7 +168,7 @@ async function handleReply(reviewId: string, commentId: string, body: string): P
     <!-- Timeline -->
     <ul class="relative pb-4" aria-label="conversation timeline">
       <!-- The global timeline line -->
-      <div class="absolute bottom-0 left-[1.125rem] top-2 z-0 w-px bg-border bg-default/40" />
+      <div class="absolute bottom-0 left-[1.125rem] top-2 z-0 border-l-2 border-default/40" />
 
       <li v-for="item in filtered" :key="item.key" class="relative z-10 flex gap-4 py-3">
         <!-- Marker Column (perfectly aligned with line) -->
@@ -201,11 +201,11 @@ async function handleReply(reviewId: string, commentId: string, body: string): P
             :src="authorFor(item)?.avatarUrl ?? undefined"
             :alt="userHandle(authorFor(item))"
             size="sm"
-            class="bg-background ring-2 ring-background"
+            class="bg-body"
           />
           <span
             v-else
-            class="flex size-8 items-center justify-center rounded-full border border-default bg-elevated ring-2 ring-background"
+            class="flex size-8 items-center justify-center rounded-full border border-default bg-elevated"
           >
             <UIcon name="i-lucide-user" class="size-4 text-muted" />
           </span>
