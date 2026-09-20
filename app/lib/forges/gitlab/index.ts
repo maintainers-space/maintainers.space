@@ -8,6 +8,7 @@ import type {
   ForgeIssue,
   ForgeIssueDetail,
   ForgeJobLog,
+  ForgeLabel,
   ForgeMergeQueueEntry,
   ForgeMergeQueueStats,
   ForgeMergeResult,
@@ -20,6 +21,8 @@ import type {
   ForgeRepo,
   ForgeSearchCode,
   ForgeSearchOptions,
+  ForgeTimelineEvent,
+  ForgeTimelineEventKind,
   ForgeTreeEntry,
   ForgeUser,
   Paginated,
@@ -526,6 +529,89 @@ export const gitlabProvider: ForgeProvider = {
       opts
     )
     return (data ?? []).map(mapCommit)
+  },
+
+  async listPullTimeline(repo, id, opts): Promise<ForgeTimelineEvent[]> {
+    const pid = projectId(repo)
+    const notes = await glFetch<GlNoteResponse[]>(
+      `/projects/${pid}/merge_requests/${id}/notes`,
+      {
+        per_page: 100,
+        sort: 'asc',
+        order_by: 'created_at',
+        page: opts?.cursor ? Number(opts.cursor) : 1
+      },
+      opts
+    ).catch(() => [])
+
+    const events: ForgeTimelineEvent[] = []
+
+    for (const n of notes) {
+      if (!n.system) continue
+
+      let kind: ForgeTimelineEventKind = 'other'
+      let label: ForgeLabel | undefined
+      let subject: ForgeUser | undefined
+      let previousTitle: string | undefined
+      let currentTitle: string | undefined
+
+      const body = n.body || ''
+
+      if (body.startsWith('added ~')) {
+        kind = 'labeled'
+        const match = body.match(/added ~"?([^"\s]+)"?/)
+        if (match?.[1]) label = { name: match[1] }
+      } else if (body.startsWith('removed ~')) {
+        kind = 'unlabeled'
+        const match = body.match(/removed ~"?([^"\s]+)"?/)
+        if (match?.[1]) label = { name: match[1] }
+      } else if (body.startsWith('assigned to @')) {
+        kind = 'assigned'
+        const match = body.match(/assigned to @([^\s]+)/)
+        if (match?.[1]) subject = { provider: 'gitlab', login: match[1] }
+      } else if (body.startsWith('unassigned @')) {
+        kind = 'unassigned'
+        const match = body.match(/unassigned @([^\s]+)/)
+        if (match?.[1]) subject = { provider: 'gitlab', login: match[1] }
+      } else if (body.startsWith('requested review from @')) {
+        kind = 'review_requested'
+        const match = body.match(/requested review from @([^\s]+)/)
+        if (match?.[1]) subject = { provider: 'gitlab', login: match[1] }
+      } else if (body.startsWith('changed title from ')) {
+        kind = 'renamed'
+        const match = body.match(/changed title from \*\*([^*]+)\*\* to \*\*([^*]+)\*\*/)
+        if (match) {
+          previousTitle = match[1]
+          currentTitle = match[2]
+        }
+      } else if (body === 'merged') {
+        kind = 'merged'
+      } else if (body === 'closed') {
+        kind = 'closed'
+      } else if (body === 'reopened') {
+        kind = 'reopened'
+      } else if (body.includes('marked as draft')) {
+        kind = 'converted_to_draft'
+      } else if (body.includes('marked as ready')) {
+        kind = 'ready_for_review'
+      } else if (body.includes('changed the milestone to %')) {
+        kind = 'milestoned'
+      }
+
+      events.push({
+        id: String(n.id),
+        kind,
+        actor: mapUser(n.author),
+        createdAt: n.created_at ?? null,
+        body,
+        label,
+        subject,
+        previousTitle,
+        currentTitle
+      })
+    }
+
+    return events
   },
 
   async getMergeQueue(repo, branch, opts): Promise<ForgeMergeQueueStats | null> {

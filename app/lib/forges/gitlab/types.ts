@@ -107,6 +107,9 @@ export interface GlNoteResponse {
   body?: string
   created_at?: string | null
   system?: boolean
+  resolvable?: boolean
+  resolved?: boolean
+  resolved_by?: GlUserResponse
 }
 
 export interface GlAwardEmojiResponse {

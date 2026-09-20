@@ -240,6 +240,10 @@ export interface ForgeComment {
   /** Replies to this comment (GitHub Discussions only — 2 levels, no reply-to-reply). */
   replies?: ForgeComment[]
   reactions?: ForgeReactionSummary[]
+  /** Whether this thread has been marked as resolved. */
+  resolved?: boolean
+  /** The user who resolved the thread. */
+  resolvedBy?: ForgeUser
 }
 
 export interface ForgeIssueDetail extends ForgeIssue {
@@ -300,6 +304,51 @@ export interface ForgePullReviewComment extends ForgeComment {
   /** The parent review-comment id when this is a reply. */
   replyToId?: string
   replies?: ForgePullReviewComment[]
+}
+
+/** The kind of system event displayed as a compact note in the PR/MR timeline. */
+export type ForgeTimelineEventKind =
+  | 'labeled'
+  | 'unlabeled'
+  | 'assigned'
+  | 'unassigned'
+  | 'review_requested'
+  | 'review_request_removed'
+  | 'milestoned'
+  | 'demilestoned'
+  | 'renamed'
+  | 'base_changed'
+  | 'head_ref_force_pushed'
+  | 'committed'
+  | 'merged'
+  | 'closed'
+  | 'reopened'
+  | 'ready_for_review'
+  | 'converted_to_draft'
+  | 'other'
+
+/**
+ * A system-generated timeline event (label added, assignee changed, status
+ * transition, etc.). These are the lightweight notes that sit between user
+ * comments and reviews in the conversation feed.
+ */
+export interface ForgeTimelineEvent {
+  id: string
+  kind: ForgeTimelineEventKind
+  actor?: ForgeUser
+  createdAt?: string | null
+  /** Human-readable description, e.g. "added ~bug label". */
+  body?: string | null
+  /** Label involved in labeled/unlabeled events. */
+  label?: ForgeLabel
+  /** User involved in assigned/unassigned/review_requested events. */
+  subject?: ForgeUser
+  /** Old title for renamed events. */
+  previousTitle?: string
+  /** New title for renamed events. */
+  currentTitle?: string
+  /** Commit SHA for head_ref_force_pushed / committed events. */
+  sha?: string
 }
 
 /** A single pull/merge request waiting in a merge queue (GitHub) or merge train (GitLab). */
@@ -676,6 +725,12 @@ export interface ForgeProvider {
     reviewId: string,
     opts?: ForgePageOptions
   ) => Promise<Paginated<ForgePullReviewComment>>
+  /** System-generated timeline events (labels, assignments, status changes, force pushes, ...). */
+  listPullTimeline?: (
+    repo: RepoLocator,
+    id: string,
+    opts?: ForgePageOptions
+  ) => Promise<ForgeTimelineEvent[]>
   /** Merge queue (GitHub) / merge train (GitLab) state for a branch (default branch if omitted). */
   getMergeQueue?: (
     repo: RepoLocator,

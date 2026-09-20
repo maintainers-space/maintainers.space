@@ -21,7 +21,9 @@ import type {
   ForgeRepo,
   ForgeRunStatus,
   ForgeTreeEntry,
-  ForgeUser
+  ForgeUser,
+  ForgeTimelineEvent,
+  ForgeTimelineEventKind
 } from '~/types/forge'
 import type {
   GhActionJobResponse,
@@ -40,7 +42,8 @@ import type {
   GhPullReviewResponse,
   GhReactionsResponse,
   GhRepoResponse,
-  GhUserResponse
+  GhUserResponse,
+  GhTimelineEventResponse
 } from './types'
 
 /** Classify a login as a known dependency bot, else null. */
@@ -587,4 +590,41 @@ export function mapEvent(e: GhEventResponse): ForgeContribution | null {
   }
 
   return { ...base, kind, title, url, number, count, refType, commits, impact: EVENT_IMPACT[kind] }
+}
+
+export function mapTimelineEvent(e: GhTimelineEventResponse): ForgeTimelineEvent | null {
+  const event = String(e.event ?? '')
+  let kind: ForgeTimelineEventKind | undefined
+  if (event === 'labeled') kind = 'labeled'
+  else if (event === 'unlabeled') kind = 'unlabeled'
+  else if (event === 'assigned') kind = 'assigned'
+  else if (event === 'unassigned') kind = 'unassigned'
+  else if (event === 'review_requested') kind = 'review_requested'
+  else if (event === 'review_request_removed') kind = 'review_request_removed'
+  else if (event === 'milestoned') kind = 'milestoned'
+  else if (event === 'demilestoned') kind = 'demilestoned'
+  else if (event === 'renamed') kind = 'renamed'
+  else if (event === 'head_ref_force_pushed') kind = 'head_ref_force_pushed'
+  else if (event === 'committed') kind = 'committed'
+  else if (event === 'merged') kind = 'merged'
+  else if (event === 'closed') kind = 'closed'
+  else if (event === 'reopened') kind = 'reopened'
+  else if (event === 'ready_for_review') kind = 'ready_for_review'
+  else if (event === 'convert_to_draft') kind = 'converted_to_draft'
+  else if (event === 'base_ref_changed') kind = 'base_changed'
+
+  if (!kind) return null
+
+  const createdAt = e.created_at ?? null
+  return {
+    id: e.id ? String(e.id) : `${kind}-${createdAt}`,
+    kind,
+    createdAt,
+    actor: mapUser(e.actor),
+    label: e.label ? { name: e.label.name ?? '', color: e.label.color } : undefined,
+    subject: mapUser(e.assignee ?? e.requested_reviewer),
+    previousTitle: e.rename?.from,
+    currentTitle: e.rename?.to,
+    sha: e.commit_id ?? undefined
+  }
 }

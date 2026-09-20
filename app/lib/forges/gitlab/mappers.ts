@@ -290,7 +290,8 @@ export function mapNote(r: GlNoteResponse, base = ''): ForgeComment {
     id: String(r.id),
     author: mapUser(r.author),
     body: absolutizeUploads(r.body, base) ?? '',
-    createdAt: r.created_at ?? null
+    createdAt: r.created_at ?? null,
+    ...(r.resolvable ? { resolved: !!r.resolved, resolvedBy: mapUser(r.resolved_by) } : {})
   }
 }
 

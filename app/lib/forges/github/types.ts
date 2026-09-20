@@ -415,3 +415,17 @@ export interface GhGraphqlMergeQueueResponse {
     } | null
   } | null
 }
+
+export interface GhTimelineEventResponse {
+  id?: number | string
+  event?: string
+  actor?: GhUserResponse | null
+  created_at?: string | null
+  label?: { name?: string; color?: string } | null
+  assignee?: GhUserResponse | null
+  requested_reviewer?: GhUserResponse | null
+  milestone?: { title?: string } | null
+  rename?: { from?: string; to?: string } | null
+  commit_id?: string | null
+  commit_url?: string | null
+}

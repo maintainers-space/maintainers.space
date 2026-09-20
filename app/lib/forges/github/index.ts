@@ -59,7 +59,8 @@ import type {
   GhSearchReposResponse,
   GhSearchUsersResponse,
   GhTreeEntryResponse,
-  GhUserResponse
+  GhUserResponse,
+  GhTimelineEventResponse
 } from './types'
 import {
   botKindOf,
@@ -82,6 +83,7 @@ import {
   mapReactions,
   mapRepo,
   mapRun,
+  mapTimelineEvent,
   mapUser,
   pullState,
   sortEntries
@@ -566,6 +568,16 @@ export const githubProvider: ForgeProvider = {
       items: mapPullReviewComments(data),
       cursor: data.length === limit ? String(page + 1) : undefined
     }
+  },
+
+  async listPullTimeline(repo, id, opts) {
+    const data = await ghFetchAllPages<GhTimelineEventResponse>(
+      `/repos/${repo.owner}/${repo.name}/issues/${id}/timeline`,
+      opts
+    ).catch(() => [])
+    return data.map(mapTimelineEvent).filter((e) => e !== null) as NonNullable<
+      ReturnType<typeof mapTimelineEvent>
+    >[]
   },
 
   async getMergeQueue(repo, branch, opts): Promise<ForgeMergeQueueStats | null> {

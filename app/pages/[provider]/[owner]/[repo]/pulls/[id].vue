@@ -4,7 +4,8 @@ import type {
   ForgeFileDiff,
   ForgePullDetail,
   ForgePullReview,
-  ForgePullReviewComment
+  ForgePullReviewComment,
+  ForgeTimelineEvent
 } from '~/types/forge'
 import { useRepoContext } from '~/composables/useRepoContext'
 import { cached, invalidate, TTL } from '~/lib/cache'
@@ -60,6 +61,7 @@ const reviewsError = ref(false)
 const reviewCommentState = reactive<
   Record<string, { cursor?: string; initialized: boolean; loading: boolean; error: boolean }>
 >({})
+const timelineEvents = ref<ForgeTimelineEvent[]>([])
 const isOnline = useOnline()
 let requestGeneration = 0
 // Bumped on every write that invalidates the review cache so an in-flight fetch
@@ -80,6 +82,7 @@ watch(
     reviewsLoaded.value = false
     reviewsLoading.value = false
     reviewsError.value = false
+    timelineEvents.value = []
     for (const reviewId of Object.keys(reviewCommentState)) delete reviewCommentState[reviewId]
   },
   { immediate: true }
@@ -199,6 +202,28 @@ async function ensureReviews(): Promise<void> {
   }
 }
 
+async function ensureTimeline(): Promise<void> {
+  const currentForge = forge.value
+  if (timelineEvents.value.length || !currentForge?.listPullTimeline) return
+  const generation = requestGeneration
+  const currentLocator = locator.value
+  const currentId = id.value
+  const persist = !meta.value?.isPrivate
+  try {
+    const key = `${itemKey.value}:timeline`
+    if (!persist) invalidate(key)
+    const result = await cached(
+      key,
+      () => currentForge.listPullTimeline!(currentLocator, currentId),
+      { ttl: TTL.MEDIUM, persist }
+    )
+    if (generation === requestGeneration) timelineEvents.value = result
+  } catch {
+    // Timeline events are supplementary — a failure shouldn't block the view.
+    if (generation === requestGeneration) timelineEvents.value = []
+  }
+}
+
 function findReviewComment(
   comments: ForgePullReviewComment[],
   commentId: string
@@ -278,11 +303,13 @@ function resetReviews(): void {
   // reload reflects the just-posted review or reply.
   invalidate(`${itemKey.value}:reviews:`, true)
   invalidate(`${itemKey.value}:review:`, true)
+  invalidate(`${itemKey.value}:timeline`, true)
   reviews.value = []
   reviewsCursor.value = undefined
   reviewsLoaded.value = false
   reviewsLoading.value = false
   reviewsError.value = false
+  timelineEvents.value = []
   for (const reviewId of Object.keys(reviewCommentState)) delete reviewCommentState[reviewId]
 }
 
@@ -296,6 +323,7 @@ watch(
       void ensureFiles()
       void ensureCommits()
       void ensureReviews()
+      void ensureTimeline()
     }
   },
   { immediate: true }
@@ -513,10 +541,12 @@ async function replyToReviewThread(
             <PullConversation
               v-if="
                 data.comments.length ||
+                timelineEvents.length ||
                 (reviewsSupported && (reviews.length || reviewsLoading || reviewsError))
               "
               :comments="data.comments"
               :reviews="reviews"
+              :events="timelineEvents"
               :thread-id="data.id"
               :has-more="reviewsSupported && reviewsHaveMore"
               :loading="reviewsSupported && reviewsLoading"
@@ -524,6 +554,7 @@ async function replyToReviewThread(
               :comment-state="reviewCommentProgress"
               :can-reply="canReplyToReviewThreads"
               :reply="replyToReviewThread"
+              :author-login="data.author?.login"
               @load-more="ensureReviews"
               @load-comments="ensureReviewComments"
             />
