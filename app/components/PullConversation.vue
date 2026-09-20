@@ -4,10 +4,9 @@ import type { ForgeComment, ForgePullReview, ForgeTimelineEvent, ForgeUser } fro
 import {
   buildPullTimeline,
   filterTimeline,
-  type PullConversationItem,
-  type PullTimelineFilter
+  type PullConversationItem
 } from '~/utils/pull-conversation'
-import { userHandle } from '~/utils/pull-review'
+import { userHandle, REVIEW_STATE_ICON, REVIEW_STATE_COLOR } from '~/utils/pull-review'
 
 const props = withDefaults(
   defineProps<{
@@ -33,22 +32,21 @@ const emit = defineEmits<{
 }>()
 
 // --- Filter & Sort ---
-const FILTER_OPTIONS: { label: string; value: PullTimelineFilter }[] = [
-  { label: 'All activity', value: 'all' },
-  { label: 'Comments only', value: 'comments' },
-  { label: 'Reviews only', value: 'reviews' },
-  { label: 'Threads only', value: 'threads' },
-  { label: 'History only', value: 'history' }
+const FILTER_OPTIONS: { label: string; value: PullConversationItem['kind'] }[] = [
+  { label: 'Comments', value: 'comment' },
+  { label: 'Reviews', value: 'review' },
+  { label: 'Threads', value: 'thread' },
+  { label: 'System Notes', value: 'event' }
 ]
 
-const activeFilter = ref<PullTimelineFilter>('all')
+const activeFilters = ref<PullConversationItem['kind'][]>(['comment', 'review', 'thread', 'event'])
 const descending = ref(false)
 
 const timeline = computed<PullConversationItem[]>(() =>
   buildPullTimeline(props.comments, props.reviews, props.events, descending.value)
 )
 const filtered = computed<PullConversationItem[]>(() =>
-  filterTimeline(timeline.value, activeFilter.value)
+  filterTimeline(timeline.value, activeFilters.value)
 )
 
 // --- Author detection ---
@@ -57,7 +55,7 @@ function isAuthor(comment: ForgeComment): boolean {
   return comment.author.login === props.authorLogin
 }
 
-// --- Avatar for timeline marker ---
+// --- Marker data ---
 function authorFor(item: PullConversationItem): ForgeUser | undefined {
   if (item.kind === 'comment') return item.comment.author
   if (item.kind === 'review') return item.review.author
@@ -65,18 +63,37 @@ function authorFor(item: PullConversationItem): ForgeUser | undefined {
   return item.event.actor
 }
 
-// --- Comment progress per review ---
-function commentProgress(review: ForgePullReview): {
-  hasMore: boolean
-  loading: boolean
-  error: boolean
-} {
-  const state = props.commentState[review.id]
-  return {
-    hasMore: !state || state.hasMore,
-    loading: !!state?.loading,
-    error: !!state?.error
-  }
+const EVENT_ICON: Record<string, string> = {
+  labeled: 'i-lucide-tag',
+  unlabeled: 'i-lucide-tag',
+  assigned: 'i-lucide-user-plus',
+  unassigned: 'i-lucide-user-minus',
+  review_requested: 'i-lucide-eye',
+  review_request_removed: 'i-lucide-eye-off',
+  milestoned: 'i-lucide-milestone',
+  demilestoned: 'i-lucide-milestone',
+  renamed: 'i-lucide-pencil',
+  base_changed: 'i-lucide-git-branch',
+  head_ref_force_pushed: 'i-lucide-git-commit-horizontal',
+  committed: 'i-lucide-git-commit-horizontal',
+  merged: 'i-lucide-git-merge',
+  closed: 'i-lucide-circle-slash',
+  reopened: 'i-lucide-circle-dot',
+  ready_for_review: 'i-lucide-circle-dot',
+  converted_to_draft: 'i-lucide-git-pull-request-draft',
+  other: 'i-lucide-activity'
+}
+
+const EVENT_COLOR: Record<string, string> = {
+  merged: 'text-primary',
+  closed: 'text-error',
+  reopened: 'text-success',
+  ready_for_review: 'text-success'
+}
+
+function stateColorClass(state: string): string {
+  const color = REVIEW_STATE_COLOR[state] ?? 'neutral'
+  return color === 'success' ? 'text-success' : color === 'error' ? 'text-error' : 'text-muted'
 }
 
 // --- Lazy loading sentinels ---
@@ -104,6 +121,7 @@ function setCommentSentinel(
       element,
       ([entry]) => {
         const state = props.commentState[reviewId]
+        // Eagerly trigger load if the sentinel is on screen
         if (entry?.isIntersecting && (!state || state.hasMore) && !state?.loading) {
           emit('loadComments', reviewId)
         }
@@ -117,7 +135,7 @@ onBeforeUnmount(() => {
   for (const observer of commentObservers.values()) observer.stop()
 })
 
-// --- Reply handling (delegated to thread component via event bubbling) ---
+// --- Reply handling ---
 async function handleReply(reviewId: string, commentId: string, body: string): Promise<void> {
   await props.reply(reviewId, commentId, body)
 }
@@ -127,13 +145,14 @@ async function handleReply(reviewId: string, commentId: string, body: string): P
   <div class="space-y-4">
     <!-- Filter / Sort bar -->
     <div v-if="timeline.length" class="flex items-center gap-2">
-      <USelect
-        v-model="activeFilter"
-        :items="FILTER_OPTIONS"
-        value-key="value"
+      <USelectMenu
+        v-model="activeFilters"
+        :options="FILTER_OPTIONS"
+        value-attribute="value"
+        multiple
+        placeholder="Filter activity..."
         size="sm"
-        class="w-40"
-        :ui="{ base: 'cursor-pointer' }"
+        class="w-64"
       />
       <UButton
         :icon="descending ? 'i-lucide-arrow-down-wide-narrow' : 'i-lucide-arrow-up-narrow-wide'"
@@ -147,31 +166,53 @@ async function handleReply(reviewId: string, commentId: string, body: string): P
     </div>
 
     <!-- Timeline -->
-    <ul class="pr-timeline" aria-label="conversation timeline">
-      <li v-for="item in filtered" :key="item.key" class="pr-timeline-item">
-        <!-- Timeline marker (avatar or icon) -->
-        <div class="pr-timeline-marker">
-          <template v-if="item.kind === 'event'">
-            <!-- Events use their own icon in TimelineSystemNote -->
-          </template>
+    <ul class="relative pb-4" aria-label="conversation timeline">
+      <!-- The global timeline line -->
+      <div class="absolute bottom-0 left-[1.125rem] top-2 z-0 w-px bg-border bg-default/40" />
+
+      <li v-for="item in filtered" :key="item.key" class="relative z-10 flex gap-4 py-3">
+        <!-- Marker Column (perfectly aligned with line) -->
+        <div class="mt-1 flex w-9 shrink-0 justify-center">
+          <!-- System Note Icon -->
+          <span
+            v-if="item.kind === 'event'"
+            class="flex size-7 items-center justify-center rounded-full border border-default bg-elevated"
+          >
+            <UIcon
+              :name="EVENT_ICON[item.event.kind] ?? 'i-lucide-activity'"
+              :class="EVENT_COLOR[item.event.kind] ?? 'text-muted'"
+              class="size-3.5"
+            />
+          </span>
+          <!-- Review Icon (only if no body, like GitLab system notes) -->
+          <span
+            v-else-if="item.kind === 'review' && !item.review.body"
+            class="flex size-7 items-center justify-center rounded-full border border-default bg-elevated"
+          >
+            <UIcon
+              :name="REVIEW_STATE_ICON[item.review.state] ?? 'i-lucide-circle'"
+              :class="stateColorClass(item.review.state)"
+              class="size-3.5"
+            />
+          </span>
+          <!-- Avatar for comments, threads, and reviews with body -->
           <UAvatar
             v-else-if="authorFor(item)?.avatarUrl"
             :src="authorFor(item)?.avatarUrl ?? undefined"
             :alt="userHandle(authorFor(item))"
             size="sm"
-            class="rounded-full ring-2 ring-default"
+            class="bg-background ring-2 ring-background"
           />
           <span
             v-else
-            class="flex size-8 items-center justify-center rounded-full border border-default bg-elevated"
+            class="flex size-8 items-center justify-center rounded-full border border-default bg-elevated ring-2 ring-background"
           >
             <UIcon name="i-lucide-user" class="size-4 text-muted" />
           </span>
         </div>
 
-        <!-- Content -->
-        <div class="pr-timeline-content">
-          <!-- Comment -->
+        <!-- Content Column -->
+        <div class="min-w-0 flex-1">
           <PullTimelineComment
             v-if="item.kind === 'comment'"
             :comment="item.comment"
@@ -179,17 +220,15 @@ async function handleReply(reviewId: string, commentId: string, body: string): P
             :is-author="isAuthor(item.comment)"
           />
 
-          <!-- Review -->
           <template v-else-if="item.kind === 'review'">
             <PullTimelineReview
               :review="item.review"
-              :comment-progress="commentProgress(item.review)"
+              :comment-progress="commentState[item.review.id]"
               @load-comments="emit('loadComments', $event)"
             />
             <div :ref="(el) => setCommentSentinel(item.review.id, el)" class="h-px" />
           </template>
 
-          <!-- Thread -->
           <PullTimelineThread
             v-else-if="item.kind === 'thread'"
             :review="item.review"
@@ -198,7 +237,6 @@ async function handleReply(reviewId: string, commentId: string, body: string): P
             @reply="handleReply"
           />
 
-          <!-- System event -->
           <PullTimelineSystemNote v-else-if="item.kind === 'event'" :event="item.event" />
         </div>
       </li>
@@ -223,47 +261,3 @@ async function handleReply(reviewId: string, commentId: string, body: string): P
     <div v-if="hasMore" ref="reviewsSentinel" aria-hidden="true" class="h-px" />
   </div>
 </template>
-
-<style scoped>
-.pr-timeline {
-  position: relative;
-}
-
-.pr-timeline::before {
-  content: '';
-  position: absolute;
-  left: 15px;
-  top: 0;
-  bottom: 0;
-  width: 2px;
-  background: color-mix(in srgb, var(--ui-border) 50%, transparent);
-  border-radius: 1px;
-}
-
-.pr-timeline-item {
-  position: relative;
-  display: flex;
-  gap: 0.75rem;
-  padding-bottom: 1.5rem;
-}
-
-.pr-timeline-item:last-child {
-  padding-bottom: 0;
-}
-
-.pr-timeline-marker {
-  position: relative;
-  z-index: 1;
-  width: 2rem;
-  display: flex;
-  align-items: flex-start;
-  justify-content: center;
-  flex-shrink: 0;
-}
-
-.pr-timeline-content {
-  min-width: 0;
-  flex: 1;
-  padding-top: 0.125rem;
-}
-</style>

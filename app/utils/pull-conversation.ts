@@ -54,19 +54,10 @@ export function buildPullTimeline(
   return descending ? items.toReversed() : items
 }
 
-const FILTER_KINDS: Record<PullTimelineFilter, Set<PullConversationItem['kind']>> = {
-  all: new Set(['comment', 'review', 'thread', 'event']),
-  comments: new Set(['comment']),
-  reviews: new Set(['review']),
-  threads: new Set(['thread']),
-  history: new Set(['review', 'event'])
-}
-
 export function filterTimeline(
   items: PullConversationItem[],
-  filter: PullTimelineFilter
+  kinds: PullConversationItem['kind'][]
 ): PullConversationItem[] {
-  if (filter === 'all') return items
-  const allowed = FILTER_KINDS[filter]
+  const allowed = new Set(kinds)
   return items.filter((item) => allowed.has(item.kind))
 }

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { ForgePullReview, ForgePullReviewComment } from '~/types/forge'
-import { commentLocation, userHandle } from '~/utils/pull-review'
+import { commentLocation } from '~/utils/pull-review'
 
 const props = defineProps<{
   review: ForgePullReview
@@ -12,32 +12,44 @@ const emit = defineEmits<{
   reply: [reviewId: string, commentId: string, body: string]
 }>()
 
-const expandedDiff = ref(false)
 const replyOpen = ref(false)
 const replyDraft = ref('')
 const postingReply = ref(false)
 
 interface DiffLine {
   text: string
-  add: boolean
-  del: boolean
+  type: 'add' | 'del' | 'context' | 'hunk'
+  oldLine?: number
+  newLine?: number
 }
 
 function parseDiffLines(hunk?: string | null): DiffLine[] {
   if (!hunk) return []
-  return hunk.split('\n').map((line): DiffLine => ({
-    text: line,
-    add: line.startsWith('+') && !line.startsWith('+++'),
-    del: line.startsWith('-') && !line.startsWith('---')
-  }))
+  const lines = hunk.split('\n')
+  const result: DiffLine[] = []
+  let oldLine = 0
+  let newLine = 0
+
+  for (const line of lines) {
+    if (line.startsWith('@@')) {
+      const match = line.match(/@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@/)
+      if (match) {
+        oldLine = parseInt(match[1]!, 10)
+        newLine = parseInt(match[2]!, 10)
+      }
+      result.push({ text: line, type: 'hunk' })
+    } else if (line.startsWith('-')) {
+      result.push({ text: line, type: 'del', oldLine: oldLine++ })
+    } else if (line.startsWith('+')) {
+      result.push({ text: line, type: 'add', newLine: newLine++ })
+    } else {
+      result.push({ text: line, type: 'context', oldLine: oldLine++, newLine: newLine++ })
+    }
+  }
+  return result
 }
 
-const DIFF_PREVIEW = 5
 const allLines = computed(() => parseDiffLines(props.comment.diffHunk))
-const visibleLines = computed(() =>
-  expandedDiff.value ? allLines.value : allLines.value.slice(0, DIFF_PREVIEW)
-)
-const hasMoreLines = computed(() => allLines.value.length > DIFF_PREVIEW)
 
 function openReply(): void {
   replyOpen.value = true
@@ -96,32 +108,43 @@ async function submitReply(): Promise<void> {
     <div v-if="allLines.length" class="border-b border-default/60">
       <div class="overflow-x-auto bg-muted/30 font-mono text-xs leading-relaxed">
         <div
-          v-for="(line, i) in visibleLines"
+          v-for="(line, i) in allLines"
           :key="i"
           class="flex"
           :class="{
-            'bg-success/10 text-success': line.add,
-            'bg-error/10 text-error': line.del
+            'bg-success/10 text-success': line.type === 'add',
+            'bg-error/10 text-error': line.type === 'del',
+            'bg-elevated text-dimmed': line.type === 'hunk'
           }"
         >
-          <span class="w-5 shrink-0 select-none text-center text-dimmed">{{
-            line.add ? '+' : line.del ? '-' : ' '
-          }}</span>
-          <span class="min-w-0 whitespace-pre break-all px-1">{{
-            line.add || line.del ? line.text.slice(1) : line.text
-          }}</span>
+          <template v-if="line.type === 'hunk'">
+            <!-- Expand icons could go here in a future iteration -->
+            <div class="flex w-12 shrink-0 border-r border-default/40 items-center justify-center">
+              <UIcon name="i-lucide-unfold-vertical" class="size-3 opacity-50" />
+            </div>
+            <span class="px-2">{{ line.text }}</span>
+          </template>
+          <template v-else>
+            <!-- Line numbers -->
+            <div
+              class="w-6 shrink-0 border-r border-default/40 pr-1 text-right select-none text-dimmed opacity-70"
+            >
+              {{ line.oldLine ?? ' ' }}
+            </div>
+            <div
+              class="w-6 shrink-0 border-r border-default/40 pr-1 text-right select-none text-dimmed opacity-70"
+            >
+              {{ line.newLine ?? ' ' }}
+            </div>
+            <!-- Sign -->
+            <div class="w-4 shrink-0 text-center select-none opacity-80">
+              {{ line.type === 'add' ? '+' : line.type === 'del' ? '-' : ' ' }}
+            </div>
+            <!-- Code -->
+            <span class="min-w-0 whitespace-pre break-all px-1">{{ line.text.slice(1) }}</span>
+          </template>
         </div>
       </div>
-      <button
-        v-if="hasMoreLines && !expandedDiff"
-        type="button"
-        class="w-full border-t border-default/40 bg-muted/15 px-3 py-1 text-xs text-muted hover:text-highlighted"
-        @click="expandedDiff = true"
-      >
-        Show {{ allLines.length - DIFF_PREVIEW }} more line{{
-          allLines.length - DIFF_PREVIEW === 1 ? '' : 's'
-        }}
-      </button>
     </div>
 
     <!-- Main comment -->
