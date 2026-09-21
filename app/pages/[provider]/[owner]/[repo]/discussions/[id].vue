@@ -32,8 +32,8 @@ watch(
 const { data, pending, error } = useLiveAsyncData<ForgeDiscussionDetail | null>(
   () => itemKey.value,
   async () => {
-    if (!forge.value?.getDiscussion) return null
-    return await forge.value.getDiscussion(locator.value, id.value, {
+    if (!forge.value?.features.discussionRead!.getDiscussion) return null
+    return await forge.value.features.discussionRead!.getDiscussion!(locator.value, id.value, {
       token: getToken(provider.value)
     })
   },

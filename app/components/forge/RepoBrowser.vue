@@ -51,11 +51,11 @@ const branchesLoading = ref(false)
 let branchesLoaded = false
 
 async function ensureBranches(): Promise<void> {
-  if (branchesLoaded || !forge.value?.listBranches) return
+  if (branchesLoaded || !forge.value?.features.codeRead!.listBranches) return
   branchesLoaded = true
   branchesLoading.value = true
   try {
-    branches.value = await forge.value.listBranches(locator.value)
+    branches.value = await forge.value.features.codeRead!.listBranches!(locator.value)
   } catch {
     branches.value = []
   } finally {

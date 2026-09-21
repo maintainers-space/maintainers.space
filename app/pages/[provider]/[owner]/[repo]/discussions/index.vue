@@ -35,16 +35,20 @@ const filtered = computed(() => {
 
 async function load(): Promise<void> {
   const f = forge.value
-  if (!f?.listDiscussions) return
+  if (!f?.features.discussionRead!.listDiscussions) return
   const token = getToken(provider.value)
   needsToken.value = !token
   loading.value = true
   error.value = null
   try {
     const key = `discussions:${provider.value}:${owner.value}:${name.value}:${token ? 'auth' : 'anon'}`
-    const page = await cached(key, () => f.listDiscussions!(locator.value, { token, limit: 30 }), {
-      ttl: TTL.SHORT
-    })
+    const page = await cached(
+      key,
+      () => f.features.discussionRead!.listDiscussions!(locator.value, { token, limit: 30 }),
+      {
+        ttl: TTL.SHORT
+      }
+    )
     items.value = page.items
     if (page.incomplete && !token) needsToken.value = true
   } catch (e) {

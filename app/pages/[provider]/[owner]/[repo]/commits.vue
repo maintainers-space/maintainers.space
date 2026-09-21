@@ -13,7 +13,7 @@ const done = ref(false)
 
 async function loadMore(reset = false): Promise<void> {
   const f = forge.value
-  if (loading.value || !f?.listCommits) return
+  if (loading.value || !f?.features.commitRead!.listCommits) return
   loading.value = true
   error.value = null
   try {
@@ -22,10 +22,11 @@ async function loadMore(reset = false): Promise<void> {
     const page = reset
       ? await cached(
           `commits:${provider.value}:${owner.value}:${name.value}:${defaultBranch.value}`,
-          () => f.listCommits!(locator.value, defaultBranch.value, { limit: 30 }),
+          () =>
+            f.features.commitRead!.listCommits!(locator.value, defaultBranch.value, { limit: 30 }),
           { ttl: TTL.SHORT }
         )
-      : await f.listCommits(locator.value, defaultBranch.value, {
+      : await f.features.commitRead!.listCommits!(locator.value, defaultBranch.value, {
           cursor: cursor.value,
           limit: 30
         })

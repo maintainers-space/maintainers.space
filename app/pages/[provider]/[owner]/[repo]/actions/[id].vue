@@ -15,14 +15,16 @@ const id = computed(() => String(route.params.id))
 // out. Skip the dead-end expand affordance in that case; the external-link
 // icon on every step is the reliable way in regardless of provider.
 const canFetchLogs = computed(
-  () => !!forge.value?.getActionJobLog && (provider.value !== 'github' || !!getToken('github'))
+  () =>
+    !!forge.value?.features.actionRead!.getActionJobLog &&
+    (provider.value !== 'github' || !!getToken('github'))
 )
 
 const { data, pending, error } = useLiveAsyncData<ForgeActionRun | null>(
   () => `run:${provider.value}:${owner.value}:${name.value}:${id.value}`,
   async () => {
-    if (!forge.value?.getActionRun) return null
-    return await forge.value.getActionRun(locator.value, id.value)
+    if (!forge.value?.features.actionRead!.getActionRun) return null
+    return await forge.value.features.actionRead!.getActionRun!(locator.value, id.value)
   },
   { lazy: true, watch: [() => route.fullPath] }
 )
@@ -53,7 +55,9 @@ async function toggleStep(job: ForgeActionJob, index: number): Promise<void> {
   if (!(job.id in jobLogs.value) && !jobLogLoading.value[job.id]) {
     jobLogLoading.value[job.id] = true
     jobLogs.value[job.id] =
-      (await forge.value?.getActionJobLog?.(locator.value, job.id).catch(() => null)) ?? null
+      (await forge.value?.features
+        .actionRead!.getActionJobLog?.(locator.value, job.id)
+        .catch(() => null)) ?? null
     jobLogLoading.value[job.id] = false
   }
 }

@@ -137,9 +137,23 @@ export function useForgeAuth(providerId: ForgeId) {
     const to =
       returnTo ?? (import.meta.client ? location.pathname + location.search : '/settings/accounts')
     const params = new URLSearchParams({ redirect: to })
+
+    // If we're on a deployment preview, we must route the OAuth flow through the production domain
+    // because the OAuth app only whitelists the production callback URL.
+    if (
+      import.meta.client &&
+      location.hostname !== 'localhost' &&
+      location.hostname !== '127.0.0.1' &&
+      location.hostname !== 'maintainers.space'
+    ) {
+      params.set('preview', location.origin)
+    }
+
     // Bind the attestation to the signed-in atproto identity when available.
     if (did.value) params.set('did', did.value)
-    window.location.assign(`/api/auth/${providerId}/login?${params.toString()}`)
+
+    const baseAuthUrl = params.has('preview') ? 'https://maintainers.space' : ''
+    window.location.assign(`${baseAuthUrl}/api/auth/${providerId}/login?${params.toString()}`)
   }
 
   function disconnect(): void {

@@ -219,10 +219,9 @@ export function useSearch() {
         }
         const owner = plan.owner!
         const token = getToken(pid)
-        if (types.includes('repos') && forge.listRepos) {
+        if (types.includes('repos') && forge.features.repoRead!.listRepos) {
           tasks.push(
-            forge
-              .listRepos(owner, { token })
+            forge.features.repoRead!.listRepos!(owner, { token })
               .then((repos) => {
                 if (myToken !== runToken) return
                 const matched = repos.filter((r) =>
@@ -235,11 +234,10 @@ export function useSearch() {
               })
           )
         }
-        if (types.includes('issues') && plan.repoName && forge.listIssues) {
+        if (types.includes('issues') && plan.repoName && forge.features.issueRead!.listIssues) {
           const locator = { owner, name: plan.repoName }
           tasks.push(
-            forge
-              .listIssues(locator, { token, limit: 50 })
+            forge.features.issueRead!.listIssues!(locator, { token, limit: 50 })
               .then((r) => {
                 if (myToken !== runToken) return
                 const matched = r.items.filter((it) => clientFilterMatches(plan, it.title, it.body))
@@ -288,10 +286,9 @@ export function useSearch() {
         noCache: opts?.noCache
       }
 
-      if (types.includes('repos') && forge.searchRepos) {
+      if (types.includes('repos') && forge.features.search!.searchRepos) {
         tasks.push(
-          forge
-            .searchRepos(queryText, base)
+          forge.features.search!.searchRepos!(queryText, base)
             .then((r) => {
               if (myToken !== runToken) return
               results.repos.push(...r.items)
@@ -303,10 +300,9 @@ export function useSearch() {
             })
         )
       }
-      if (types.includes('issues') && forge.searchIssues) {
+      if (types.includes('issues') && forge.features.search!.searchIssues) {
         tasks.push(
-          forge
-            .searchIssues(queryText, base)
+          forge.features.search!.searchIssues!(queryText, base)
             .then((r) => {
               if (myToken !== runToken) return
               results.issues.push(...r.items)
@@ -318,10 +314,9 @@ export function useSearch() {
             })
         )
       }
-      if (types.includes('users') && forge.searchUsers) {
+      if (types.includes('users') && forge.features.search!.searchUsers) {
         tasks.push(
-          forge
-            .searchUsers(queryText, base)
+          forge.features.search!.searchUsers!(queryText, base)
             .then((r) => {
               if (myToken !== runToken) return
               results.users.push(...r.items)
@@ -333,15 +328,14 @@ export function useSearch() {
             })
         )
       }
-      if (types.includes('code') && forge.searchCode) {
+      if (types.includes('code') && forge.features.search!.searchCode) {
         if (!base.token) {
           noteSet.add(
             `Add a ${forge.label} token in Settings → Access tokens to enable code search.`
           )
         } else {
           tasks.push(
-            forge
-              .searchCode(queryText, base)
+            forge.features.search!.searchCode!(queryText, base)
               .then((r) => {
                 if (myToken !== runToken) return
                 results.code.push(...r.items)
@@ -354,15 +348,14 @@ export function useSearch() {
           )
         }
       }
-      if (types.includes('discussions') && forge.searchDiscussions) {
+      if (types.includes('discussions') && forge.features.search!.searchDiscussions) {
         if (!base.token) {
           noteSet.add(
             `Add a ${forge.label} token in Settings → Access tokens to search Discussions.`
           )
         } else {
           tasks.push(
-            forge
-              .searchDiscussions(queryText, base)
+            forge.features.search!.searchDiscussions!(queryText, base)
               .then((r) => {
                 if (myToken !== runToken) return
                 results.discussions.push(...r.items)

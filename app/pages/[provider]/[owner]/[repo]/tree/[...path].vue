@@ -19,8 +19,8 @@ const path = computed(() => parts.value.slice(1).join('/'))
 const { data, pending, error } = useLiveAsyncData<ForgeTreeEntry[]>(
   () => `tree:${provider.value}:${owner.value}:${name.value}:${gitRef.value}:${path.value}`,
   async () => {
-    if (!forge.value?.getTree) return []
-    return await forge.value.getTree(locator.value, gitRef.value, path.value)
+    if (!forge.value?.features.codeRead!.getTree) return []
+    return await forge.value.features.codeRead!.getTree!(locator.value, gitRef.value, path.value)
   },
   { lazy: true, watch: [() => route.fullPath] }
 )

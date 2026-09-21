@@ -40,6 +40,7 @@ export default defineEventHandler(async (event) => {
     state?: string
     returnTo?: string
     did?: string
+    previewOrigin?: string
   } = {}
   try {
     stored = cookieRaw ? JSON.parse(cookieRaw) : {}
@@ -112,7 +113,8 @@ export default defineEventHandler(async (event) => {
       }
     }
 
-    return sendRedirect(event, `/oauth/${providerId}#${fragment.toString()}`)
+    const targetOrigin = stored.previewOrigin ?? ''
+    return sendRedirect(event, `${targetOrigin}/oauth/${providerId}#${fragment.toString()}`)
   } catch (err) {
     // Surface the upstream OAuth error (e.g. invalid_grant, invalid_client, a
     // redirect_uri mismatch on the forge's own client registration) instead of

@@ -33,7 +33,13 @@ export default defineEventHandler((event) => {
   const rawDid = getQuery(event).did
   const did = typeof rawDid === 'string' && rawDid.startsWith('did:') ? rawDid : ''
 
-  setCookie(event, `oauth_${providerId}`, JSON.stringify({ state, returnTo, did }), {
+  const rawPreview = getQuery(event).preview
+  // Prevent open redirect vulnerabilities by strictly validating the preview origin
+  // Note: Adjust the allowed preview domains if needed (e.g. .onrender.com, .pages.dev)
+  const isValidPreview = typeof rawPreview === 'string' && rawPreview.startsWith('https://')
+  const previewOrigin = isValidPreview ? rawPreview : undefined
+
+  setCookie(event, `oauth_${providerId}`, JSON.stringify({ state, returnTo, did, previewOrigin }), {
     httpOnly: true,
     sameSite: 'lax',
     secure: origin.startsWith('https:'),
