@@ -31,8 +31,14 @@ export function useForgeTokens() {
   load()
 
   function get(provider: ForgeId, repoFullName?: string): string | undefined {
-    const key = repoFullName ? `${provider}:${repoFullName}` : provider
-    return _tokens.value[key] || undefined
+    // A repository-scoped token (e.g. one stored during 403 recovery under
+    // `${provider}:${owner}/${name}`) takes precedence for repository requests;
+    // fall back to the provider-wide token when no override exists.
+    if (repoFullName) {
+      const scoped = _tokens.value[`${provider}:${repoFullName}`]
+      if (scoped) return scoped
+    }
+    return _tokens.value[provider] || undefined
   }
 
   function set(provider: ForgeId, token: string, repoFullName?: string): void {

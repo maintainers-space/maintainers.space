@@ -16,14 +16,14 @@ const id = computed(() => String(route.params.id))
 // icon on every step is the reliable way in regardless of provider.
 const canFetchLogs = computed(
   () =>
-    !!forge.value?.features.actionRead!.getActionJobLog &&
+    !!forge.value?.features.actionRead?.getActionJobLog &&
     (provider.value !== 'github' || !!getToken('github'))
 )
 
 const { data, pending, error } = useLiveAsyncData<ForgeActionRun | null>(
   () => `run:${provider.value}:${owner.value}:${name.value}:${id.value}`,
   async () => {
-    if (!forge.value?.features.actionRead!.getActionRun) return null
+    if (!forge.value?.features.actionRead?.getActionRun) return null
     return await forge.value.features.actionRead!.getActionRun!(locator.value, id.value)
   },
   { lazy: true, watch: [() => route.fullPath] }

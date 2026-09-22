@@ -1,5 +1,5 @@
 ---
-"maintainers.space": minor
+'maintainers.space': minor
 ---
 
 refactor: migrate to forge feature matrix architecture

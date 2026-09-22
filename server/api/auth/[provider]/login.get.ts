@@ -9,6 +9,35 @@ function safeReturn(raw: unknown): string {
   return value.startsWith('/') && !value.startsWith('//') ? value : '/settings/accounts'
 }
 
+// The `preview` query parameter lets a preview deployment (e.g. a per-PR build on
+// *.pages.dev / *.onrender.com) receive the OAuth token fragment from the shared
+// callback. It is attacker-controllable — the flow runs in the victim's browser
+// and the OAuth `state` does not bind the origin — so `startsWith('https://')` is
+// not enough: an attacker could start a flow with `preview=https://attacker.example`
+// and receive the victim's access token. Only origins matching the configured
+// allowlist (NUXT_PREVIEW_ORIGINS) are trusted; everything else is rejected.
+function allowedPreviewOrigin(raw: unknown, patterns: string[]): string | undefined {
+  if (typeof raw !== 'string' || !raw) return undefined
+  let url: URL
+  try {
+    url = new URL(raw)
+  } catch {
+    return undefined
+  }
+  // Bare https origins only — no credentials, and normalise away any path/query.
+  if (url.protocol !== 'https:' || url.username || url.password) return undefined
+  const host = url.hostname.toLowerCase()
+  for (const pattern of patterns) {
+    if (pattern.startsWith('https://*.')) {
+      const suffix = pattern.slice('https://*.'.length).toLowerCase()
+      if (suffix && (host === suffix || host.endsWith(`.${suffix}`))) return url.origin
+    } else if (url.origin === pattern) {
+      return url.origin
+    }
+  }
+  return undefined
+}
+
 export default defineEventHandler((event) => {
   const providerId = String(getRouterParam(event, 'provider') ?? '')
   const provider = getOAuthProvider(providerId)
@@ -33,11 +62,14 @@ export default defineEventHandler((event) => {
   const rawDid = getQuery(event).did
   const did = typeof rawDid === 'string' && rawDid.startsWith('did:') ? rawDid : ''
 
-  const rawPreview = getQuery(event).preview
-  // Prevent open redirect vulnerabilities by strictly validating the preview origin
-  // Note: Adjust the allowed preview domains if needed (e.g. .onrender.com, .pages.dev)
-  const isValidPreview = typeof rawPreview === 'string' && rawPreview.startsWith('https://')
-  const previewOrigin = isValidPreview ? rawPreview : undefined
+  // Restrict the preview origin to the configured allowlist (see
+  // `allowedPreviewOrigin`) so the callback can only hand the token fragment to a
+  // trusted deployment, never an attacker-supplied origin.
+  const previewPatterns = String(useRuntimeConfig(event).previewOrigins ?? '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean)
+  const previewOrigin = allowedPreviewOrigin(getQuery(event).preview, previewPatterns)
 
   setCookie(event, `oauth_${providerId}`, JSON.stringify({ state, returnTo, did, previewOrigin }), {
     httpOnly: true,

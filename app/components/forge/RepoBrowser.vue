@@ -51,7 +51,7 @@ const branchesLoading = ref(false)
 let branchesLoaded = false
 
 async function ensureBranches(): Promise<void> {
-  if (branchesLoaded || !forge.value?.features.codeRead!.listBranches) return
+  if (branchesLoaded || !forge.value?.features.codeRead?.listBranches) return
   branchesLoaded = true
   branchesLoading.value = true
   try {

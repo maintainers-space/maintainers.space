@@ -1,8 +1,9 @@
 import fs from 'fs'
 import path from 'path'
 import { forgeList } from '../app/lib/forges/index.js' // We'll run this via tsx so imports work
+import type { ForgeFeatureMatrix } from '../app/types/features.js'
 
-const allFeatures = [
+const allFeatures: (keyof ForgeFeatureMatrix)[] = [
   'repoRead',
   'codeRead',
   'commitRead',
@@ -31,8 +32,10 @@ function generateMatrix() {
   for (const feature of allFeatures) {
     let row = `| **${feature}** | `
     for (const provider of providers) {
-      // @ts-ignore
-      const hasFeature = provider.features && provider.features[feature]
+      const group = provider.features[feature]
+      // A group is "supported" only when the provider declares it with at least
+      // one method; an omitted or empty group means the capability is unavailable.
+      const hasFeature = !!group && Object.keys(group).length > 0
       row += (hasFeature ? '✅' : '❌') + ' | '
     }
     md += row + '\n'

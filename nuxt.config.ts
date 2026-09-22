@@ -51,6 +51,13 @@ export default defineNuxtConfig({
     attestation: {
       privateKey: ''
     },
+    // Trusted preview-deployment origins allowed to receive the OAuth token
+    // fragment (server-only). Comma-separated list of exact origins and/or
+    // `https://*.suffix` host-suffix patterns, e.g.
+    // "https://*.pages.dev,https://*.onrender.com". Set NUXT_PREVIEW_ORIGINS.
+    // Anything not matched here is rejected to prevent token exfiltration via an
+    // attacker-supplied `preview` origin.
+    previewOrigins: '',
     public: {
       // OAuth client id for production; overridden per-env. Empty => localhost dev client.
       atprotoClientId: '',

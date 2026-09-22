@@ -45,7 +45,7 @@ const { data, pending, error, refresh } = useLiveAsyncData<ForgePullDetail | nul
 const { get: getToken } = useForgeTokens()
 const toast = useToast()
 const canWrite = computed(
-  () => !!getToken(provider.value) && !!forge.value?.features.write!.createComment
+  () => !!getToken(provider.value) && !!forge.value?.features.write?.createComment
 )
 
 const tab = useRouteTab('tab', ['conversation', 'commits', 'files'] as const, 'conversation')
@@ -345,11 +345,11 @@ const postingComment = ref(false)
 const reviewDraft = ref('')
 const reviewSubmitting = ref<'' | 'APPROVE' | 'REQUEST_CHANGES' | 'COMMENT'>('')
 const canReplyToReviewThreads = computed(
-  () => !!getToken(provider.value) && !!forge.value?.features.write!.createPullReviewReply
+  () => !!getToken(provider.value) && !!forge.value?.features.write?.createPullReviewReply
 )
 
 async function submitComment(): Promise<void> {
-  if (!forge.value?.features.write!.createComment || !commentDraft.value.trim()) return
+  if (!forge.value?.features.write?.createComment || !commentDraft.value.trim()) return
   postingComment.value = true
   try {
     await forge.value.features.write!.createComment!(locator.value, id.value, commentDraft.value)
@@ -375,7 +375,7 @@ async function submitComment(): Promise<void> {
 }
 
 async function submitReview(event: 'APPROVE' | 'REQUEST_CHANGES' | 'COMMENT'): Promise<void> {
-  if (!forge.value?.features.write!.createReview) return
+  if (!forge.value?.features.write?.createReview) return
   reviewSubmitting.value = event
   try {
     await forge.value.features.write!.createReview!(locator.value, id.value, {
@@ -405,7 +405,7 @@ async function submitReview(event: 'APPROVE' | 'REQUEST_CHANGES' | 'COMMENT'): P
 }
 
 async function onDiffComment(payload: { path: string; line: number; body: string }): Promise<void> {
-  if (!forge.value?.features.write!.createReview) return
+  if (!forge.value?.features.write?.createReview) return
   try {
     await forge.value.features.write!.createReview!(locator.value, id.value, {
       event: 'COMMENT',
@@ -436,7 +436,7 @@ async function replyToReviewThread(
   commentId: string,
   body: string
 ): Promise<boolean> {
-  if (!forge.value?.features.write!.createPullReviewReply || !body.trim()) return false
+  if (!forge.value?.features.write?.createPullReviewReply || !body.trim()) return false
   try {
     const reply = await forge.value.features.write!.createPullReviewReply!(
       locator.value,

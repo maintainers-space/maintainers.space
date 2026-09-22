@@ -188,6 +188,15 @@ export interface ActivityReader {
   listFollowing(opts?: ForgePageOptions): Promise<ForgeUser[]>
 }
 
+/**
+ * A forge's supported capabilities, grouped by area.
+ *
+ * Every group is optional: a provider omits any area it does not support (e.g.
+ * Tangled has no `write`/`search`, Bitbucket has no `notificationRead`). Always
+ * access a group with optional chaining (`features.write?.setStar`) — a
+ * non-null assertion (`features.write!.setStar`) reads a property of `undefined`
+ * and throws at runtime for providers that omit the group.
+ */
 export interface ForgeFeatureMatrix {
   repoRead?: Partial<RepoReader>
   codeRead?: Partial<CodeReader>

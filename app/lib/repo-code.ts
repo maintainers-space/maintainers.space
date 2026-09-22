@@ -47,12 +47,12 @@ export async function loadRepoCode(
   ref: string
 ): Promise<{ entries: ForgeTreeEntry[]; health: HealthFile[] }> {
   let entries: ForgeTreeEntry[]
-  if (f.features.codeRead!.getTree) entries = await f.features.codeRead!.getTree!(locator, ref, '')
+  if (f.features.codeRead?.getTree) entries = await f.features.codeRead!.getTree!(locator, ref, '')
   else entries = (await f.features.repoRead!.getOverview!(owner, repo)).entries
 
   const candidates = [...entries]
   const dotgithub = entries.find((e) => e.type === 'dir' && e.name.toLowerCase() === '.github')
-  if (dotgithub && f.features.codeRead!.getTree) {
+  if (dotgithub && f.features.codeRead?.getTree) {
     try {
       candidates.push(...(await f.features.codeRead!.getTree!(locator, ref, dotgithub.path)))
     } catch {

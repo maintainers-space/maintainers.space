@@ -242,9 +242,7 @@ async function onUnlink(account: ForgeAccount) {
             <div>
               <p class="font-medium text-sm text-default">{{ override.repoFullName }}</p>
               <p class="text-xs text-muted">
-                {{
-                  forgeList.find((f) => f.id === override.provider)?.label ?? override.provider
-                }}
+                {{ forgeList.find((f) => f.id === override.provider)?.label ?? override.provider }}
                 Token
               </p>
             </div>

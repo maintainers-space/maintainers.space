@@ -135,7 +135,7 @@ const tabs = computed(() => {
       disabled: unavailableOffline('code')
     }
   ]
-  if (caps.value?.issueRead && features.value!.issues !== false)
+  if (caps.value?.issueRead && features.value?.issues !== false)
     items.push({
       label: 'Issues',
       icon: tabIcon('issues', 'i-lucide-circle-dot'),
@@ -143,7 +143,7 @@ const tabs = computed(() => {
       active: startsWith('issues'),
       disabled: unavailableOffline('issues')
     })
-  if (caps.value?.pullRead && features.value!.pulls !== false)
+  if (caps.value?.pullRead && features.value?.pulls !== false)
     items.push({
       label: pullsTerm(provider.value, { plural: true, capitalize: true }),
       icon: tabIcon('pulls', 'i-lucide-git-pull-request'),
@@ -159,7 +159,7 @@ const tabs = computed(() => {
       active: startsWith('actions'),
       disabled: unavailableOffline('actions')
     })
-  if (caps.value?.discussionRead && features.value!.discussions !== false)
+  if (caps.value?.discussionRead && features.value?.discussions !== false)
     items.push({
       label: 'Discussions',
       icon: tabIcon('discussions', 'i-lucide-messages-square'),
