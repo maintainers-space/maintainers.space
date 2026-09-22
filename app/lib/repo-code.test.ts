@@ -13,18 +13,23 @@ function forge(opts: {
   tree?: ForgeTreeEntry[]
   overview?: { entries: ForgeTreeEntry[] }
 }): ForgeProvider {
-  const coverage = {
-    getTree: opts.tree
-      ? vi.fn(async (): Promise<ForgeTreeEntry[]> => opts.tree as ForgeTreeEntry[])
-      : undefined,
-    getOverview: opts.overview
-      ? vi.fn(async (): Promise<{ repo: { defaultBranch: string }; entries: ForgeTreeEntry[] }> => {
-          const o = opts.overview!
-          return { repo: { defaultBranch: 'main' }, ...o }
-        })
-      : undefined
-  } as Partial<ForgeProvider>
-  return coverage as ForgeProvider
+  return {
+    features: {
+      codeRead: opts.tree
+        ? { getTree: vi.fn(async (): Promise<ForgeTreeEntry[]> => opts.tree as ForgeTreeEntry[]) }
+        : undefined,
+      repoRead: opts.overview
+        ? {
+            getOverview: vi.fn(
+              async (): Promise<{ repo: { defaultBranch: string }; entries: ForgeTreeEntry[] }> => {
+                const o = opts.overview!
+                return { repo: { defaultBranch: 'main' }, ...o }
+              }
+            )
+          }
+        : undefined
+    }
+  } as ForgeProvider
 }
 
 describe('loadRepoCode', () => {
@@ -45,8 +50,8 @@ describe('loadRepoCode', () => {
       .fn()
       .mockResolvedValueOnce(root)
       .mockResolvedValueOnce([file('README.md'), file('SECURITY.md'), file('.github/action.yml')])
-    const f = { getTree: tree } as Partial<ForgeProvider>
-    const { health } = await loadRepoCode(f as ForgeProvider, locator, 'nuxt', 'nuxt', 'main')
+    const f = { features: { codeRead: { getTree: tree } } } as unknown as ForgeProvider
+    const { health } = await loadRepoCode(f, locator, 'nuxt', 'nuxt', 'main')
     // readme+license deduped from root; security comes from .github; order by convention
     expect(health.map((h) => h.key)).toEqual(['readme', 'security', 'license'])
   })

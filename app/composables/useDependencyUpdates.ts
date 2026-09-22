@@ -144,7 +144,7 @@ export function useDependencyUpdates() {
 
   async function approveAndMerge(item: DependencyPr): Promise<void> {
     const forge = getForge(item.repo.provider)
-    if (!forge?.features.write!.mergePull)
+    if (!forge?.features.write?.mergePull)
       throw new Error(`Cannot merge on forge "${item.repo.provider}".`)
     const token = getToken(item.repo.provider)
     const loc: RepoLocator = { owner: item.repo.owner, name: item.repo.name }

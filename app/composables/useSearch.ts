@@ -234,7 +234,7 @@ export function useSearch() {
               })
           )
         }
-        if (types.includes('issues') && plan.repoName && forge.features.issueRead!.listIssues) {
+        if (types.includes('issues') && plan.repoName && forge.features.issueRead?.listIssues) {
           const locator = { owner, name: plan.repoName }
           tasks.push(
             forge.features.issueRead!.listIssues!(locator, { token, limit: 50 })

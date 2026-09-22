@@ -156,7 +156,7 @@ const { data: activity, pending: activityPending } = useLiveAsyncData(
     for (const [providerId, logins] of Object.entries(providerLogins.value)) {
       const forge = getForge(providerId)
       const primary = logins[0]
-      if (!forge?.features.search!.searchIssues || !primary) continue
+      if (!forge?.features.search?.searchIssues || !primary) continue
       const token = getToken(providerId)
       const opts = { token, sort: 'updated' as const, order: 'desc' as const, limit: 8 }
       authoredJobs.push(

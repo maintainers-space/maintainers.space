@@ -27,7 +27,7 @@ const filtered = computed(() => {
 
 async function load(): Promise<void> {
   const f = forge.value
-  if (!f?.features.issueRead!.listIssues) return
+  if (!f?.features.issueRead?.listIssues) return
   loading.value = true
   error.value = null
   try {

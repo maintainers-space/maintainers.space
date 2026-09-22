@@ -226,7 +226,7 @@ function itemListFetchers(
 ): Array<[string, () => Promise<unknown>]> {
   const lists: Array<[string, () => Promise<unknown>]> = []
   // Seed every state the live pages request, so each filter has an offline copy.
-  if (f.features.issueRead!.listIssues) {
+  if (f.features.issueRead?.listIssues) {
     lists.push([
       `issues:${prefix}:open`,
       () => f.features.issueRead!.listIssues!(locator, { token, state: 'open', limit: 30 })
@@ -236,7 +236,7 @@ function itemListFetchers(
       () => f.features.issueRead!.listIssues!(locator, { token, state: 'closed', limit: 30 })
     ])
   }
-  if (f.features.pullRead!.listPulls) {
+  if (f.features.pullRead?.listPulls) {
     lists.push([
       `pulls:${prefix}:open`,
       () => f.features.pullRead!.listPulls!(locator, { token, state: 'open', limit: 30 })
@@ -250,12 +250,12 @@ function itemListFetchers(
       () => f.features.pullRead!.listPulls!(locator, { token, state: 'merged', limit: 30 })
     ])
   }
-  if (f.features.discussionRead!.listDiscussions)
+  if (f.features.discussionRead?.listDiscussions)
     lists.push([
       `discussions:${prefix}:${token ? 'auth' : 'anon'}`,
       () => f.features.discussionRead!.listDiscussions!(locator, { token, limit: 30 })
     ])
-  if (f.features.actionRead!.listActionRuns)
+  if (f.features.actionRead?.listActionRuns)
     lists.push([
       `actions:${prefix}`,
       () => f.features.actionRead!.listActionRuns!(locator, { limit: 30 })
@@ -273,16 +273,16 @@ function detailFetcher(
   const [kind, , , , rawId] = key.split(':')
   if (!rawId) return undefined
   const itemId = rawId as string
-  if (kind === 'issue' && f.features.issueRead!.getIssue) {
-    const getIssue = f.features.issueRead!.getIssue
+  if (kind === 'issue' && f.features.issueRead?.getIssue) {
+    const getIssue = f.features.issueRead?.getIssue
     return () => getIssue(locator, itemId, { token })
   }
-  if (kind === 'pull' && f.features.pullRead!.getPull) {
-    const getPull = f.features.pullRead!.getPull
+  if (kind === 'pull' && f.features.pullRead?.getPull) {
+    const getPull = f.features.pullRead?.getPull
     return () => getPull(locator, itemId, { token })
   }
-  if (kind === 'discussion' && f.features.discussionRead!.getDiscussion) {
-    const getDiscussion = f.features.discussionRead!.getDiscussion
+  if (kind === 'discussion' && f.features.discussionRead?.getDiscussion) {
+    const getDiscussion = f.features.discussionRead?.getDiscussion
     return () => getDiscussion(locator, itemId, { token })
   }
   return undefined

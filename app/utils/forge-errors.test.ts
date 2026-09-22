@@ -13,10 +13,18 @@ describe('describeForgeError', () => {
     expect(describeForgeError({ message: 'Not found' })).toEqual({ description: 'Not found' })
   })
 
-  it('recognizes GitHub OAuth App access restrictions and links to GitHub settings', () => {
+  it('recognizes GitHub OAuth App access restrictions and offers a repo-scoped token', () => {
     const hint = describeForgeError({ message: 'OAuth App access restrictions are enabled' })
-    expect(hint.to).toBe('https://github.com/settings/connections/applications')
-    expect(hint.description).toContain("hasn't approved maintainers.space")
+    expect(hint.to).toBe('/settings/accounts')
+    expect(hint.description).toContain('Personal Access Token')
+  })
+
+  it('scopes the repo-token recovery link to the failing repository when known', () => {
+    const hint = describeForgeError(
+      { message: 'OAuth App access restrictions are enabled' },
+      { provider: 'github', owner: 'nuxt', name: 'nuxt' }
+    )
+    expect(hint.to).toBe('/settings/accounts?pat=github:nuxt/nuxt')
   })
 
   describe('rate limiting', () => {

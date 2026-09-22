@@ -186,15 +186,15 @@ export function useNotifications() {
           return
         }
         if (
-          !forge.features.notificationRead!.listInbox &&
-          !forge.features.notificationRead!.listNotifications
+          !forge.features.notificationRead?.listInbox &&
+          !forge.features.notificationRead?.listNotifications
         )
           return
         try {
           const list = await cached(
             `inbox:${forge.id}:${viewer ?? 'anon'}`,
             async () => {
-              if (forge.features.notificationRead!.listInbox)
+              if (forge.features.notificationRead?.listInbox)
                 return await forge.features.notificationRead!.listInbox!({
                   token,
                   viewer,
@@ -248,7 +248,7 @@ export function useNotifications() {
     removeItem(item)
     rememberDismissed([item])
     invalidate(`inbox:${item.provider}:${did.value ?? 'anon'}`)
-    if (forge?.features.notificationRead!.markNotificationRead)
+    if (forge?.features.notificationRead?.markNotificationRead)
       await forge.features.notificationRead!.markNotificationRead!(item.id, { token }).catch(
         () => {}
       )
@@ -265,7 +265,7 @@ export function useNotifications() {
       targets.map((it) => {
         const forge = getForge(it.provider)
         const token = getToken(it.provider)
-        return forge?.features.notificationRead!.markNotificationRead
+        return forge?.features.notificationRead?.markNotificationRead
           ? forge.features.notificationRead!.markNotificationRead!(it.id, { token }).catch(() => {})
           : Promise.resolve()
       })
@@ -279,8 +279,14 @@ export function useNotifications() {
 
   async function reply(item: ForgeInboxItem, body: string): Promise<boolean> {
     const forge = getForge(item.provider)
-    const token = getToken(item.provider)
-    if (!forge?.features.write!.createComment || !item.repo || !item.number || !body.trim())
+    // Repository-scoped requests (posting a comment) must use a repository
+    // override token when one exists — e.g. one stored during 403 recovery —
+    // and fall back to the provider-wide token otherwise.
+    const token = getToken(
+      item.provider,
+      item.repo ? `${item.repo.owner}/${item.repo.name}` : undefined
+    )
+    if (!forge?.features.write?.createComment || !item.repo || !item.number || !body.trim())
       return false
     try {
       await forge.features.write!.createComment!(

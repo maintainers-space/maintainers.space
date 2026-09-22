@@ -31,7 +31,7 @@
     "check:quick": "pnpm run lint && pnpm run format:check && pnpm run typecheck && pnpm run test:coverage",
     "check:push": "pnpm run typecheck && pnpm run lint && pnpm run test && pnpm run test:e2e",
     "check:all": "pnpm run check:push && pnpm run build && pnpm run test:lighthouse",
-    "generate-matrix": "tsx scripts/generate-matrix.ts",
+    "generate-matrix": "tsx --tsconfig .nuxt/tsconfig.json scripts/generate-matrix.ts",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "test:watch": "vitest",
