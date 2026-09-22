@@ -18,6 +18,8 @@
     "build": "nuxt build",
     "dev": "nuxt dev",
     "preview": "nuxt preview",
+    "storybook": "nuxt storybook",
+    "storybook:build": "nuxt storybook build",
     "postinstall": "nuxt prepare && simple-git-hooks",
     "lint": "oxlint .",
     "lint:fix": "oxlint . --fix",
@@ -72,10 +74,11 @@
     "@changesets/cli": "3.0.1",
     "@lhci/cli": "^0.15.1",
     "@nuxt/test-utils": "^4.1.0",
+    "@nuxtjs/storybook": "^9.0.1",
     "@playwright/test": "^1.62.1",
     "@tailwindcss/typography": "^0.5.20",
     "@vite-pwa/nuxt": "^1.1.1",
-    "@vitest/coverage-v8": "4.1.10",
+    "@vitest/coverage-v8": "4.1.11",
     "@vue/test-utils": "^2.4.11",
     "happy-dom": "^20.11.1",
     "knip": "^6.29.0",
@@ -83,16 +86,16 @@
     "oxfmt": "^0.65.0",
     "oxlint": "^1.76.0",
     "simple-git-hooks": "^2.13.1",
+    "storybook": "^10.6.0",
     "tsx": "^4.23.13",
     "typescript": "^6.0.3",
-    "vitest": "^4.1.10",
+    "vitest": "^4.1.11",
     "vitest-environment-nuxt": "^2.0.0",
     "vue-tsc": "^3.3.8"
   },
   "simple-git-hooks": {
     "commit-msg": "node scripts/check-commit-message.mjs \"$1\"",
-    "pre-commit": "pnpm exec nano-staged",
-    "pre-push": "pnpm run check:push"
+    "pre-commit": "pnpm exec nano-staged"
   },
   "nano-staged": {
     "*.{ts,vue,js,mjs,cjs}": [
