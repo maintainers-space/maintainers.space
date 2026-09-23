@@ -3,7 +3,10 @@ import { expect, test, type Page } from '@playwright/test'
 
 const API = 'https://api.github.com/repos/octo/timeline'
 
-async function mockPull(page: Page, reviewsStatus = 200): Promise<void> {
+async function mockPull(
+  page: Page,
+  { reviewsStatus = 200, body = 'Adds a unified timeline.' } = {}
+): Promise<void> {
   await page.route('**/api/**', (route) => route.abort())
   await page.route('https://api.github.com/**', (route) =>
     route.fulfill({ status: 404, json: { message: 'Not Found' } })
@@ -26,8 +29,10 @@ async function mockPull(page: Page, reviewsStatus = 200): Promise<void> {
         title: 'Add the timeline',
         state: 'open',
         user: { login: 'octo' },
-        body: 'Adds a unified timeline.',
+        body,
+        labels: [{ name: 'enhancement', color: 'a2eeef' }],
         created_at: '2024-01-01T09:00:00Z',
+        updated_at: '2024-01-06T09:00:00Z',
         head: { ref: 'timeline' },
         base: { ref: 'main' },
         html_url: 'https://github.com/octo/timeline/pull/3'
@@ -159,12 +164,70 @@ test.describe('pull request activity timeline', () => {
   })
 
   test('keeps comments visible and offers a retry when reviews fail', async ({ page }) => {
-    await mockPull(page, 500)
+    await mockPull(page, { reviewsStatus: 500 })
     await page.goto('/github/octo/timeline/pulls/3')
 
     const activity = page.getByRole('region', { name: 'Activity' })
     await expect(activity.getByText("Couldn't load reviews")).toBeVisible()
     await expect(activity.getByRole('listitem')).toHaveCount(2)
     await expect(activity.getByRole('button', { name: 'Retry' })).toBeVisible()
+  })
+})
+
+test.describe('pull request details on wide screens', () => {
+  test.use({ viewport: { width: 1440, height: 700 } })
+
+  test('sticks beside the description and scrolls away after it', async ({ page }) => {
+    const paragraphs = Array.from({ length: 40 }, (_, i) => `Paragraph ${i + 1}.`)
+    await mockPull(page, { body: paragraphs.join('\n\n') })
+    await page.goto('/github/octo/timeline/pulls/3')
+
+    const details = page.getByRole('complementary', { name: 'Pull request details' })
+    await expect(page.getByRole('button', { name: 'Pull request details' })).toBeHidden()
+    const reviewers = details.getByRole('region', { name: 'Reviewers' }).getByRole('listitem')
+    await expect(reviewers).toHaveText([/bob\s*Requested changes/, /carol\s*Approved/])
+    await expect(details.getByRole('region', { name: 'Labels' })).toContainText('enhancement')
+    const about = details.getByRole('region', { name: 'About' })
+    await expect(about).toContainText('Reviews2')
+    await expect(about).toContainText('Approvals1')
+    await expect(about).toContainText('Changes requested1')
+
+    await page.getByText('Paragraph 30.').scrollIntoViewIfNeeded()
+    await expect(details.getByRole('heading', { name: 'Reviewers' })).toBeInViewport()
+
+    await page
+      .getByRole('region', { name: 'Activity' })
+      .getByRole('listitem')
+      .last()
+      .evaluate((el) => el.scrollIntoView({ block: 'end' }))
+    await expect(page.getByText('Paragraph 40.')).not.toBeInViewport()
+    await expect(details.getByRole('heading', { name: 'About' })).not.toBeInViewport()
+
+    const results = await new AxeBuilder({ page })
+      .include('aside[aria-label="Pull request details"]')
+      .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+      .analyze()
+    expect(results.violations).toEqual([])
+  })
+})
+
+test.describe('pull request details on narrow screens', () => {
+  test.use({ viewport: { width: 390, height: 844 } })
+
+  test('opens from an info button and dismisses with Escape', async ({ page }) => {
+    await mockPull(page)
+    await page.goto('/github/octo/timeline/pulls/3')
+
+    await expect(page.getByRole('complementary', { name: 'Pull request details' })).toBeHidden()
+    const trigger = page.getByRole('button', { name: 'Pull request details' })
+    await trigger.click()
+
+    const popover = page.getByRole('dialog')
+    await expect(popover.getByRole('region', { name: 'Reviewers' })).toContainText('carol')
+    await expect(popover.getByRole('region', { name: 'Labels' })).toContainText('enhancement')
+
+    await page.keyboard.press('Escape')
+    await expect(popover).toBeHidden()
+    await expect(trigger).toBeFocused()
   })
 })
