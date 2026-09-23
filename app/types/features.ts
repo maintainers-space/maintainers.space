@@ -91,12 +91,11 @@ export interface PullReader {
     id: string,
     opts?: ForgePageOptions
   ): Promise<Paginated<ForgePullReview>>
-  listPullReviewComments(
+  listPullReviewThreads(
     repo: RepoLocator,
     id: string,
-    reviewId: string,
-    opts?: ForgePageOptions
-  ): Promise<Paginated<ForgePullReviewComment>>
+    opts?: ForgeReadOptions
+  ): Promise<ForgePullReviewComment[]>
   getMergeQueue(
     repo: RepoLocator,
     branch?: string,

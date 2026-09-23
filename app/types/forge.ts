@@ -299,6 +299,7 @@ export interface ForgePullReviewComment extends ForgeComment {
   isOutdated?: boolean
   /** The parent review-comment id when this is a reply. */
   replyToId?: string
+  reviewId?: string
   replies?: ForgePullReviewComment[]
 }
 

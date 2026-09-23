@@ -76,4 +76,12 @@ describe('mapPullReviewComments', () => {
     ])
     expect(threads[0]!.isOutdated).toBe(false)
   })
+
+  it('records the review each comment was submitted with', () => {
+    const threads = mapPullReviewComments([
+      { id: 9, body: 'nit', path: 'c.ts', pull_request_review_id: 42, user: {} },
+      { id: 10, body: 'draft', path: 'c.ts', pull_request_review_id: null, user: {} }
+    ])
+    expect(threads.map((thread) => thread.reviewId)).toEqual(['42', undefined])
+  })
 })

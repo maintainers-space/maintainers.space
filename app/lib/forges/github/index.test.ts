@@ -60,3 +60,32 @@ describe('githubProvider comment pagination', () => {
     expectAllCommentPages()
   })
 })
+
+describe('githubProvider review threads', () => {
+  it('loads every page of pull request review comments and groups replies', async () => {
+    const reviewComments = Array.from({ length: 101 }, (_, index) => ({
+      id: index + 1,
+      body: `Review comment ${index + 1}`,
+      path: 'src/a.ts',
+      pull_request_review_id: 5,
+      in_reply_to_id: index === 100 ? 1 : undefined
+    }))
+    githubFetchMock.mockImplementation(
+      async (url: string, options?: { query?: { page?: number } }) => {
+        if (url.endsWith('/pulls/7/comments')) {
+          return options?.query?.page === 2
+            ? reviewComments.slice(100)
+            : reviewComments.slice(0, 100)
+        }
+        throw new Error(`Unexpected request: ${url}`)
+      }
+    )
+
+    const threads = await githubProvider.features.pullRead!.listPullReviewThreads!(repo, '7')
+
+    expect(threads).toHaveLength(100)
+    expect(threads[0]!.reviewId).toBe('5')
+    expect(threads[0]!.replies?.map((reply) => reply.body)).toEqual(['Review comment 101'])
+    expect(githubFetchMock).toHaveBeenCalledTimes(2)
+  })
+})

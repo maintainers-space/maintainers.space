@@ -22,7 +22,7 @@ Regenerate with `pnpm vitest run -u app/lib/forges/feature-matrix.test.ts`.
 | `pullRead.getPullFiles` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | `pullRead.getPullCommits` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | `pullRead.listPullReviews` | ✅ | — | — | — | — | — |
-| `pullRead.listPullReviewComments` | ✅ | — | — | — | — | — |
+| `pullRead.listPullReviewThreads` | ✅ | — | — | — | — | — |
 | `pullRead.getMergeQueue` | ✅ | ✅ | — | — | — | — |
 | `discussionRead.listDiscussions` | ✅ | — | — | — | — | — |
 | `discussionRead.getDiscussion` | ✅ | — | — | — | — | — |

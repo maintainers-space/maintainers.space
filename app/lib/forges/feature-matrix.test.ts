@@ -21,7 +21,7 @@ const matrixRows = {
     getPullFiles: true,
     getPullCommits: true,
     listPullReviews: true,
-    listPullReviewComments: true,
+    listPullReviewThreads: true,
     getMergeQueue: true
   },
   discussionRead: { listDiscussions: true, getDiscussion: true },

@@ -59,4 +59,31 @@ describe('renderMarkdown', () => {
     expect(alert?.textContent).toContain('Read the guide.')
     expect(alert?.querySelector('strong')?.textContent).toBe('guide')
   })
+
+  it('renders review suggestions as a labelled suggested change', () => {
+    const container = render(renderMarkdown('```suggestion\nconst a = <b>\n```', true))
+    const suggestion = container.querySelector('.markdown-suggestion')
+
+    expect(suggestion?.querySelector('.markdown-suggestion__title')?.textContent).toBe(
+      'Suggested change'
+    )
+    expect(suggestion?.querySelector('code')?.textContent).toBe('const a = <b>\n')
+    expect(suggestion?.querySelector('b')).toBeNull()
+  })
+
+  it('describes an empty suggestion as removing the selected lines', () => {
+    const container = render(renderMarkdown('```suggestion\n```', true))
+
+    expect(container.querySelector('.markdown-suggestion code')).toBeNull()
+    expect(container.querySelector('.markdown-suggestion__empty')?.textContent).toBe(
+      'Removes the selected lines.'
+    )
+  })
+
+  it('keeps other fenced code blocks unchanged', () => {
+    const container = render(renderMarkdown('```ts\nconst a = 1\n```', true))
+
+    expect(container.querySelector('.markdown-suggestion')).toBeNull()
+    expect(container.querySelector('code.language-ts')?.textContent).toBe('const a = 1\n')
+  })
 })
