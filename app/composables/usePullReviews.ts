@@ -10,18 +10,23 @@ interface PullReviewActivity {
   threads: ForgePullReviewComment[]
 }
 
-async function fetchPullReviewActivity(
+export async function fetchPullReviewActivity(
   reader: Pick<PullReader, 'listPullReviews'> & Partial<Pick<PullReader, 'listPullReviewThreads'>>,
   repo: RepoLocator,
   id: string
 ): Promise<PullReviewActivity> {
   const listAllReviews = async (): Promise<ForgePullReview[]> => {
     const reviews: ForgePullReview[] = []
+    const requested = new Set<string>()
     let cursor: string | undefined
     do {
       const page = await reader.listPullReviews(repo, id, { cursor, limit: 100 })
       reviews.push(...page.items)
+      if (cursor) requested.add(cursor)
       cursor = page.cursor
+      if (cursor && requested.has(cursor)) {
+        throw new Error(`Review pagination repeated cursor ${cursor}`)
+      }
     } while (cursor)
     return reviews
   }
