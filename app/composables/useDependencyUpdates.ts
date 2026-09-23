@@ -78,8 +78,8 @@ export function useDependencyUpdates() {
   const activeForges = () =>
     forgeList.filter(
       (f) =>
-        f.features.repoRead!.listAccessibleRepos &&
-        f.features.pullRead!.listPulls &&
+        f.features.repoRead.listAccessibleRepos &&
+        f.features.pullRead?.listPulls &&
         !!getToken(f.id)
     )
 
@@ -97,7 +97,7 @@ export function useDependencyUpdates() {
           active.map(async (forge) => {
             const token = getToken(forge.id)
             try {
-              const repos = await forge.features.repoRead!.listAccessibleRepos!({ token, viewer })
+              const repos = await forge.features.repoRead.listAccessibleRepos!({ token, viewer })
               const listed = await mapLimit(repos, 6, async (repo) => {
                 try {
                   const pulls: ForgePull[] = []
@@ -144,7 +144,7 @@ export function useDependencyUpdates() {
 
   async function approveAndMerge(item: DependencyPr): Promise<void> {
     const forge = getForge(item.repo.provider)
-    if (!forge?.features.write!.mergePull)
+    if (!forge?.features.write?.mergePull)
       throw new Error(`Cannot merge on forge "${item.repo.provider}".`)
     const token = getToken(item.repo.provider)
     const loc: RepoLocator = { owner: item.repo.owner, name: item.repo.name }
@@ -152,7 +152,7 @@ export function useDependencyUpdates() {
     if (!number) throw new Error('This update has no pull request number.')
 
     let expectedHead: string | undefined
-    if (forge.features.pullRead!.getPull) {
+    if (forge.features.pullRead?.getPull) {
       const fresh = await forge.features.pullRead!.getPull!(loc, number, { token })
       if (fresh.state === 'closed' || fresh.state === 'merged' || fresh.state === 'draft')
         throw new Error(`This ${pullsTerm(forge.id)} is no longer open and unlocked.`)
@@ -164,7 +164,7 @@ export function useDependencyUpdates() {
       ...(expectedHead ? { expectedHead } : {})
     }
     let approvalError: unknown
-    if (forge.features.write!.createReview) {
+    if (forge.features.write?.createReview) {
       try {
         await forge.features.write!.createReview!(loc, number, input, { token })
       } catch (e) {

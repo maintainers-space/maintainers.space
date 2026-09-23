@@ -561,4 +561,4 @@ export interface ForgeMyWork {
   assignedIssues: ForgeIssue[]
 }
 
-export type { ForgeProvider, ForgeFeatureMatrix } from './features'
+export type { ForgeProvider } from './features'

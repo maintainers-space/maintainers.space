@@ -170,8 +170,8 @@ async function seedRepo(r: RepoRef, force = false): Promise<void> {
   const repo = await runRequest<ForgeRepo>(
     metaKey,
     (): Promise<ForgeRepo> => {
-      if (f.features.repoRead!.getRepo) return f.features.repoRead!.getRepo!(r.owner, r.name)
-      return f.features.repoRead!.getOverview!(r.owner, r.name).then((ov) => ov?.repo)
+      if (f.features.repoRead.getRepo) return f.features.repoRead.getRepo!(r.owner, r.name)
+      return f.features.repoRead.getOverview(r.owner, r.name).then((ov) => ov?.repo)
     },
     force
   )
@@ -202,7 +202,7 @@ async function prefetchRepoHealthFiles(
   health: Awaited<ReturnType<typeof loadRepoCode>>['health'],
   force = false
 ): Promise<void> {
-  if (!f.features.codeRead!.getBlob) return
+  if (!f.features.codeRead?.getBlob) return
   for (const file of health) {
     if (runExhausted()) return
     try {
@@ -226,7 +226,7 @@ function itemListFetchers(
 ): Array<[string, () => Promise<unknown>]> {
   const lists: Array<[string, () => Promise<unknown>]> = []
   // Seed every state the live pages request, so each filter has an offline copy.
-  if (f.features.issueRead!.listIssues) {
+  if (f.features.issueRead?.listIssues) {
     lists.push([
       `issues:${prefix}:open`,
       () => f.features.issueRead!.listIssues!(locator, { token, state: 'open', limit: 30 })
@@ -236,7 +236,7 @@ function itemListFetchers(
       () => f.features.issueRead!.listIssues!(locator, { token, state: 'closed', limit: 30 })
     ])
   }
-  if (f.features.pullRead!.listPulls) {
+  if (f.features.pullRead?.listPulls) {
     lists.push([
       `pulls:${prefix}:open`,
       () => f.features.pullRead!.listPulls!(locator, { token, state: 'open', limit: 30 })
@@ -250,12 +250,12 @@ function itemListFetchers(
       () => f.features.pullRead!.listPulls!(locator, { token, state: 'merged', limit: 30 })
     ])
   }
-  if (f.features.discussionRead!.listDiscussions)
+  if (f.features.discussionRead?.listDiscussions)
     lists.push([
       `discussions:${prefix}:${token ? 'auth' : 'anon'}`,
       () => f.features.discussionRead!.listDiscussions!(locator, { token, limit: 30 })
     ])
-  if (f.features.actionRead!.listActionRuns)
+  if (f.features.actionRead?.listActionRuns)
     lists.push([
       `actions:${prefix}`,
       () => f.features.actionRead!.listActionRuns!(locator, { limit: 30 })
@@ -273,16 +273,16 @@ function detailFetcher(
   const [kind, , , , rawId] = key.split(':')
   if (!rawId) return undefined
   const itemId = rawId as string
-  if (kind === 'issue' && f.features.issueRead!.getIssue) {
-    const getIssue = f.features.issueRead!.getIssue
+  if (kind === 'issue' && f.features.issueRead?.getIssue) {
+    const getIssue = f.features.issueRead.getIssue
     return () => getIssue(locator, itemId, { token })
   }
-  if (kind === 'pull' && f.features.pullRead!.getPull) {
-    const getPull = f.features.pullRead!.getPull
+  if (kind === 'pull' && f.features.pullRead?.getPull) {
+    const getPull = f.features.pullRead.getPull
     return () => getPull(locator, itemId, { token })
   }
-  if (kind === 'discussion' && f.features.discussionRead!.getDiscussion) {
-    const getDiscussion = f.features.discussionRead!.getDiscussion
+  if (kind === 'discussion' && f.features.discussionRead?.getDiscussion) {
+    const getDiscussion = f.features.discussionRead.getDiscussion
     return () => getDiscussion(locator, itemId, { token })
   }
   return undefined
@@ -335,7 +335,7 @@ async function prefetchRepoCommits(
   defaultBranch: string,
   force = false
 ): Promise<void> {
-  if (!f.features.commitRead!.listCommits || runExhausted()) return
+  if (!f.features.commitRead?.listCommits || runExhausted()) return
   try {
     await runRequest(
       `commits:${prefix}:${defaultBranch}`,

@@ -34,7 +34,7 @@ const { data, pending, error, refresh } = useLiveAsyncData<Awaited<
 
 async function loadDoc(path: string): Promise<string> {
   const f = forge.value
-  if (!f?.features.codeRead!.getBlob) return ''
+  if (!f?.features.codeRead?.getBlob) return ''
   const key = `blob:${provider.value}:${owner.value}:${name.value}:${defaultBranch.value}:${path}`
   const persist = !meta.value?.isPrivate
   if (!persist) invalidate(key)

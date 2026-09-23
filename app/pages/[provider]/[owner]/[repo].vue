@@ -18,9 +18,9 @@ const {
     const f = getForge(provider.value)
     if (!f)
       throw createError({ statusCode: 404, statusMessage: `Unknown provider "${provider.value}"` })
-    if (f.features.repoRead!.getRepo)
-      return await f.features.repoRead!.getRepo!(owner.value, name.value)
-    const ov = await f.features.repoRead!.getOverview!(owner.value, name.value)
+    if (f.features.repoRead.getRepo)
+      return await f.features.repoRead.getRepo!(owner.value, name.value)
+    const ov = await f.features.repoRead.getOverview(owner.value, name.value)
     return ov?.repo
   },
   { lazy: true, watch: [provider, owner, name], default: () => null }
@@ -135,7 +135,7 @@ const tabs = computed(() => {
       disabled: unavailableOffline('code')
     }
   ]
-  if (caps.value?.issueRead && features.value!.issues !== false)
+  if (caps.value?.issueRead && features.value?.issues !== false)
     items.push({
       label: 'Issues',
       icon: tabIcon('issues', 'i-lucide-circle-dot'),
@@ -143,7 +143,7 @@ const tabs = computed(() => {
       active: startsWith('issues'),
       disabled: unavailableOffline('issues')
     })
-  if (caps.value?.pullRead && features.value!.pulls !== false)
+  if (caps.value?.pullRead && features.value?.pulls !== false)
     items.push({
       label: pullsTerm(provider.value, { plural: true, capitalize: true }),
       icon: tabIcon('pulls', 'i-lucide-git-pull-request'),
@@ -159,7 +159,7 @@ const tabs = computed(() => {
       active: startsWith('actions'),
       disabled: unavailableOffline('actions')
     })
-  if (caps.value?.discussionRead && features.value!.discussions !== false)
+  if (caps.value?.discussionRead && features.value?.discussions !== false)
     items.push({
       label: 'Discussions',
       icon: tabIcon('discussions', 'i-lucide-messages-square'),

@@ -219,9 +219,9 @@ export function useSearch() {
         }
         const owner = plan.owner!
         const token = getToken(pid)
-        if (types.includes('repos') && forge.features.repoRead!.listRepos) {
+        if (types.includes('repos') && forge.features.repoRead.listRepos) {
           tasks.push(
-            forge.features.repoRead!.listRepos!(owner, { token })
+            forge.features.repoRead.listRepos!(owner, { token })
               .then((repos) => {
                 if (myToken !== runToken) return
                 const matched = repos.filter((r) =>
@@ -234,7 +234,7 @@ export function useSearch() {
               })
           )
         }
-        if (types.includes('issues') && plan.repoName && forge.features.issueRead!.listIssues) {
+        if (types.includes('issues') && plan.repoName && forge.features.issueRead?.listIssues) {
           const locator = { owner, name: plan.repoName }
           tasks.push(
             forge.features.issueRead!.listIssues!(locator, { token, limit: 50 })
@@ -286,7 +286,7 @@ export function useSearch() {
         noCache: opts?.noCache
       }
 
-      if (types.includes('repos') && forge.features.search!.searchRepos) {
+      if (types.includes('repos') && forge.features.search?.searchRepos) {
         tasks.push(
           forge.features.search!.searchRepos!(queryText, base)
             .then((r) => {
@@ -300,7 +300,7 @@ export function useSearch() {
             })
         )
       }
-      if (types.includes('issues') && forge.features.search!.searchIssues) {
+      if (types.includes('issues') && forge.features.search?.searchIssues) {
         tasks.push(
           forge.features.search!.searchIssues!(queryText, base)
             .then((r) => {
@@ -314,7 +314,7 @@ export function useSearch() {
             })
         )
       }
-      if (types.includes('users') && forge.features.search!.searchUsers) {
+      if (types.includes('users') && forge.features.search?.searchUsers) {
         tasks.push(
           forge.features.search!.searchUsers!(queryText, base)
             .then((r) => {
@@ -328,7 +328,7 @@ export function useSearch() {
             })
         )
       }
-      if (types.includes('code') && forge.features.search!.searchCode) {
+      if (types.includes('code') && forge.features.search?.searchCode) {
         if (!base.token) {
           noteSet.add(
             `Add a ${forge.label} token in Settings → Access tokens to enable code search.`
@@ -348,7 +348,7 @@ export function useSearch() {
           )
         }
       }
-      if (types.includes('discussions') && forge.features.search!.searchDiscussions) {
+      if (types.includes('discussions') && forge.features.search?.searchDiscussions) {
         if (!base.token) {
           noteSet.add(
             `Add a ${forge.label} token in Settings → Access tokens to search Discussions.`

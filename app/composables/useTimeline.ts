@@ -93,7 +93,7 @@ export function useTimeline() {
     if (!loaded.value) await refresh()
     const jobs: Promise<ForgeContribution[]>[] = []
     for (const forge of forgeList) {
-      if (!forge.features.activityRead!.listUserEvents) continue
+      if (!forge.features.activityRead?.listUserEvents) continue
       if (forge.id === 'tangled') {
         const self = tangledSelf()
         if (self)
@@ -125,7 +125,7 @@ export function useTimeline() {
     if (!loaded.value) await refresh()
     const buckets = await Promise.all(
       forgeList.map(async (forge) => {
-        if (!forge.features.activityRead!.listUserEvents) return [] as ForgeContribution[]
+        if (!forge.features.activityRead?.listUserEvents) return [] as ForgeContribution[]
 
         if (forge.id === 'tangled') {
           const self = did.value
@@ -142,7 +142,7 @@ export function useTimeline() {
         }
 
         const token = getToken(forge.id)
-        if (!token || !forge.features.activityRead!.listFollowing) return [] as ForgeContribution[]
+        if (!token || !forge.features.activityRead?.listFollowing) return [] as ForgeContribution[]
         const users = await forge.features.activityRead!.listFollowing!({
           token,
           limit: 100

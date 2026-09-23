@@ -75,7 +75,7 @@ export function describeForgeError(
   if (raw && GITHUB_OAUTH_RESTRICTION.test(raw)) {
     const link =
       locator?.provider && locator?.owner && locator?.name
-        ? `/settings/accounts?pat=${locator.provider}:${locator.owner}/${locator.name}`
+        ? `/settings/accounts?${new URLSearchParams({ pat: `${locator.provider}:${locator.owner}/${locator.name}` })}`
         : '/settings/accounts'
 
     return {

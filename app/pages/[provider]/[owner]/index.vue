@@ -11,10 +11,10 @@ const { data, pending, error, refresh } = useLiveAsyncData(
   () => `owner-repos:${provider.value}:${owner.value}`,
   async () => {
     const f = getForge(provider.value)
-    if (!f?.features.repoRead!.listRepos) {
+    if (!f?.features.repoRead.listRepos) {
       throw createError({ statusCode: 404, statusMessage: `Unknown provider "${provider.value}"` })
     }
-    return await f.features.repoRead!.listRepos!(owner.value)
+    return await f.features.repoRead.listRepos!(owner.value)
   },
   { lazy: true, watch: [provider, owner] }
 )

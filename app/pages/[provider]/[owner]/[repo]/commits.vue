@@ -13,7 +13,7 @@ const done = ref(false)
 
 async function loadMore(reset = false): Promise<void> {
   const f = forge.value
-  if (loading.value || !f?.features.commitRead!.listCommits) return
+  if (loading.value || !f?.features.commitRead?.listCommits) return
   loading.value = true
   error.value = null
   try {

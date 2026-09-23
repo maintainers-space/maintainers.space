@@ -188,8 +188,14 @@ export interface ActivityReader {
   listFollowing(opts?: ForgePageOptions): Promise<ForgeUser[]>
 }
 
+/**
+ * What a forge supports, grouped by area. An absent group (or method) means the forge does not
+ * support it, so consumers must feature-detect with optional chaining (`features.write?.setStar`)
+ * rather than assert presence.
+ */
 export interface ForgeFeatureMatrix {
-  repoRead?: Partial<RepoReader>
+  /** Every forge can at least resolve a repository overview; other readers are optional. */
+  repoRead: Partial<RepoReader> & Pick<RepoReader, 'getOverview'>
   codeRead?: Partial<CodeReader>
   commitRead?: Partial<CommitReader>
   issueRead?: Partial<IssueReader>

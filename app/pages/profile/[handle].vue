@@ -125,16 +125,16 @@ const { data: repos, pending: reposPending } = useLiveAsyncData(
     const tangled = getForge('tangled')
     const jobs: Promise<ForgeRepo[]>[] = []
 
-    if (tangled?.features.repoRead!.listRepos) {
-      jobs.push(tangled.features.repoRead!.listRepos!(handle.value).catch(() => [] as ForgeRepo[]))
+    if (tangled?.features.repoRead.listRepos) {
+      jobs.push(tangled.features.repoRead.listRepos!(handle.value).catch(() => [] as ForgeRepo[]))
     }
     for (const [providerId, logins] of Object.entries(providerLogins.value)) {
       const forge = getForge(providerId)
-      if (!forge?.features.repoRead!.listRepos) continue
+      if (!forge?.features.repoRead.listRepos) continue
       const token = getToken(providerId)
       for (const login of logins) {
         jobs.push(
-          forge.features.repoRead!.listRepos!(login, { token }).catch(() => [] as ForgeRepo[])
+          forge.features.repoRead.listRepos!(login, { token }).catch(() => [] as ForgeRepo[])
         )
       }
     }
@@ -156,7 +156,7 @@ const { data: activity, pending: activityPending } = useLiveAsyncData(
     for (const [providerId, logins] of Object.entries(providerLogins.value)) {
       const forge = getForge(providerId)
       const primary = logins[0]
-      if (!forge?.features.search!.searchIssues || !primary) continue
+      if (!forge?.features.search?.searchIssues || !primary) continue
       const token = getToken(providerId)
       const opts = { token, sort: 'updated' as const, order: 'desc' as const, limit: 8 }
       authoredJobs.push(

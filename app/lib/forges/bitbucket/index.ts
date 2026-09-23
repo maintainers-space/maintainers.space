@@ -160,7 +160,7 @@ export const bitbucketProvider: ForgeProvider = {
         )
       },
       async getOverview(owner, repo, opts) {
-        const meta = await bitbucketProvider.features.repoRead!.getRepo!(owner, repo, opts)
+        const meta = await bitbucketProvider.features.repoRead.getRepo!(owner, repo, opts)
         const entries = await getRootTree(owner, repo, meta.defaultBranch, opts).catch(
           () => [] as ForgeTreeEntry[]
         )

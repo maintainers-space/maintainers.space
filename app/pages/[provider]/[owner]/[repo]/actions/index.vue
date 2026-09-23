@@ -14,7 +14,7 @@ const error = ref<string | null>(null)
 
 async function load(): Promise<void> {
   const f = forge.value
-  if (!f?.features.actionRead!.listActionRuns) return
+  if (!f?.features.actionRead?.listActionRuns) return
   loading.value = true
   error.value = null
   try {

@@ -30,9 +30,10 @@ function load(): void {
 export function useForgeTokens() {
   load()
 
+  /** The repo-scoped override for `repoFullName` when one exists, else the provider-wide token. */
   function get(provider: ForgeId, repoFullName?: string): string | undefined {
-    const key = repoFullName ? `${provider}:${repoFullName}` : provider
-    return _tokens.value[key] || undefined
+    const override = repoFullName ? _tokens.value[`${provider}:${repoFullName}`] : undefined
+    return override || _tokens.value[provider] || undefined
   }
 
   function set(provider: ForgeId, token: string, repoFullName?: string): void {

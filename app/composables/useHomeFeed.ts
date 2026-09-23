@@ -38,7 +38,7 @@ export function useHomeFeed() {
   const workForges = () =>
     forgeList.filter(
       (f) =>
-        f.features.activityRead!.listMyWork &&
+        f.features.activityRead?.listMyWork &&
         (f.id === 'tangled' ? !!tangledSelf() : !!getToken(f.id))
     )
   const connected = computed(() => workForges().length > 0)

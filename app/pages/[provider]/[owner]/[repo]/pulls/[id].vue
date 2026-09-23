@@ -36,7 +36,7 @@ watch(
 const { data, pending, error, refresh } = useLiveAsyncData<ForgePullDetail | null>(
   () => itemKey.value,
   async () => {
-    if (!forge.value?.features.pullRead!.getPull) return null
+    if (!forge.value?.features.pullRead?.getPull) return null
     return await forge.value.features.pullRead!.getPull!(locator.value, id.value)
   },
   { lazy: true, watch: [() => route.fullPath] }
@@ -45,7 +45,7 @@ const { data, pending, error, refresh } = useLiveAsyncData<ForgePullDetail | nul
 const { get: getToken } = useForgeTokens()
 const toast = useToast()
 const canWrite = computed(
-  () => !!getToken(provider.value) && !!forge.value?.features.write!.createComment
+  () => !!getToken(provider.value) && !!forge.value?.features.write?.createComment
 )
 
 const tab = useRouteTab('tab', ['conversation', 'commits', 'files'] as const, 'conversation')
@@ -89,7 +89,7 @@ watch(
 
 async function ensureFiles(): Promise<void> {
   const currentForge = forge.value
-  if (files.value || filesLoading.value || !currentForge?.features.pullRead!.getPullFiles) return
+  if (files.value || filesLoading.value || !currentForge?.features.pullRead?.getPullFiles) return
   const generation = requestGeneration
   const currentKey = itemKey.value
   const currentLocator = locator.value
@@ -117,7 +117,7 @@ async function ensureFiles(): Promise<void> {
 
 async function ensureCommits(): Promise<void> {
   const currentForge = forge.value
-  if (commits.value || commitsLoading.value || !currentForge?.features.pullRead!.getPullCommits)
+  if (commits.value || commitsLoading.value || !currentForge?.features.pullRead?.getPullCommits)
     return
   const generation = requestGeneration
   const currentKey = itemKey.value
@@ -173,7 +173,7 @@ async function ensureReviews(): Promise<void> {
   if (
     reviewsLoading.value ||
     (reviewsLoaded.value && !reviewsCursor.value) ||
-    !currentForge?.features.pullRead!.listPullReviews
+    !currentForge?.features.pullRead?.listPullReviews
   ) {
     return
   }
@@ -241,7 +241,7 @@ async function ensureReviewComments(reviewId: string): Promise<void> {
   if (
     state.loading ||
     (state.initialized && !state.cursor) ||
-    !currentForge?.features.pullRead!.listPullReviewComments
+    !currentForge?.features.pullRead?.listPullReviewComments
   ) {
     return
   }
@@ -345,14 +345,24 @@ const postingComment = ref(false)
 const reviewDraft = ref('')
 const reviewSubmitting = ref<'' | 'APPROVE' | 'REQUEST_CHANGES' | 'COMMENT'>('')
 const canReplyToReviewThreads = computed(
-  () => !!getToken(provider.value) && !!forge.value?.features.write!.createPullReviewReply
+  () => !!getToken(provider.value) && !!forge.value?.features.write?.createPullReviewReply
 )
 
+// Writes prefer a repo-scoped token when the user added one to bypass org OAuth restrictions.
+const writeOpts = () => ({
+  token: getToken(provider.value, `${locator.value.owner}/${locator.value.name}`)
+})
+
 async function submitComment(): Promise<void> {
-  if (!forge.value?.features.write!.createComment || !commentDraft.value.trim()) return
+  if (!forge.value?.features.write?.createComment || !commentDraft.value.trim()) return
   postingComment.value = true
   try {
-    await forge.value.features.write!.createComment!(locator.value, id.value, commentDraft.value)
+    await forge.value.features.write!.createComment!(
+      locator.value,
+      id.value,
+      commentDraft.value,
+      writeOpts()
+    )
     commentDraft.value = ''
     toast.add({ title: 'Comment posted', color: 'success', icon: 'i-lucide-check' })
     await refresh()
@@ -375,13 +385,18 @@ async function submitComment(): Promise<void> {
 }
 
 async function submitReview(event: 'APPROVE' | 'REQUEST_CHANGES' | 'COMMENT'): Promise<void> {
-  if (!forge.value?.features.write!.createReview) return
+  if (!forge.value?.features.write?.createReview) return
   reviewSubmitting.value = event
   try {
-    await forge.value.features.write!.createReview!(locator.value, id.value, {
-      event,
-      body: reviewDraft.value || undefined
-    })
+    await forge.value.features.write!.createReview!(
+      locator.value,
+      id.value,
+      {
+        event,
+        body: reviewDraft.value || undefined
+      },
+      writeOpts()
+    )
     reviewDraft.value = ''
     toast.add({ title: 'Review submitted', color: 'success', icon: 'i-lucide-check' })
     await refresh()
@@ -405,12 +420,17 @@ async function submitReview(event: 'APPROVE' | 'REQUEST_CHANGES' | 'COMMENT'): P
 }
 
 async function onDiffComment(payload: { path: string; line: number; body: string }): Promise<void> {
-  if (!forge.value?.features.write!.createReview) return
+  if (!forge.value?.features.write?.createReview) return
   try {
-    await forge.value.features.write!.createReview!(locator.value, id.value, {
-      event: 'COMMENT',
-      comments: [{ path: payload.path, line: payload.line, body: payload.body }]
-    })
+    await forge.value.features.write!.createReview!(
+      locator.value,
+      id.value,
+      {
+        event: 'COMMENT',
+        comments: [{ path: payload.path, line: payload.line, body: payload.body }]
+      },
+      writeOpts()
+    )
     toast.add({ title: 'Comment added to the diff', color: 'success', icon: 'i-lucide-check' })
     resetReviews()
   } catch (e) {
@@ -436,13 +456,14 @@ async function replyToReviewThread(
   commentId: string,
   body: string
 ): Promise<boolean> {
-  if (!forge.value?.features.write!.createPullReviewReply || !body.trim()) return false
+  if (!forge.value?.features.write?.createPullReviewReply || !body.trim()) return false
   try {
     const reply = await forge.value.features.write!.createPullReviewReply!(
       locator.value,
       id.value,
       commentId,
-      body
+      body,
+      writeOpts()
     )
     const review = reviews.value.find((item) => item.id === reviewId)
     if (review) appendReviewComments(review, [reply])
@@ -530,7 +551,7 @@ async function replyToReviewThread(
           :thread-id="data.id"
         />
         <PullReviewList
-          v-if="forge?.features.pullRead!.listPullReviews"
+          v-if="forge?.features.pullRead?.listPullReviews"
           :reviews="reviews"
           :has-more="reviewsHaveMore"
           :loading="reviewsLoading"

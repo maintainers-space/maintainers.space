@@ -30,7 +30,7 @@ const filtered = computed(() => {
 
 async function load(): Promise<void> {
   const f = forge.value
-  if (!f?.features.pullRead!.listPulls) return
+  if (!f?.features.pullRead?.listPulls) return
   loading.value = true
   error.value = null
   try {
@@ -56,7 +56,7 @@ onMounted(load)
 async function loadMergeQueue(): Promise<void> {
   mergeQueue.value = null
   const f = forge.value
-  if (!f?.features.pullRead!.getMergeQueue) return
+  if (!f?.features.pullRead?.getMergeQueue) return
   if (!meta.value) return
   try {
     mergeQueue.value = await f.features.pullRead!.getMergeQueue!(

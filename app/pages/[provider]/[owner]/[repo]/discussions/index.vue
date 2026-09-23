@@ -35,7 +35,7 @@ const filtered = computed(() => {
 
 async function load(): Promise<void> {
   const f = forge.value
-  if (!f?.features.discussionRead!.listDiscussions) return
+  if (!f?.features.discussionRead?.listDiscussions) return
   const token = getToken(provider.value)
   needsToken.value = !token
   loading.value = true

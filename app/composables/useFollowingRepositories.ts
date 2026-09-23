@@ -58,11 +58,11 @@ export function useFollowingRepositories() {
 
     await Promise.all(
       forgeList.map(async (forge) => {
-        if (!forge.features.repoRead!.listFollowedRepos) return
+        if (!forge.features.repoRead.listFollowedRepos) return
         const token = getToken(forge.id)
         if (!token) return
         try {
-          collected.push(...(await forge.features.repoRead!.listFollowedRepos!({ token })))
+          collected.push(...(await forge.features.repoRead.listFollowedRepos!({ token })))
         } catch {
           /* A single unavailable forge must not hide results from the others. */
         }
@@ -70,12 +70,12 @@ export function useFollowingRepositories() {
     )
 
     const tangled = getForge('tangled')
-    if (tangled?.features.repoRead!.listRepos && did.value) {
+    if (tangled?.features.repoRead.listRepos && did.value) {
       try {
         const follows = await fetchFollows(did.value, 60)
         const chunks = await mapLimit(follows.slice(0, 12), 3, async (follow) => {
           try {
-            const list = await tangled.features.repoRead!.listRepos!(follow.did)
+            const list = await tangled.features.repoRead.listRepos!(follow.did)
             const owner =
               follow.handle && !follow.handle.endsWith('.invalid') ? follow.handle : follow.did
             return list.map((repo) => withOwner(repo, owner))
