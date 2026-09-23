@@ -16,10 +16,7 @@ const config: KnipConfig = {
     '@fontsource-variable/geist',
     '@fontsource-variable/geist-mono',
     // CLI-only: invoked by `nuxt typecheck`, never imported.
-    'vue-tsc',
-    // Storybook: consumed via nuxt cli, not imported in app code.
-    '@nuxtjs/storybook',
-    'storybook'
+    'vue-tsc'
   ]
 }
 
