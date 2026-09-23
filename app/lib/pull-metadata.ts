@@ -9,18 +9,12 @@ export interface PullReviewer {
 }
 
 export interface PullReviewSummary {
-  /** Submitted reviews by anyone but the author, including comment-only ones. */
   reviewCount: number
   approvals: number
   changesRequested: number
   reviewers: PullReviewer[]
 }
 
-/**
- * Reduces reviews (in submission order) to each reviewer's standing decision.
- * Like GitHub, a later comment-only review keeps an earlier approval or change
- * request, and the pull author's replies to their own pull are not reviews.
- */
 export function summarizePullReviews(
   reviews: ForgePullReview[],
   authorLogin?: string

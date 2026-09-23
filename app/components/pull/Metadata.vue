@@ -9,7 +9,6 @@ const props = defineProps<{
   reviewsStatus: 'idle' | 'pending' | 'success' | 'error'
 }>()
 
-// The rail and the narrow-screen popover can both be mounted at once.
 const id = useId()
 
 const summary = computed(() => summarizePullReviews(props.reviews, props.pull.author?.login))

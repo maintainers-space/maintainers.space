@@ -355,10 +355,6 @@ async function replyToReviewThread(commentId: string, body: string): Promise<boo
 
       <UTabs v-model="tab" :items="tabItems" :content="false" size="sm" />
 
-      <!-- The details rail shares only the description's grid row and adds no
-           height to it (contain: size), so it sticks while the description
-           scrolls past and then leaves with it. When the description is shorter
-           than the rail, the rail simply overflows beside the activity below. -->
       <div v-show="tab === 'conversation'" class="@container">
         <div
           class="flex flex-col gap-4 @3xl:grid @3xl:grid-cols-[minmax(0,1fr)_16rem] @3xl:gap-x-6"
