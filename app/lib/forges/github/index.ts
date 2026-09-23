@@ -551,21 +551,12 @@ export const githubProvider: ForgeProvider = {
     }
   },
 
-  async listPullReviewComments(repo, id, reviewId, opts) {
-    const limit = Math.min(opts?.limit ?? 30, GH_MAX_PER_PAGE)
-    const page = opts?.cursor ? Number(opts.cursor) : 1
-    const data = await $fetch<GhPullReviewCommentResponse[]>(
-      `${API}/repos/${repo.owner}/${repo.name}/pulls/${id}/reviews/${reviewId}/comments`,
-      {
-        headers: ghHeaders(opts),
-        query: { per_page: limit, page },
-        signal: opts?.signal
-      }
+  async listPullReviewThreads(repo, id, opts) {
+    const data = await ghFetchAllPages<GhPullReviewCommentResponse>(
+      `/repos/${repo.owner}/${repo.name}/pulls/${id}/comments`,
+      opts
     )
-    return {
-      items: mapPullReviewComments(data),
-      cursor: data.length === limit ? String(page + 1) : undefined
-    }
+    return mapPullReviewComments(data)
   },
 
   async getMergeQueue(repo, branch, opts): Promise<ForgeMergeQueueStats | null> {

@@ -297,7 +297,9 @@ export function mapPullReviewComments(
       // outdated when a line comment lost its anchor in the latest diff.
       isOutdated:
         comment.subject_type !== 'file' && comment.line == null && comment.position == null,
-      replyToId: comment.in_reply_to_id ? String(comment.in_reply_to_id) : undefined
+      replyToId: comment.in_reply_to_id ? String(comment.in_reply_to_id) : undefined,
+      reviewId:
+        comment.pull_request_review_id != null ? String(comment.pull_request_review_id) : undefined
     }
     byId.set(mapped.id, mapped)
   }

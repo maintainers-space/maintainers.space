@@ -299,6 +299,7 @@ export interface ForgePullReviewComment extends ForgeComment {
   isOutdated?: boolean
   /** The parent review-comment id when this is a reply. */
   replyToId?: string
+  reviewId?: string
   replies?: ForgePullReviewComment[]
 }
 
@@ -669,13 +670,11 @@ export interface ForgeProvider {
     id: string,
     opts?: ForgePageOptions
   ) => Promise<Paginated<ForgePullReview>>
-  /** Inline comments and suggestions belonging to one review. */
-  listPullReviewComments?: (
+  listPullReviewThreads?: (
     repo: RepoLocator,
     id: string,
-    reviewId: string,
-    opts?: ForgePageOptions
-  ) => Promise<Paginated<ForgePullReviewComment>>
+    opts?: ForgeReadOptions
+  ) => Promise<ForgePullReviewComment[]>
   /** Merge queue (GitHub) / merge train (GitLab) state for a branch (default branch if omitted). */
   getMergeQueue?: (
     repo: RepoLocator,
