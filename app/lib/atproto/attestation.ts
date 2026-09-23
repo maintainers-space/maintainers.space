@@ -22,15 +22,15 @@ export interface AttestableAccount {
 /**
  * Origins whose attestations we trust. An attacker could set any `attestedBy`
  * and self-sign, so we only trust our own deployment's issuer(s): the current
- * origin plus the configured public app URL, if any.
+ * origin plus the configured public site URL, if any.
  */
 function trustedIssuers(): Set<string> {
   const set = new Set<string>()
   if (import.meta.client) set.add(window.location.origin)
-  const appUrl = useRuntimeConfig().public.appUrl
-  if (appUrl) {
+  const siteUrl = useRuntimeConfig().public.siteUrl
+  if (siteUrl) {
     try {
-      set.add(new URL(appUrl).origin)
+      set.add(new URL(siteUrl).origin)
     } catch {
       /* ignore malformed config */
     }

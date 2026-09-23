@@ -76,6 +76,8 @@
     "@playwright/test": "^1.62.1",
     "@storybook/vue3-vite": "^10.6.0",
     "@tailwindcss/typography": "^0.5.20",
+    "@takumi-rs/core": "^2.5.4",
+    "@takumi-rs/helpers": "^2.5.4",
     "@vite-pwa/nuxt": "^1.1.1",
     "@vitejs/plugin-vue": "^6.0.8",
     "@vitest/coverage-v8": "4.1.11",
