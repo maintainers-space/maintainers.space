@@ -27,14 +27,14 @@ const filtered = computed(() => {
 
 async function load(): Promise<void> {
   const f = forge.value
-  if (!f?.listIssues) return
+  if (!f?.features.issueRead?.listIssues) return
   loading.value = true
   error.value = null
   try {
     const key = `issues:${provider.value}:${owner.value}:${name.value}:${state.value}`
     const page = await cached(
       key,
-      () => f.listIssues!(locator.value, { state: state.value, limit: 30 }),
+      () => f.features.issueRead!.listIssues!(locator.value, { state: state.value, limit: 30 }),
       {
         ttl: TTL.SHORT
       }

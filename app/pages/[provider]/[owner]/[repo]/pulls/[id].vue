@@ -30,15 +30,17 @@ watch(
 const { data, pending, error, refresh } = useLiveAsyncData<ForgePullDetail | null>(
   () => itemKey.value,
   async () => {
-    if (!forge.value?.getPull) return null
-    return await forge.value.getPull(locator.value, id.value)
+    if (!forge.value?.features.pullRead?.getPull) return null
+    return await forge.value.features.pullRead!.getPull!(locator.value, id.value)
   },
   { lazy: true, watch: [() => route.fullPath] }
 )
 
 const { get: getToken } = useForgeTokens()
 const toast = useToast()
-const canWrite = computed(() => !!getToken(provider.value) && !!forge.value?.createComment)
+const canWrite = computed(
+  () => !!getToken(provider.value) && !!forge.value?.features.write?.createComment
+)
 
 const tab = useRouteTab('tab', ['conversation', 'commits', 'files'] as const, 'conversation')
 
@@ -72,7 +74,7 @@ watch(
 
 async function ensureFiles(): Promise<void> {
   const currentForge = forge.value
-  if (files.value || filesLoading.value || !currentForge?.getPullFiles) return
+  if (files.value || filesLoading.value || !currentForge?.features.pullRead?.getPullFiles) return
   const generation = requestGeneration
   const currentKey = itemKey.value
   const currentLocator = locator.value
@@ -82,10 +84,14 @@ async function ensureFiles(): Promise<void> {
   try {
     const key = `${currentKey}:files`
     if (!persist) invalidate(key)
-    const result = await cached(key, () => currentForge.getPullFiles!(currentLocator, currentId), {
-      ttl: TTL.MEDIUM,
-      persist
-    })
+    const result = await cached(
+      key,
+      () => currentForge.features.pullRead!.getPullFiles!(currentLocator, currentId),
+      {
+        ttl: TTL.MEDIUM,
+        persist
+      }
+    )
     if (generation === requestGeneration) files.value = result
   } catch {
     if (generation === requestGeneration) files.value = []
@@ -96,7 +102,8 @@ async function ensureFiles(): Promise<void> {
 
 async function ensureCommits(): Promise<void> {
   const currentForge = forge.value
-  if (commits.value || commitsLoading.value || !currentForge?.getPullCommits) return
+  if (commits.value || commitsLoading.value || !currentForge?.features.pullRead?.getPullCommits)
+    return
   const generation = requestGeneration
   const currentKey = itemKey.value
   const currentLocator = locator.value
@@ -108,7 +115,7 @@ async function ensureCommits(): Promise<void> {
     if (!persist) invalidate(key)
     const result = await cached(
       key,
-      () => currentForge.getPullCommits!(currentLocator, currentId),
+      () => currentForge.features.pullRead!.getPullCommits!(currentLocator, currentId),
       {
         ttl: TTL.MEDIUM,
         persist
@@ -169,19 +176,33 @@ const postingComment = ref(false)
 const reviewDraft = ref('')
 const reviewSubmitting = ref<'' | 'APPROVE' | 'REQUEST_CHANGES' | 'COMMENT'>('')
 const canReplyToReviewThreads = computed(
-  () => !!getToken(provider.value) && !!forge.value?.createPullReviewReply
+  () => !!getToken(provider.value) && !!forge.value?.features.write?.createPullReviewReply
 )
 
+// Writes prefer a repo-scoped token when the user added one to bypass org OAuth restrictions.
+const writeOpts = () => ({
+  token: getToken(provider.value, `${locator.value.owner}/${locator.value.name}`)
+})
+
 async function submitComment(): Promise<void> {
-  if (!forge.value?.createComment || !commentDraft.value.trim()) return
+  if (!forge.value?.features.write?.createComment || !commentDraft.value.trim()) return
   postingComment.value = true
   try {
-    await forge.value.createComment(locator.value, id.value, commentDraft.value)
+    await forge.value.features.write!.createComment!(
+      locator.value,
+      id.value,
+      commentDraft.value,
+      writeOpts()
+    )
     commentDraft.value = ''
     toast.add({ title: 'Comment posted', color: 'success', icon: 'i-lucide-check' })
     await refresh()
   } catch (e) {
-    const hint = describeForgeError(e)
+    const hint = describeForgeError(e, {
+      provider: unref(provider),
+      owner: unref(locator)?.owner,
+      name: unref(locator)?.name
+    })
     toast.add({
       title: 'Could not post comment',
       description: hint.description,
@@ -195,19 +216,28 @@ async function submitComment(): Promise<void> {
 }
 
 async function submitReview(event: 'APPROVE' | 'REQUEST_CHANGES' | 'COMMENT'): Promise<void> {
-  if (!forge.value?.createReview) return
+  if (!forge.value?.features.write?.createReview) return
   reviewSubmitting.value = event
   try {
-    await forge.value.createReview(locator.value, id.value, {
-      event,
-      body: reviewDraft.value || undefined
-    })
+    await forge.value.features.write!.createReview!(
+      locator.value,
+      id.value,
+      {
+        event,
+        body: reviewDraft.value || undefined
+      },
+      writeOpts()
+    )
     reviewDraft.value = ''
     toast.add({ title: 'Review submitted', color: 'success', icon: 'i-lucide-check' })
     await refresh()
     void reloadReviews()
   } catch (e) {
-    const hint = describeForgeError(e)
+    const hint = describeForgeError(e, {
+      provider: unref(provider),
+      owner: unref(locator)?.owner,
+      name: unref(locator)?.name
+    })
     toast.add({
       title: 'Could not submit review',
       description: hint.description,
@@ -221,16 +251,25 @@ async function submitReview(event: 'APPROVE' | 'REQUEST_CHANGES' | 'COMMENT'): P
 }
 
 async function onDiffComment(payload: { path: string; line: number; body: string }): Promise<void> {
-  if (!forge.value?.createReview) return
+  if (!forge.value?.features.write?.createReview) return
   try {
-    await forge.value.createReview(locator.value, id.value, {
-      event: 'COMMENT',
-      comments: [{ path: payload.path, line: payload.line, body: payload.body }]
-    })
+    await forge.value.features.write!.createReview!(
+      locator.value,
+      id.value,
+      {
+        event: 'COMMENT',
+        comments: [{ path: payload.path, line: payload.line, body: payload.body }]
+      },
+      writeOpts()
+    )
     toast.add({ title: 'Comment added to the diff', color: 'success', icon: 'i-lucide-check' })
     void reloadReviews()
   } catch (e) {
-    const hint = describeForgeError(e)
+    const hint = describeForgeError(e, {
+      provider: unref(provider),
+      owner: unref(locator)?.owner,
+      name: unref(locator)?.name
+    })
     toast.add({
       title: 'Could not add comment',
       description: hint.description,
@@ -244,14 +283,24 @@ async function onDiffComment(payload: { path: string; line: number; body: string
 // Returns whether the reply posted, so the thread keeps its draft open and
 // editable when a network error means the user's text shouldn't be lost.
 async function replyToReviewThread(commentId: string, body: string): Promise<boolean> {
-  if (!forge.value?.createPullReviewReply || !body.trim()) return false
+  if (!forge.value?.features.write?.createPullReviewReply || !body.trim()) return false
   try {
-    const reply = await forge.value.createPullReviewReply(locator.value, id.value, commentId, body)
+    const reply = await forge.value.features.write!.createPullReviewReply!(
+      locator.value,
+      id.value,
+      commentId,
+      body,
+      writeOpts()
+    )
     addReviewReply(reply)
     toast.add({ title: 'Reply posted', color: 'success', icon: 'i-lucide-check' })
     return true
   } catch (e) {
-    const hint = describeForgeError(e)
+    const hint = describeForgeError(e, {
+      provider: unref(provider),
+      owner: unref(locator)?.owner,
+      name: unref(locator)?.name
+    })
     toast.add({
       title: 'Could not post reply',
       description: hint.description,

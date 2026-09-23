@@ -30,14 +30,14 @@ const filtered = computed(() => {
 
 async function load(): Promise<void> {
   const f = forge.value
-  if (!f?.listPulls) return
+  if (!f?.features.pullRead?.listPulls) return
   loading.value = true
   error.value = null
   try {
     const key = `pulls:${provider.value}:${owner.value}:${name.value}:${state.value}`
     const page = await cached(
       key,
-      () => f.listPulls!(locator.value, { state: state.value, limit: 30 }),
+      () => f.features.pullRead!.listPulls!(locator.value, { state: state.value, limit: 30 }),
       {
         ttl: TTL.SHORT
       }
@@ -56,10 +56,13 @@ onMounted(load)
 async function loadMergeQueue(): Promise<void> {
   mergeQueue.value = null
   const f = forge.value
-  if (!f?.getMergeQueue || !f.capabilities.mergeQueue) return
+  if (!f?.features.pullRead?.getMergeQueue) return
   if (!meta.value) return
   try {
-    mergeQueue.value = await f.getMergeQueue(locator.value, meta.value.defaultBranch || undefined)
+    mergeQueue.value = await f.features.pullRead!.getMergeQueue!(
+      locator.value,
+      meta.value.defaultBranch || undefined
+    )
   } catch {
     mergeQueue.value = null
   }

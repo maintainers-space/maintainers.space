@@ -51,6 +51,12 @@ export default defineNuxtConfig({
     attestation: {
       privateKey: ''
     },
+    // Deployment-preview origins allowed to receive OAuth tokens after signing in
+    // through production (server-only). Comma-separated `https://` origins; a
+    // leading `*.` matches subdomains. Set NUXT_OAUTH_PREVIEW_ORIGINS. Empty => off.
+    oauth: {
+      previewOrigins: ''
+    },
     public: {
       // OAuth client id for production; overridden per-env. Empty => localhost dev client.
       atprotoClientId: '',

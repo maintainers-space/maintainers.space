@@ -43,7 +43,7 @@ describe('githubProvider comment pagination', () => {
   it('loads every page of issue comments', async () => {
     mockFetch('/issues/7')
 
-    const issue = await githubProvider.getIssue!(repo, '7')
+    const issue = await githubProvider.features.issueRead!.getIssue!(repo, '7')
 
     expect(issue.comments).toHaveLength(101)
     expect(issue.comments.at(-1)?.body).toBe('Comment 101')
@@ -53,7 +53,7 @@ describe('githubProvider comment pagination', () => {
   it('loads every page of pull request comments', async () => {
     mockFetch('/pulls/7')
 
-    const pull = await githubProvider.getPull!(repo, '7')
+    const pull = await githubProvider.features.pullRead!.getPull!(repo, '7')
 
     expect(pull.comments).toHaveLength(101)
     expect(pull.comments.at(-1)?.body).toBe('Comment 101')
@@ -81,7 +81,7 @@ describe('githubProvider review threads', () => {
       }
     )
 
-    const threads = await githubProvider.listPullReviewThreads!(repo, '7')
+    const threads = await githubProvider.features.pullRead!.listPullReviewThreads!(repo, '7')
 
     expect(threads).toHaveLength(100)
     expect(threads[0]!.reviewId).toBe('5')

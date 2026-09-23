@@ -14,14 +14,18 @@ const error = ref<string | null>(null)
 
 async function load(): Promise<void> {
   const f = forge.value
-  if (!f?.listActionRuns) return
+  if (!f?.features.actionRead?.listActionRuns) return
   loading.value = true
   error.value = null
   try {
     const key = `actions:${provider.value}:${owner.value}:${name.value}`
-    const page = await cached(key, () => f.listActionRuns!(locator.value, { limit: 30 }), {
-      ttl: TTL.SHORT
-    })
+    const page = await cached(
+      key,
+      () => f.features.actionRead!.listActionRuns!(locator.value, { limit: 30 }),
+      {
+        ttl: TTL.SHORT
+      }
+    )
     items.value = page.items
   } catch (e) {
     error.value = e instanceof Error ? e.message : 'Failed to load workflow runs.'

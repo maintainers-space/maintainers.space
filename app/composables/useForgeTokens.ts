@@ -30,23 +30,27 @@ function load(): void {
 export function useForgeTokens() {
   load()
 
-  function get(provider: ForgeId): string | undefined {
-    return _tokens.value[provider] || undefined
+  /** The repo-scoped override for `repoFullName` when one exists, else the provider-wide token. */
+  function get(provider: ForgeId, repoFullName?: string): string | undefined {
+    const override = repoFullName ? _tokens.value[`${provider}:${repoFullName}`] : undefined
+    return override || _tokens.value[provider] || undefined
   }
 
-  function set(provider: ForgeId, token: string): void {
+  function set(provider: ForgeId, token: string, repoFullName?: string): void {
     const clean = token.trim()
-    if (!clean) return remove(provider)
-    localStorage.setItem(STORAGE_PREFIX + provider, clean)
-    _tokens.value = { ..._tokens.value, [provider]: clean }
+    const key = repoFullName ? `${provider}:${repoFullName}` : provider
+    if (!clean) return remove(provider, repoFullName)
+    localStorage.setItem(STORAGE_PREFIX + key, clean)
+    _tokens.value = { ..._tokens.value, [key]: clean }
     syncForgeTokens(_tokens.value)
   }
 
-  function remove(provider: ForgeId): void {
-    localStorage.removeItem(STORAGE_PREFIX + provider)
+  function remove(provider: ForgeId, repoFullName?: string): void {
+    const key = repoFullName ? `${provider}:${repoFullName}` : provider
+    localStorage.removeItem(STORAGE_PREFIX + key)
     const next = { ..._tokens.value }
     // eslint-disable-next-line @typescript-eslint/no-dynamic-delete
-    delete next[provider]
+    delete next[key]
     _tokens.value = next
     syncForgeTokens(next)
   }

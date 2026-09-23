@@ -18,9 +18,10 @@ const {
     const f = getForge(provider.value)
     if (!f)
       throw createError({ statusCode: 404, statusMessage: `Unknown provider "${provider.value}"` })
-    if (f.getRepo) return await f.getRepo(owner.value, name.value)
-    const ov = await f.getOverview(owner.value, name.value)
-    return ov.repo
+    if (f.features.repoRead.getRepo)
+      return await f.features.repoRead.getRepo!(owner.value, name.value)
+    const ov = await f.features.repoRead.getOverview(owner.value, name.value)
+    return ov?.repo
   },
   { lazy: true, watch: [provider, owner, name], default: () => null }
 )
@@ -55,7 +56,7 @@ watch(
 const base = computed(() =>
   repoPath({ provider: provider.value, owner: owner.value, name: name.value })
 )
-const caps = computed(() => forge.value?.capabilities)
+const caps = computed(() => forge.value?.features)
 const isOnline = useOnline()
 const { get: getToken } = useForgeTokens()
 const sectionAvailability = ref<Record<string, boolean>>({})
@@ -134,7 +135,7 @@ const tabs = computed(() => {
       disabled: unavailableOffline('code')
     }
   ]
-  if (caps.value?.issues && features.value?.issues !== false)
+  if (caps.value?.issueRead && features.value?.issues !== false)
     items.push({
       label: 'Issues',
       icon: tabIcon('issues', 'i-lucide-circle-dot'),
@@ -142,7 +143,7 @@ const tabs = computed(() => {
       active: startsWith('issues'),
       disabled: unavailableOffline('issues')
     })
-  if (caps.value?.pulls && features.value?.pulls !== false)
+  if (caps.value?.pullRead && features.value?.pulls !== false)
     items.push({
       label: pullsTerm(provider.value, { plural: true, capitalize: true }),
       icon: tabIcon('pulls', 'i-lucide-git-pull-request'),
@@ -150,7 +151,7 @@ const tabs = computed(() => {
       active: startsWith('pulls'),
       disabled: unavailableOffline('pulls')
     })
-  if (caps.value?.actions)
+  if (caps.value?.actionRead)
     items.push({
       label: 'Actions',
       icon: tabIcon('actions', 'i-lucide-play'),
@@ -158,7 +159,7 @@ const tabs = computed(() => {
       active: startsWith('actions'),
       disabled: unavailableOffline('actions')
     })
-  if (caps.value?.discussions && features.value?.discussions !== false)
+  if (caps.value?.discussionRead && features.value?.discussions !== false)
     items.push({
       label: 'Discussions',
       icon: tabIcon('discussions', 'i-lucide-messages-square'),

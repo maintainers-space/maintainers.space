@@ -1,10 +1,6 @@
 import type { Ref } from 'vue'
-import type {
-  ForgeProvider,
-  ForgePullReview,
-  ForgePullReviewComment,
-  RepoLocator
-} from '~/types/forge'
+import type { ForgePullReview, ForgePullReviewComment, RepoLocator } from '~/types/forge'
+import type { PullReader } from '~/types/features'
 import { useRepoContext } from '~/composables/useRepoContext'
 import { cached, invalidate, TTL } from '~/lib/cache'
 import { findReviewComment } from '~/lib/pull-timeline'
@@ -15,7 +11,7 @@ interface PullReviewActivity {
 }
 
 async function fetchPullReviewActivity(
-  forge: ForgeProvider,
+  reader: Pick<PullReader, 'listPullReviews'> & Partial<Pick<PullReader, 'listPullReviewThreads'>>,
   repo: RepoLocator,
   id: string
 ): Promise<PullReviewActivity> {
@@ -23,7 +19,7 @@ async function fetchPullReviewActivity(
     const reviews: ForgePullReview[] = []
     let cursor: string | undefined
     do {
-      const page = await forge.listPullReviews!(repo, id, { cursor, limit: 100 })
+      const page = await reader.listPullReviews(repo, id, { cursor, limit: 100 })
       reviews.push(...page.items)
       cursor = page.cursor
     } while (cursor)
@@ -31,7 +27,7 @@ async function fetchPullReviewActivity(
   }
   const [reviews, threads] = await Promise.all([
     listAllReviews(),
-    forge.listPullReviewThreads?.(repo, id) ?? []
+    reader.listPullReviewThreads?.(repo, id) ?? []
   ])
   return { reviews, threads }
 }
@@ -41,7 +37,7 @@ export function usePullReviews(itemKey: Ref<string>, id: Ref<string>) {
   const reviews = ref<ForgePullReview[]>([])
   const threads = ref<ForgePullReviewComment[]>([])
   const status = ref<'idle' | 'pending' | 'success' | 'error'>('idle')
-  const supported = computed(() => !!forge.value?.listPullReviews)
+  const supported = computed(() => !!forge.value?.features.pullRead?.listPullReviews)
   let generation = 0
 
   const cacheKey = () => `${itemKey.value}:review-activity`
@@ -60,9 +56,9 @@ export function usePullReviews(itemKey: Ref<string>, id: Ref<string>) {
   }
 
   async function load(force = false): Promise<void> {
-    const currentForge = forge.value
-    if (!currentForge?.listPullReviews || status.value === 'pending' || status.value === 'success')
-      return
+    const reader = forge.value?.features.pullRead
+    const listPullReviews = reader?.listPullReviews
+    if (!listPullReviews || status.value === 'pending' || status.value === 'success') return
     const run = ++generation
     const currentLocator = locator.value
     const currentId = id.value
@@ -73,7 +69,12 @@ export function usePullReviews(itemKey: Ref<string>, id: Ref<string>) {
       if (!persist) invalidate(key)
       const activity = await cached(
         key,
-        () => fetchPullReviewActivity(currentForge, currentLocator, currentId),
+        () =>
+          fetchPullReviewActivity(
+            { listPullReviews, listPullReviewThreads: reader.listPullReviewThreads },
+            currentLocator,
+            currentId
+          ),
         {
           ttl: TTL.MEDIUM,
           persist,

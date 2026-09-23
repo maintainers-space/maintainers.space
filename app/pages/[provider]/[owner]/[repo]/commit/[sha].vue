@@ -9,8 +9,8 @@ const sha = computed(() => String(route.params.sha))
 const { data, pending, error } = useLiveAsyncData<ForgeCommitDetail | null>(
   () => `commit:${provider.value}:${owner.value}:${name.value}:${sha.value}`,
   async () => {
-    if (!forge.value?.getCommit) return null
-    return await forge.value.getCommit(locator.value, sha.value)
+    if (!forge.value?.features.commitRead?.getCommit) return null
+    return await forge.value.features.commitRead!.getCommit!(locator.value, sha.value)
   },
   { lazy: true, watch: [() => route.fullPath] }
 )

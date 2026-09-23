@@ -33,7 +33,13 @@ export default defineEventHandler((event) => {
   const rawDid = getQuery(event).did
   const did = typeof rawDid === 'string' && rawDid.startsWith('did:') ? rawDid : ''
 
-  setCookie(event, `oauth_${providerId}`, JSON.stringify({ state, returnTo, did }), {
+  // The callback sends the token to this origin, so only allowlisted previews qualify.
+  const previewOrigin = allowedPreviewOrigin(
+    getQuery(event).preview,
+    useRuntimeConfig(event).oauth.previewOrigins
+  )
+
+  setCookie(event, `oauth_${providerId}`, JSON.stringify({ state, returnTo, did, previewOrigin }), {
     httpOnly: true,
     sameSite: 'lax',
     secure: origin.startsWith('https:'),

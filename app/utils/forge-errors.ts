@@ -64,17 +64,25 @@ function minutesUntilReset(headers: Headers | undefined): number | undefined {
  * A 429 (or a 403 whose body says "rate limit") gets an actionable message with
  * the reset ETA when the forge's response headers provide one.
  */
-export function describeForgeError(e: unknown): ForgeErrorHint {
+export function describeForgeError(
+  e: unknown,
+  locator?: { provider?: string; owner?: string; name?: string }
+): ForgeErrorHint {
   const raw =
     (e as { data?: { message?: string }; message?: string })?.data?.message ??
     (e as { message?: string })?.message
 
   if (raw && GITHUB_OAUTH_RESTRICTION.test(raw)) {
+    const link =
+      locator?.provider && locator?.owner && locator?.name
+        ? `/settings/accounts?${new URLSearchParams({ pat: `${locator.provider}:${locator.owner}/${locator.name}` })}`
+        : '/settings/accounts'
+
     return {
       description:
-        "This organization restricts third-party apps and hasn't approved maintainers.space yet. Ask an organization owner to approve it, or request access yourself.",
-      to: 'https://github.com/settings/connections/applications',
-      linkLabel: 'Open GitHub settings'
+        'This organization restricts third-party OAuth apps. To bypass this, you can provide a fine-grained Personal Access Token scoped strictly to this repository.',
+      to: link,
+      linkLabel: 'Provide a repo-scoped token'
     }
   }
 
