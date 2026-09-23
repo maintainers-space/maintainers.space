@@ -37,7 +37,9 @@ export function useHomeFeed() {
   /** Forges that can produce a "my work" feed and have a connected identity. */
   const workForges = () =>
     forgeList.filter(
-      (f) => f.listMyWork && (f.id === 'tangled' ? !!tangledSelf() : !!getToken(f.id))
+      (f) =>
+        f.features.activityRead?.listMyWork &&
+        (f.id === 'tangled' ? !!tangledSelf() : !!getToken(f.id))
     )
   const connected = computed(() => workForges().length > 0)
 
@@ -111,7 +113,7 @@ export function useHomeFeed() {
         const empty: ForgeMyWork = { authoredPulls: [], reviewRequests: [], assignedIssues: [] }
         await Promise.all(
           active.map((f) =>
-            f.listMyWork!(
+            f.features.activityRead!.listMyWork!(
               f.id === 'tangled' ? { viewer: tangledSelf() } : { token: getToken(f.id) }
             )
               .then((work) => {

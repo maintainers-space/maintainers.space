@@ -24,8 +24,8 @@ const parentDir = computed(() => {
 const { data, pending, error } = useLiveAsyncData<ForgeBlob | null>(
   () => `blob:${provider.value}:${owner.value}:${name.value}:${gitRef.value}:${path.value}`,
   async () => {
-    if (!forge.value?.getBlob) return null
-    return await forge.value.getBlob(locator.value, gitRef.value, path.value)
+    if (!forge.value?.features.codeRead?.getBlob) return null
+    return await forge.value.features.codeRead!.getBlob!(locator.value, gitRef.value, path.value)
   },
   { lazy: true, watch: [() => route.fullPath] }
 )

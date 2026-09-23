@@ -23,21 +23,22 @@ export function useRepoContextMenu(repo: MaybeRefOrGetter<ForgeRepo>) {
     const r = toValue(repo)
     const base = repoPath(r)
     const forge = getForge(r.provider)
-    const caps = forge?.capabilities
+    const caps = forge?.features
 
     const nav: ContextMenuItem[] = [
       { label: 'Open repository', icon: 'i-lucide-book-marked', to: base },
       { label: 'View commits', icon: 'i-lucide-history', to: `${base}/commits` }
     ]
-    if (caps?.issues && r.features?.issues !== false)
+    if (caps?.issueRead && r.features?.issues !== false)
       nav.push({ label: 'Issues', icon: 'i-lucide-circle-dot', to: `${base}/issues` })
-    if (caps?.pulls && r.features?.pulls !== false)
+    if (caps?.pullRead && r.features?.pulls !== false)
       nav.push({
         label: pullsTerm(r.provider, { plural: true, capitalize: true }),
         icon: 'i-lucide-git-pull-request',
         to: `${base}/pulls`
       })
-    if (caps?.actions) nav.push({ label: 'Actions', icon: 'i-lucide-play', to: `${base}/actions` })
+    if (caps?.actionRead)
+      nav.push({ label: 'Actions', icon: 'i-lucide-play', to: `${base}/actions` })
 
     const clip: ContextMenuItem[] = [
       {

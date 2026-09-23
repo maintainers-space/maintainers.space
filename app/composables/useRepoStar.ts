@@ -37,9 +37,9 @@ export function useRepoStar(repo: Ref<ForgeRepo | null>) {
   const canStar = computed(() => {
     const r = repo.value
     const f = forge.value
-    if (!r || !f?.capabilities.star) return false
+    if (!r || !f?.features.write?.setStar) return false
     if (isTangled.value) return !!did.value && !!r.ref?.repoDid
-    return !!getToken(r.provider as ForgeId) && !!f.setStar
+    return !!getToken(r.provider as ForgeId) && !!f.features.write?.setStar
   })
 
   function repoDid(): string | undefined {
@@ -78,8 +78,8 @@ export function useRepoStar(repo: Ref<ForgeRepo | null>) {
     try {
       if (isTangled.value) {
         await loadTangled()
-      } else if (locator.value && forge.value?.isStarred) {
-        starred.value = await forge.value.isStarred(locator.value, {
+      } else if (locator.value && forge.value?.features.activityRead?.isStarred) {
+        starred.value = await forge.value.features.activityRead!.isStarred!(locator.value, {
           token: getToken(r.provider as ForgeId)
         })
       }
@@ -136,8 +136,8 @@ export function useRepoStar(repo: Ref<ForgeRepo | null>) {
     try {
       if (isTangled.value) {
         await toggleTangled(next)
-      } else if (locator.value && forge.value?.setStar) {
-        const res = await forge.value.setStar(locator.value, next, {
+      } else if (locator.value && forge.value?.features.write?.setStar) {
+        const res = await forge.value.features.write!.setStar!(locator.value, next, {
           token: getToken(r.provider as ForgeId)
         })
         starred.value = res.starred

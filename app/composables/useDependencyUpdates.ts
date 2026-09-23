@@ -76,7 +76,12 @@ export function useDependencyUpdates() {
   const isPending = (item: DependencyPr): boolean => pending.value.includes(prKey(item))
 
   const activeForges = () =>
-    forgeList.filter((f) => f.listAccessibleRepos && f.listPulls && !!getToken(f.id))
+    forgeList.filter(
+      (f) =>
+        f.features.repoRead.listAccessibleRepos &&
+        f.features.pullRead?.listPulls &&
+        !!getToken(f.id)
+    )
 
   async function load(force = false): Promise<void> {
     loading.value = true
@@ -92,13 +97,13 @@ export function useDependencyUpdates() {
           active.map(async (forge) => {
             const token = getToken(forge.id)
             try {
-              const repos = await forge.listAccessibleRepos!({ token, viewer })
+              const repos = await forge.features.repoRead.listAccessibleRepos!({ token, viewer })
               const listed = await mapLimit(repos, 6, async (repo) => {
                 try {
                   const pulls: ForgePull[] = []
                   let cursor: string | undefined
                   do {
-                    const page = await forge.listPulls!(
+                    const page = await forge.features.pullRead!.listPulls!(
                       { owner: repo.owner, name: repo.name, ref: repo.ref },
                       { state: 'open', limit: 50, cursor, token, viewer }
                     )
@@ -139,15 +144,16 @@ export function useDependencyUpdates() {
 
   async function approveAndMerge(item: DependencyPr): Promise<void> {
     const forge = getForge(item.repo.provider)
-    if (!forge?.mergePull) throw new Error(`Cannot merge on forge "${item.repo.provider}".`)
+    if (!forge?.features.write?.mergePull)
+      throw new Error(`Cannot merge on forge "${item.repo.provider}".`)
     const token = getToken(item.repo.provider)
     const loc: RepoLocator = { owner: item.repo.owner, name: item.repo.name }
     const number = String(item.pull.number ?? item.pull.id)
     if (!number) throw new Error('This update has no pull request number.')
 
     let expectedHead: string | undefined
-    if (forge.getPull) {
-      const fresh = await forge.getPull(loc, number, { token })
+    if (forge.features.pullRead?.getPull) {
+      const fresh = await forge.features.pullRead!.getPull!(loc, number, { token })
       if (fresh.state === 'closed' || fresh.state === 'merged' || fresh.state === 'draft')
         throw new Error(`This ${pullsTerm(forge.id)} is no longer open and unlocked.`)
       expectedHead = fresh.headSha ?? undefined
@@ -158,16 +164,16 @@ export function useDependencyUpdates() {
       ...(expectedHead ? { expectedHead } : {})
     }
     let approvalError: unknown
-    if (forge.createReview) {
+    if (forge.features.write?.createReview) {
       try {
-        await forge.createReview(loc, number, input, { token })
+        await forge.features.write!.createReview!(loc, number, input, { token })
       } catch (e) {
         const selfApproval = item.repo.provider === 'github' && isGitHubSelfApprovalRejection(e)
         if (!selfApproval) throw e
         approvalError = e
       }
     }
-    const res = await forge.mergePull(loc, number, {
+    const res = await forge.features.write!.mergePull!(loc, number, {
       token,
       ...(expectedHead ? { expectedHead } : {})
     })

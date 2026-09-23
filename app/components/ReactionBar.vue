@@ -25,11 +25,15 @@ const pickerOpen = ref(false)
 
 const canReact = computed(
   () =>
-    !!forge.value?.capabilities.reactions &&
-    !!forge.value.addReaction &&
-    !!forge.value.removeReaction &&
+    !!forge.value?.features.write?.addReaction &&
+    !!forge.value.features.write?.removeReaction &&
     !!getToken(provider.value)
 )
+
+// Prefer a repo-scoped token when the user added one to bypass org OAuth restrictions.
+const writeOpts = () => ({
+  token: getToken(provider.value, `${locator.value.owner}/${locator.value.name}`)
+})
 
 function summaryFor(kind: ForgeReactionKind): ForgeReactionSummary | undefined {
   return local.value.find((r) => r.kind === kind)
@@ -42,12 +46,22 @@ async function toggle(kind: ForgeReactionKind): Promise<void> {
   pending.value[kind] = true
   try {
     if (reacted && existing) {
-      await forge.value!.removeReaction!(locator.value, props.target, kind)
+      await forge.value!.features.write!.removeReaction!(
+        locator.value,
+        props.target,
+        kind,
+        writeOpts()
+      )
       existing.count = Math.max(0, existing.count - 1)
       existing.viewerReacted = false
       local.value = local.value.filter((r) => r.count > 0)
     } else {
-      await forge.value!.addReaction!(locator.value, props.target, kind)
+      await forge.value!.features.write!.addReaction!(
+        locator.value,
+        props.target,
+        kind,
+        writeOpts()
+      )
       if (existing) {
         existing.count += 1
         existing.viewerReacted = true
@@ -56,7 +70,11 @@ async function toggle(kind: ForgeReactionKind): Promise<void> {
       }
     }
   } catch (e) {
-    const hint = describeForgeError(e)
+    const hint = describeForgeError(e, {
+      provider: unref(provider),
+      owner: unref(locator)?.owner,
+      name: unref(locator)?.name
+    })
     toast.add({
       title: 'Could not update reaction',
       description: hint.description,

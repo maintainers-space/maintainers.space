@@ -1,19 +1,56 @@
 <script setup lang="ts">
-import { forgeList } from '~/lib/forges'
+import { forgeList, isForgeId, type KnownForgeId } from '~/lib/forges'
 import type { ForgeAccount } from '~/composables/useForgeAccounts'
 
 const { accounts, pending, loaded, refresh, unlink } = useForgeAccounts()
 const { did } = useAuth()
 const { isVerified, check } = useForgeAttestations()
 const toast = useToast()
+const { tokens, set: setForgeToken, remove: removeForgeToken } = useForgeTokens()
+
+const repoOverrides = computed(() => {
+  return Object.keys(tokens.value)
+    .filter((key) => key.includes(':'))
+    .map((key) => {
+      const [provider, ...rest] = key.split(':')
+      return { key, provider: provider as string, repoFullName: rest.join(':') }
+    })
+})
 
 // Tangled signs in via the atproto identity itself, not this OAuth flow.
 const oauthForges = forgeList.filter((f) => f.id !== 'tangled')
 const authByProvider = new Map(oauthForges.map((f) => [f.id, useForgeAuth(f.id)]))
 
+const route = useRoute()
+const router = useRouter()
+
+const isPatModalOpen = ref(false)
+const patTarget = ref<{ provider: KnownForgeId; repoFullName: string } | null>(null)
+const patInput = ref('')
+
+/** `?pat=<provider>:<owner>/<repo>` comes from a forge error hint, but any link can set it. */
+function parsePatTarget(raw: unknown): { provider: KnownForgeId; repoFullName: string } | null {
+  if (typeof raw !== 'string') return null
+  const match = raw.match(/^([a-z]+):([\w.-]+\/[\w.-]+)$/)
+  if (!match?.[1] || !match[2] || !isForgeId(match[1])) return null
+  return { provider: match[1], repoFullName: match[2] }
+}
+
 onMounted(() => {
   if (!loaded.value) refresh()
+
+  patTarget.value = parsePatTarget(route.query.pat)
+  isPatModalOpen.value = !!patTarget.value
 })
+
+function savePat() {
+  if (!patInput.value.trim() || !patTarget.value) return
+  setForgeToken(patTarget.value.provider, patInput.value, patTarget.value.repoFullName)
+  toast.add({ title: 'Repository token saved', color: 'success' })
+  isPatModalOpen.value = false
+  patInput.value = ''
+  router.replace({ query: {} })
+}
 
 // Verify attestations whenever the account list or identity changes.
 watch(
@@ -182,5 +219,103 @@ async function onUnlink(account: ForgeAccount) {
         />
       </div>
     </div>
+
+    <div class="space-y-2 mt-8">
+      <h3 class="text-sm font-medium text-muted">Repository Overrides (Hybrid Auth)</h3>
+      <p class="text-xs text-muted mb-4">
+        Fine-grained Personal Access Tokens used to bypass organization restrictions on specific
+        repositories. These are stored securely on this device and are only used for the specified
+        repository.
+      </p>
+
+      <UCard>
+        <div v-if="repoOverrides.length === 0" class="text-sm text-muted text-center py-4">
+          No repository overrides configured. You will be prompted to add one if you encounter a 403
+          error on an organization-restricted repository.
+        </div>
+        <div v-else class="space-y-2">
+          <div
+            v-for="override in repoOverrides"
+            :key="override.key"
+            class="flex items-center justify-between py-2 border-b border-default last:border-0"
+          >
+            <div>
+              <p class="font-medium text-sm text-default">{{ override.repoFullName }}</p>
+              <p class="text-xs text-muted">
+                {{ forgeList.find((f) => f.id === override.provider)?.label ?? override.provider }}
+                Token
+              </p>
+            </div>
+            <UButton
+              label="Remove"
+              icon="i-lucide-trash-2"
+              color="error"
+              variant="ghost"
+              size="xs"
+              @click="removeForgeToken(override.provider, override.repoFullName)"
+            />
+          </div>
+        </div>
+      </UCard>
+    </div>
+
+    <UModal
+      v-model:open="isPatModalOpen"
+      title="Provide repository token"
+      :description="`Your organization restricts third-party OAuth apps from modifying ${patTarget?.repoFullName ?? 'this repository'}.`"
+    >
+      <template #body>
+        <div class="space-y-4">
+          <p class="text-sm text-muted">
+            To bypass this, you can provide a fine-grained Personal Access Token scoped strictly to
+            this repository.
+          </p>
+
+          <ol
+            v-if="patTarget?.provider === 'github'"
+            class="bg-elevated p-3 rounded-md text-sm text-muted space-y-2 list-decimal list-inside"
+          >
+            <li>
+              Go to
+              <a
+                href="https://github.com/settings/personal-access-tokens/new"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="text-primary hover:underline"
+                >GitHub fine-grained tokens</a
+              >
+            </li>
+            <li>
+              Set <strong>Repository access</strong> to "Only select repositories" and select
+              <code>{{ patTarget.repoFullName.split('/')[1] }}</code>
+            </li>
+            <li>Grant <strong>Read & Write</strong> access for Issues and Pull Requests</li>
+          </ol>
+
+          <UFormField label="Personal access token">
+            <UInput
+              v-model="patInput"
+              placeholder="github_pat_..."
+              type="password"
+              autocomplete="off"
+              icon="i-lucide-key"
+              class="w-full"
+            />
+          </UFormField>
+        </div>
+      </template>
+
+      <template #footer>
+        <div class="flex w-full justify-end gap-2">
+          <UButton color="neutral" variant="soft" label="Cancel" @click="isPatModalOpen = false" />
+          <UButton
+            color="primary"
+            label="Save token"
+            :disabled="!patInput.trim()"
+            @click="savePat"
+          />
+        </div>
+      </template>
+    </UModal>
   </div>
 </template>

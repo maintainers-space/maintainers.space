@@ -29,8 +29,8 @@ watch(
 const { data, pending, error } = useLiveAsyncData<ForgeIssueDetail | null>(
   () => itemKey.value,
   async () => {
-    if (!forge.value?.getIssue) return null
-    return await forge.value.getIssue(locator.value, id.value)
+    if (!forge.value?.features.issueRead?.getIssue) return null
+    return await forge.value.features.issueRead!.getIssue!(locator.value, id.value)
   },
   { lazy: true, watch: [() => route.fullPath] }
 )

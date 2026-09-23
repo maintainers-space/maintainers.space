@@ -125,15 +125,17 @@ const { data: repos, pending: reposPending } = useLiveAsyncData(
     const tangled = getForge('tangled')
     const jobs: Promise<ForgeRepo[]>[] = []
 
-    if (tangled?.listRepos) {
-      jobs.push(tangled.listRepos(handle.value).catch(() => [] as ForgeRepo[]))
+    if (tangled?.features.repoRead.listRepos) {
+      jobs.push(tangled.features.repoRead.listRepos!(handle.value).catch(() => [] as ForgeRepo[]))
     }
     for (const [providerId, logins] of Object.entries(providerLogins.value)) {
       const forge = getForge(providerId)
-      if (!forge?.listRepos) continue
+      if (!forge?.features.repoRead.listRepos) continue
       const token = getToken(providerId)
       for (const login of logins) {
-        jobs.push(forge.listRepos(login, { token }).catch(() => [] as ForgeRepo[]))
+        jobs.push(
+          forge.features.repoRead.listRepos!(login, { token }).catch(() => [] as ForgeRepo[])
+        )
       }
     }
     const out = (await Promise.all(jobs)).flat()
@@ -154,18 +156,16 @@ const { data: activity, pending: activityPending } = useLiveAsyncData(
     for (const [providerId, logins] of Object.entries(providerLogins.value)) {
       const forge = getForge(providerId)
       const primary = logins[0]
-      if (!forge?.searchIssues || !primary) continue
+      if (!forge?.features.search?.searchIssues || !primary) continue
       const token = getToken(providerId)
       const opts = { token, sort: 'updated' as const, order: 'desc' as const, limit: 8 }
       authoredJobs.push(
-        forge
-          .searchIssues(`author:${primary}`, opts)
+        forge.features.search!.searchIssues!(`author:${primary}`, opts)
           .then((r) => r.items)
           .catch(() => [] as ForgeIssue[])
       )
       commentedJobs.push(
-        forge
-          .searchIssues(`commenter:${primary} -author:${primary}`, opts)
+        forge.features.search!.searchIssues!(`commenter:${primary} -author:${primary}`, opts)
           .then((r) => r.items)
           .catch(() => [] as ForgeIssue[])
       )

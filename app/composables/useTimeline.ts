@@ -93,12 +93,14 @@ export function useTimeline() {
     if (!loaded.value) await refresh()
     const jobs: Promise<ForgeContribution[]>[] = []
     for (const forge of forgeList) {
-      if (!forge.listUserEvents) continue
+      if (!forge.features.activityRead?.listUserEvents) continue
       if (forge.id === 'tangled') {
         const self = tangledSelf()
         if (self)
           jobs.push(
-            forge.listUserEvents(self, { limit: 100 }).catch(() => [] as ForgeContribution[])
+            forge.features.activityRead!.listUserEvents!(self, { limit: 100 }).catch(
+              () => [] as ForgeContribution[]
+            )
           )
         continue
       }
@@ -106,7 +108,9 @@ export function useTimeline() {
       if (!token) continue
       for (const login of loginsFor(forge.id)) {
         jobs.push(
-          forge.listUserEvents(login, { token, limit: 100 }).catch(() => [] as ForgeContribution[])
+          forge.features.activityRead!.listUserEvents!(login, { token, limit: 100 }).catch(
+            () => [] as ForgeContribution[]
+          )
         )
       }
     }
@@ -121,7 +125,7 @@ export function useTimeline() {
     if (!loaded.value) await refresh()
     const buckets = await Promise.all(
       forgeList.map(async (forge) => {
-        if (!forge.listUserEvents) return [] as ForgeContribution[]
+        if (!forge.features.activityRead?.listUserEvents) return [] as ForgeContribution[]
 
         if (forge.id === 'tangled') {
           const self = did.value
@@ -130,16 +134,21 @@ export function useTimeline() {
           // Bobbin's rate limit is shared across every maintainers.space user on the same
           // proxy, so keep this fan-out modest rather than bursting requests.
           const chunks = await mapLimit(follows.slice(0, 12), 3, (f) =>
-            forge.listUserEvents!(f.did, { limit: 100 }).catch(() => [] as ForgeContribution[])
+            forge.features.activityRead!.listUserEvents!(f.did, { limit: 100 }).catch(
+              () => [] as ForgeContribution[]
+            )
           )
           return chunks.flat()
         }
 
         const token = getToken(forge.id)
-        if (!token || !forge.listFollowing) return [] as ForgeContribution[]
-        const users = await forge.listFollowing({ token, limit: 100 }).catch(() => [])
+        if (!token || !forge.features.activityRead?.listFollowing) return [] as ForgeContribution[]
+        const users = await forge.features.activityRead!.listFollowing!({
+          token,
+          limit: 100
+        }).catch(() => [])
         const chunks = await mapLimit(users.slice(0, 20), 6, (u) =>
-          forge.listUserEvents!(u.login, { token, limit: 100 }).catch(
+          forge.features.activityRead!.listUserEvents!(u.login, { token, limit: 100 }).catch(
             () => [] as ForgeContribution[]
           )
         )

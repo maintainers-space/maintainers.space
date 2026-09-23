@@ -34,14 +34,18 @@ const { data, pending, error, refresh } = useLiveAsyncData<Awaited<
 
 async function loadDoc(path: string): Promise<string> {
   const f = forge.value
-  if (!f?.getBlob) return ''
+  if (!f?.features.codeRead?.getBlob) return ''
   const key = `blob:${provider.value}:${owner.value}:${name.value}:${defaultBranch.value}:${path}`
   const persist = !meta.value?.isPrivate
   if (!persist) invalidate(key)
-  const blob = await cached(key, () => f.getBlob!(locator.value, defaultBranch.value, path), {
-    ttl: TTL.MEDIUM,
-    persist
-  })
+  const blob = await cached(
+    key,
+    () => f.features.codeRead!.getBlob!(locator.value, defaultBranch.value, path),
+    {
+      ttl: TTL.MEDIUM,
+      persist
+    }
+  )
   return blob.isBinary ? '' : blob.content
 }
 </script>
