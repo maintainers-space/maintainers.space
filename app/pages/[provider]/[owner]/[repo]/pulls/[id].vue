@@ -355,52 +355,92 @@ async function replyToReviewThread(commentId: string, body: string): Promise<boo
 
       <UTabs v-model="tab" :items="tabItems" :content="false" size="sm" />
 
-      <div v-show="tab === 'conversation'" class="space-y-4">
-        <article class="overflow-hidden rounded-lg border border-default">
-          <header
-            class="flex items-center gap-2 border-b border-default bg-elevated/40 px-4 py-2 text-sm"
-          >
-            <UserLink :user="data.author" />
-            <span v-if="data.createdAt" class="text-muted"
-              >opened {{ formatRelativeTime(data.createdAt) }}</span
-            >
-          </header>
-          <div class="px-4 py-3">
-            <MarkdownBody :content="data.body ?? ''" empty="No description provided." />
-          </div>
-          <ReactionBar :reactions="data.reactions" :target="{ kind: 'pull', threadId: data.id }" />
-        </article>
-        <PullTimeline
-          :pull-id="data.id"
-          :comments="data.comments"
-          :reviews="reviews"
-          :threads="reviewThreads"
-          :reviews-supported="reviewsSupported"
-          :reviews-status="reviewsStatus"
-          :forge-label="forge?.label ?? provider"
-          :can-reply="canReplyToReviewThreads"
-          :reply="replyToReviewThread"
-          @retry="loadReviews"
+      <div v-show="tab === 'conversation'" class="@container">
+        <div
+          class="flex flex-col gap-4 @3xl:grid @3xl:grid-cols-[minmax(0,1fr)_16rem] @3xl:gap-x-6"
         >
-          <template v-if="canWrite" #composer>
-            <div class="space-y-2">
-              <MarkdownEditor
-                v-model="commentDraft"
-                placeholder="Leave a comment…"
-                @submit="submitComment"
-              />
-              <div class="flex justify-end">
+          <article class="overflow-hidden rounded-lg border border-default @3xl:col-start-1">
+            <header
+              class="flex items-center gap-2 border-b border-default bg-elevated/40 px-4 py-2 text-sm"
+            >
+              <UserLink :user="data.author" />
+              <span v-if="data.createdAt" class="text-muted"
+                >opened {{ formatRelativeTime(data.createdAt) }}</span
+              >
+              <UPopover :content="{ align: 'end' }">
                 <UButton
-                  icon="i-lucide-send"
-                  label="Comment"
-                  :loading="postingComment"
-                  :disabled="!commentDraft.trim()"
-                  @click="submitComment"
+                  icon="i-lucide-info"
+                  color="neutral"
+                  variant="ghost"
+                  size="xs"
+                  square
+                  aria-label="Pull request details"
+                  class="ms-auto @3xl:hidden"
                 />
-              </div>
+                <template #content>
+                  <PullMetadata
+                    :pull="data"
+                    :reviews="reviews"
+                    :reviews-supported="reviewsSupported"
+                    :reviews-status="reviewsStatus"
+                    class="max-h-[min(70vh,32rem)] w-72 overflow-y-auto"
+                  />
+                </template>
+              </UPopover>
+            </header>
+            <div class="px-4 py-3">
+              <MarkdownBody :content="data.body ?? ''" empty="No description provided." />
             </div>
-          </template>
-        </PullTimeline>
+            <ReactionBar
+              :reactions="data.reactions"
+              :target="{ kind: 'pull', threadId: data.id }"
+            />
+          </article>
+          <aside
+            aria-label="Pull request details"
+            class="hidden [contain:size] @3xl:col-start-2 @3xl:row-start-1 @3xl:block"
+          >
+            <PullMetadata
+              :pull="data"
+              :reviews="reviews"
+              :reviews-supported="reviewsSupported"
+              :reviews-status="reviewsStatus"
+              class="sticky top-4 rounded-lg border border-default bg-default"
+            />
+          </aside>
+          <PullTimeline
+            class="@3xl:col-start-1"
+            :pull-id="data.id"
+            :comments="data.comments"
+            :reviews="reviews"
+            :threads="reviewThreads"
+            :reviews-supported="reviewsSupported"
+            :reviews-status="reviewsStatus"
+            :forge-label="forge?.label ?? provider"
+            :can-reply="canReplyToReviewThreads"
+            :reply="replyToReviewThread"
+            @retry="loadReviews"
+          >
+            <template v-if="canWrite" #composer>
+              <div class="space-y-2">
+                <MarkdownEditor
+                  v-model="commentDraft"
+                  placeholder="Leave a comment…"
+                  @submit="submitComment"
+                />
+                <div class="flex justify-end">
+                  <UButton
+                    icon="i-lucide-send"
+                    label="Comment"
+                    :loading="postingComment"
+                    :disabled="!commentDraft.trim()"
+                    @click="submitComment"
+                  />
+                </div>
+              </div>
+            </template>
+          </PullTimeline>
+        </div>
       </div>
 
       <div v-show="tab === 'commits'">
