@@ -156,3 +156,93 @@ test.describe('dependency updates page', () => {
     expect(results.violations).toEqual([])
   })
 })
+
+test.describe('pull request files changed', () => {
+  test('shows a file tree, lazy-loads diffs, and jumps between files', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 900 })
+    const repo = 'https://api.github.com/repos/octo/diffpr'
+    await page.route(repo, (route) =>
+      route.fulfill({
+        json: {
+          owner: { login: 'octo' },
+          name: 'diffpr',
+          full_name: 'octo/diffpr',
+          default_branch: 'main',
+          html_url: 'https://github.com/octo/diffpr',
+          has_issues: true
+        }
+      })
+    )
+    await page.route(`${repo}/pulls/7`, (route) =>
+      route.fulfill({
+        json: {
+          number: 7,
+          title: 'Diff me',
+          state: 'open',
+          merged: false,
+          draft: false,
+          user: { login: 'octo' },
+          body: 'body',
+          head: { ref: 'feature' },
+          base: { ref: 'main' },
+          created_at: '2024-01-01T00:00:00Z',
+          html_url: `${repo}/pull/7`,
+          additions: 130,
+          deletions: 0,
+          changed_files: 2,
+          commits: 2
+        }
+      })
+    )
+    await page.route(
+      /^https:\/\/api\.github\.com\/repos\/octo\/diffpr\/issues\/7\/comments(?:\?.*)?$/,
+      (route) => route.fulfill({ json: [] })
+    )
+    const bigPatch =
+      '@@ -0,0 +1,120 @@\n' +
+      Array.from({ length: 120 }, (_, i) => `+const value${i} = ${i}`).join('\n')
+    await page.route(
+      /^https:\/\/api\.github\.com\/repos\/octo\/diffpr\/pulls\/7\/files(?:\?.*)?$/,
+      (route) =>
+        route.fulfill({
+          json: [
+            {
+              filename: 'src/one.ts',
+              status: 'added',
+              additions: 120,
+              deletions: 0,
+              patch: bigPatch
+            },
+            {
+              filename: 'src/two.ts',
+              status: 'added',
+              additions: 1,
+              deletions: 0,
+              patch: '@@ -0,0 +1,1 @@\n+export const two = 2\n'
+            }
+          ]
+        })
+    )
+    await page.route(
+      /^https:\/\/api\.github\.com\/repos\/octo\/diffpr\/pulls\/7\/commits(?:\?.*)?$/,
+      (route) => route.fulfill({ json: [] })
+    )
+    await page.route(repo + '/pulls/7/reviews', (route) => route.fulfill({ json: [] }))
+
+    await page.goto('/github/octo/diffpr/pulls/7')
+    await page.getByRole('tab', { name: /Files changed/ }).click()
+
+    const tree = page.locator('ul[aria-label="2 changed files"]')
+    await expect(tree).toBeVisible()
+    await expect(tree).toContainText('src/one.ts')
+    await expect(tree).toContainText('src/two.ts')
+
+    // Only the first file's diff is rendered until the second is reached.
+    await expect(page.getByText('const value0 = 0')).toBeVisible()
+    await expect(page.getByText('export const two = 2')).not.toBeVisible()
+
+    // Jumping from the file tree renders and scrolls to the target instantly.
+    await tree.getByText('src/two.ts').click()
+    await expect(page.getByText('export const two = 2')).toBeVisible({ timeout: 10_000 })
+  })
+})
