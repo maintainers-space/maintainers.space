@@ -18,13 +18,16 @@ import {
  * GAP(forges): there is no `repos.listFor(owner)`; search with an owner filter is the closest
  * verb, which forges rate-limit harder and index with a delay.
  */
+/** How many repositories an owner page lists; forges report no total, so a full page reads as "at least". */
+export const OWNER_REPO_LIMIT = 100
+
 export async function listOwnerRepos(provider: ForgeProvider, owner: string): Promise<Repo[]> {
   if (isTangled(provider)) return listTangledRepos(provider, owner)
   const page = await provider.search
     .repos({
       direction: 'desc',
       owner,
-      perPage: 100,
+      perPage: OWNER_REPO_LIMIT,
       sort: 'updated'
     })
     .page()
