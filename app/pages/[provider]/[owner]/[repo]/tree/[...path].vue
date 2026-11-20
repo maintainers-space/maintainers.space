@@ -39,7 +39,7 @@ const { data, pending, error } = useLiveAsyncData<TreeEntry[]>(
       variant="subtle"
       icon="i-lucide-circle-alert"
       title="Could not load directory"
-      :description="error?.message"
+      :description="forgeErrorMessage(error)"
     />
     <ForgeRepoBrowser v-else :entries="data ?? []" :base="base" :git-ref="gitRef" :path="path" />
   </div>

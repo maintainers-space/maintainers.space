@@ -45,7 +45,7 @@ async function ensure(path: string): Promise<void> {
   try {
     cache[path].content = await props.load(path)
   } catch (e) {
-    cache[path].error = e instanceof Error ? e.message : 'Failed to load file.'
+    cache[path].error = forgeErrorMessage(e, 'Failed to load file.')
   } finally {
     cache[path].loading = false
   }

@@ -53,7 +53,7 @@ async function loadMore(reset = false): Promise<void> {
       done.value = !page.cursor || page.items.length === 0
     }
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Failed to load commits.'
+    error.value = forgeErrorMessage(e, 'Failed to load commits.')
   } finally {
     loading.value = false
   }

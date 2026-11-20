@@ -61,10 +61,7 @@ async function loadDoc(path: string): Promise<string> {
       variant="subtle"
       icon="i-lucide-circle-alert"
       title="Could not load files"
-      :description="
-        (error as { message?: string })?.message ||
-        'GitHub may be rate-limiting anonymous requests. Connect your GitHub account in settings to raise the limit.'
-      "
+      :description="forgeErrorMessage(error)"
     >
       <template #actions>
         <UButton color="error" variant="soft" label="Retry" @click="refresh()" />

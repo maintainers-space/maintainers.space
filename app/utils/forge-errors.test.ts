@@ -1,6 +1,6 @@
-import { ForbiddenError, RateLimitedError } from 'forges'
+import { ForbiddenError, ForgeNetworkError, NotFoundError, RateLimitedError } from 'forges'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { describeForgeError, isForgeRateLimit } from './forge-errors'
+import { describeForgeError, forgeErrorMessage, isForgeRateLimit } from './forge-errors'
 
 describe('describeForgeError', () => {
   it('passes through a plain message unchanged', () => {
@@ -50,5 +50,49 @@ describe('describeForgeError', () => {
       expect(isForgeRateLimit(new RateLimitedError('Limited', 429, ''))).toBe(true)
       expect(isForgeRateLimit(new Error('rate limit'))).toBe(false)
     })
+  })
+})
+
+describe('forgeErrorMessage', () => {
+  const notFound = new NotFoundError(
+    'Nothing found at GET http://127.0.0.1:3000/api/tangled/xrpc/sh.tangled.repo.tree?repo=at%3A%2F%2Fdid, or the credential cannot see it',
+    404,
+    ''
+  )
+
+  it('never shows the request URL of a missing resource', () => {
+    const message = forgeErrorMessage(notFound)
+    expect(message).toBe(
+      "This doesn't exist, or it's private and your connected account can't see it."
+    )
+    expect(message).not.toContain('http')
+  })
+
+  it('reads the forge error behind the Nuxt error that useAsyncData reports', () => {
+    const wrapped = Object.assign(new Error(notFound.message), {
+      cause: notFound,
+      statusMessage: notFound.message
+    })
+    expect(forgeErrorMessage(wrapped)).not.toContain('http')
+  })
+
+  it('tells people when the forge could not be reached', () => {
+    const error = new ForgeNetworkError('fetch failed: GET https://api.github.com/repos/a/b')
+    expect(forgeErrorMessage(error)).toBe(
+      "Couldn't reach the forge. Check your connection and try again."
+    )
+  })
+
+  it('keeps the messages the app writes itself', () => {
+    expect(forgeErrorMessage(new Error('You appear to be offline.'), 'Fallback')).toBe(
+      'You appear to be offline.'
+    )
+    expect(forgeErrorMessage({ statusMessage: 'Repository "x" was not found.' })).toBe(
+      'Repository "x" was not found.'
+    )
+  })
+
+  it('falls back when there is nothing to show', () => {
+    expect(forgeErrorMessage(null, 'Failed to load issues.')).toBe('Failed to load issues.')
   })
 })

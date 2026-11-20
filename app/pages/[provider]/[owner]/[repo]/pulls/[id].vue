@@ -276,7 +276,7 @@ async function replyToReviewThread(comment: ReviewComment, body: string): Promis
       variant="subtle"
       icon="i-lucide-circle-alert"
       :title="`Could not load ${pullsTerm(provider)}`"
-      :description="error?.message"
+      :description="forgeErrorMessage(error)"
     />
 
     <template v-else-if="data">

@@ -90,7 +90,7 @@ async function toggleJob(job: CiJob): Promise<void> {
       variant="subtle"
       icon="i-lucide-circle-alert"
       title="Could not load run"
-      :description="error?.message"
+      :description="forgeErrorMessage(error)"
     />
 
     <template v-else-if="data">

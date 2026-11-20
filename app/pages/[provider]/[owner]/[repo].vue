@@ -190,9 +190,7 @@ const tabs = computed(() => {
           variant="subtle"
           icon="i-lucide-circle-alert"
           :title="isForgeId(provider) ? 'Repository not found' : `Unknown provider: ${provider}`"
-          :description="
-            error?.statusMessage || error?.message || 'We could not load this repository.'
-          "
+          :description="forgeErrorMessage(error, 'We could not load this repository.')"
         >
           <template #actions>
             <UButton color="error" variant="soft" label="Retry" @click="refresh()" />

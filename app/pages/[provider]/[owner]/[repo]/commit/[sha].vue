@@ -36,7 +36,7 @@ const bodyText = computed(() => {
       variant="subtle"
       icon="i-lucide-circle-alert"
       title="Could not load commit"
-      :description="error?.message"
+      :description="forgeErrorMessage(error)"
     />
 
     <template v-else-if="data">

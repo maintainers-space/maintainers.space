@@ -34,7 +34,7 @@ async function toggleOffline(): Promise<void> {
   } catch (e) {
     toast.add({
       title: 'Could not make available offline',
-      description: e instanceof Error ? e.message : String(e),
+      description: forgeErrorMessage(e),
       color: 'error'
     })
   }
