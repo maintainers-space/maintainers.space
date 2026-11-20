@@ -1,6 +1,5 @@
 import type { ForgeProvider, RepoSearchQuery, Thread, ThreadSearchQuery } from 'forges'
 
-import { balanceByDominance } from '~/lib/forge-balance'
 import {
   canSearchCode,
   canSearchDiscussions,
@@ -11,7 +10,7 @@ import {
 } from '~/lib/forges/gaps/search-extra'
 import type { CodeHit, DiscussionHit, UserHit } from '~/lib/forges/gaps/search-extra'
 import { listOwnerRepos } from '~/lib/forges/reads'
-import { forgeIdOf, forgeList, getForge, isForgeId, repoRefOf } from '~/lib/forges/registry'
+import { forgeList, getForge, isForgeId, repoRefOf } from '~/lib/forges/registry'
 import { toRepoCard } from '~/lib/forges/view'
 import type { RepoCard } from '~/lib/forges/view'
 import { astToGitHubQuery } from '~/lib/search/adapters/github'
@@ -250,21 +249,15 @@ export function useSearch() {
     const plainText = astToPlainText(q.root).trim()
     const tasks: Promise<void>[] = []
 
-    // Rank within each provider first, then interleave providers by dominance so results read as
-    // one fair, forge-agnostic list rather than "GitHub, then everyone else" once relevance ties
-    // are broken by GitHub's much larger star counts. This runs after every batch, so the list is
-    // ranked while slower forges are still answering instead of reshuffling at the very end.
+    // One list per result type, ordered by relevance across every forge: a search should put the
+    // best match first wherever it lives. This runs after every batch, so the list is ranked while
+    // slower forges are still answering instead of reshuffling at the very end.
     const rerank = (): void => {
-      results.repos = balanceByDominance(rankRepos(results.repos, plainText))
-      results.issues = balanceByDominance(
-        rankIssues(results.issues, plainText).map((t) => ({
-          provider: forgeIdOf(t.ref),
-          thread: t
-        }))
-      ).map((x) => x.thread)
-      results.discussions = balanceByDominance(rankDiscussions(results.discussions, plainText))
-      results.users = balanceByDominance(rankUsers(results.users, plainText))
-      results.code = balanceByDominance(rankCode(results.code, plainText))
+      results.repos = rankRepos(results.repos, plainText)
+      results.issues = rankIssues(results.issues, plainText)
+      results.discussions = rankDiscussions(results.discussions, plainText)
+      results.users = rankUsers(results.users, plainText)
+      results.code = rankCode(results.code, plainText)
     }
 
     const guard = (work: () => Promise<void>, failure: string): void => {
