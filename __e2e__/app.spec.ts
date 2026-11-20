@@ -149,6 +149,10 @@ test.describe('dependency updates page', () => {
     await expect(
       page.getByRole('paragraph').filter({ hasText: 'Sign in to aggregate dependency updates' })
     ).toBeVisible()
+    await expect(page.getByRole('main').getByRole('link', { name: 'Sign in' })).toHaveAttribute(
+      'href',
+      '/login?redirect=%2Fdependencies'
+    )
 
     const results = await new AxeBuilder({ page })
       .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
