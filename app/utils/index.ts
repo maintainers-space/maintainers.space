@@ -96,6 +96,12 @@ export function pullsTerm(
   return opts.capitalize ? withPlural.charAt(0).toUpperCase() + withPlural.slice(1) : withPlural
 }
 
+/** A forge's raw CI trigger name for display: `workflow_run` becomes "Workflow run". */
+export function ciEventLabel(raw: string): string {
+  const words = raw.replace(/[_-]+/g, ' ').trim()
+  return words.charAt(0).toUpperCase() + words.slice(1)
+}
+
 /** Lucide icon per pull-request state — shared by StateBadge and the pulls list. */
 export const PULL_STATE_ICON: Record<string, string> = {
   open: 'i-lucide-git-pull-request',

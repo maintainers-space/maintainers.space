@@ -6,6 +6,7 @@ import {
   formatDate,
   formatDuration,
   formatRelativeTime,
+  ciEventLabel,
   pullsTerm,
   repoPath,
   shortDid
@@ -179,5 +180,16 @@ describe('pullsTerm', () => {
   it('capitalizes the first letter on request, after pluralizing', () => {
     expect(pullsTerm('github', { capitalize: true })).toBe('Pull request')
     expect(pullsTerm('gitlab', { plural: true, capitalize: true })).toBe('Merge requests')
+  })
+})
+
+describe('ciEventLabel', () => {
+  it.each([
+    ['workflow_run', 'Workflow run'],
+    ['pull_request', 'Pull request'],
+    ['push', 'Push'],
+    ['merge-request', 'Merge request']
+  ])('turns %s into %s', (raw, label) => {
+    expect(ciEventLabel(raw)).toBe(label)
   })
 })

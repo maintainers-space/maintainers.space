@@ -5,6 +5,7 @@ import { parseJobLog } from '~/lib/actions-log'
 import type { ParsedJobLog } from '~/lib/actions-log'
 import type { TangledRepoRaw } from '~/lib/forges/gaps/tangled'
 import { getTangledRun } from '~/lib/forges/gaps/tangled'
+import { getForge } from '~/lib/forges/registry'
 
 const route = useRoute()
 const { provider, owner, name, forge, meta } = useRepoContext()
@@ -12,6 +13,7 @@ const base = computed(() =>
   repoPath({ provider: provider.value, owner: owner.value, name: name.value })
 )
 const id = computed(() => String(route.params.id))
+const forgeLabel = computed(() => getForge(provider.value)?.label ?? provider.value)
 
 // Logs need the forge's ci.log capability, which GitHub only grants to authenticated callers.
 const canFetchLogs = computed(() => !!forge.value?.can('ci.log'))
@@ -98,7 +100,7 @@ async function toggleJob(job: CiJob): Promise<void> {
         </h1>
         <div class="flex flex-wrap items-center gap-2 text-sm text-muted">
           <StateBadge :state="data.run.state" kind="run" />
-          <span v-if="data.run.eventRaw" class="capitalize">{{ data.run.eventRaw }}</span>
+          <span v-if="data.run.eventRaw">{{ ciEventLabel(data.run.eventRaw) }}</span>
           <span v-if="data.run.branch" class="font-mono text-xs">{{ data.run.branch }}</span>
           <span v-if="data.run.sha" class="font-mono text-xs">{{ data.run.sha.slice(0, 7) }}</span>
           <UserLink v-if="data.run.actor" :user="data.run.actor" />
@@ -131,7 +133,8 @@ async function toggleJob(job: CiJob): Promise<void> {
               :href="job.url"
               target="_blank"
               rel="noopener"
-              :title="`View this job's logs on ${forge?.forge}`"
+              :title="`View this job's logs on ${forgeLabel}`"
+              :aria-label="`View this job's logs on ${forgeLabel}`"
               class="shrink-0 text-muted hover:text-primary"
               @click.stop
             >
