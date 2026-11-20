@@ -241,8 +241,8 @@ const examples = [
             One place for every forge.
           </h1>
           <p class="text-muted">
-            Browse repositories across GitHub and Tangled — and link your forge accounts to your
-            atproto identity.
+            Browse repositories on GitHub, GitLab, Codeberg, Gitea, Bitbucket and Tangled, and link
+            your forge accounts to your atproto identity.
           </p>
         </div>
 
