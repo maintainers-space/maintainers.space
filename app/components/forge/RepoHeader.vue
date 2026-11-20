@@ -69,8 +69,8 @@ const actionItems = computed<DropdownMenuItem[]>(() => {
 
 <template>
   <div class="space-y-4">
-    <div class="flex flex-wrap items-start justify-between gap-3">
-      <div class="min-w-0 space-y-1.5">
+    <div class="flex items-start justify-between gap-3">
+      <div class="min-w-0 flex-1 space-y-1.5">
         <div v-if="card.isPrivate || card.isFork" class="flex items-center gap-2">
           <UBadge
             v-if="card.isPrivate"
@@ -90,13 +90,18 @@ const actionItems = computed<DropdownMenuItem[]>(() => {
           />
         </div>
 
-        <h1 class="flex items-center gap-2 text-xl font-semibold text-highlighted">
+        <h1
+          class="flex flex-wrap items-center gap-x-2 text-xl font-semibold text-highlighted [overflow-wrap:anywhere]"
+        >
           <ForgeIcon :provider="card.provider" class="size-5 shrink-0 text-muted" />
-          <NuxtLink :to="`/${card.provider}/${card.owner}`" class="text-primary hover:underline">
+          <NuxtLink
+            :to="`/${card.provider}/${card.owner}`"
+            class="min-w-0 text-primary hover:underline"
+          >
             {{ card.owner }}
           </NuxtLink>
           <span class="text-muted">/</span>
-          <span class="truncate">{{ card.name }}</span>
+          <span class="min-w-0">{{ card.name }}</span>
         </h1>
 
         <p v-if="repo.description" class="max-w-2xl text-sm text-muted">
@@ -104,7 +109,7 @@ const actionItems = computed<DropdownMenuItem[]>(() => {
         </p>
       </div>
 
-      <div class="flex gap-2">
+      <div class="flex shrink-0 gap-2">
         <!-- Less-used repo actions live behind a "…" menu so the header stays
              compact while remaining extensible (offline pin, open on platform, …). -->
         <UDropdownMenu
