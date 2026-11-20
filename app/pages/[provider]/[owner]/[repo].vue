@@ -198,7 +198,7 @@ const tabs = computed(() => {
         </UAlert>
 
         <template v-else-if="meta">
-          <ForgeRepoHeader :repo="meta" />
+          <ForgeRepoHeader :repo="meta" :show-topics="route.path === base" />
           <UNavigationMenu
             :items="tabs"
             highlight

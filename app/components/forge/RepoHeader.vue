@@ -4,8 +4,26 @@ import type { Repo } from 'forges'
 import { useOfflineRepos, type RepoRef } from '~/composables/useOfflineRepos'
 import { toRepoCard } from '~/lib/forges/view'
 
-const props = defineProps<{ repo: Repo }>()
+const props = withDefaults(
+  defineProps<{
+    repo: Repo
+    /** Topics belong to the overview; sub-pages leave them out so their content starts higher. */
+    showTopics?: boolean
+  }>(),
+  { showTopics: true }
+)
 const card = computed(() => toRepoCard(props.repo))
+
+// Phones show the first few topics, the rest behind a toggle, so they don't fill the first screen.
+const COLLAPSED_TOPICS = 4
+const isWide = useMediaQuery('(min-width: 640px)')
+const topicsExpanded = ref(false)
+const visibleTopics = computed(() =>
+  isWide.value || topicsExpanded.value
+    ? props.repo.topics
+    : props.repo.topics.slice(0, COLLAPSED_TOPICS)
+)
+const hiddenTopicCount = computed(() => props.repo.topics.length - visibleTopics.value.length)
 
 const offline = useOfflineRepos()
 const toast = useToast()
@@ -156,15 +174,31 @@ const actionItems = computed<DropdownMenuItem[]>(() => {
       </span>
     </div>
 
-    <div v-if="repo.topics.length" class="flex flex-wrap gap-1.5">
+    <div v-if="showTopics && repo.topics.length" class="flex flex-wrap items-center gap-1.5">
       <UBadge
-        v-for="t in repo.topics"
+        v-for="t in visibleTopics"
         :key="t"
         :label="t"
         color="primary"
         variant="subtle"
         size="sm"
         class="rounded-full"
+      />
+      <UButton
+        v-if="hiddenTopicCount > 0"
+        :label="`+${hiddenTopicCount} more`"
+        color="neutral"
+        variant="link"
+        size="xs"
+        @click="topicsExpanded = true"
+      />
+      <UButton
+        v-else-if="topicsExpanded && !isWide"
+        label="Show fewer"
+        color="neutral"
+        variant="link"
+        size="xs"
+        @click="topicsExpanded = false"
       />
     </div>
   </div>
