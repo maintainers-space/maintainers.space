@@ -90,7 +90,7 @@ const actionItems = computed<DropdownMenuItem[]>(() => {
           />
         </div>
 
-        <h1
+        <p
           class="flex flex-wrap items-center gap-x-2 text-xl font-semibold text-highlighted [overflow-wrap:anywhere]"
         >
           <ForgeIcon :provider="card.provider" class="size-5 shrink-0 text-muted" />
@@ -102,7 +102,7 @@ const actionItems = computed<DropdownMenuItem[]>(() => {
           </NuxtLink>
           <span class="text-muted">/</span>
           <span class="min-w-0">{{ card.name }}</span>
-        </h1>
+        </p>
 
         <p v-if="repo.description" class="max-w-2xl text-sm text-muted">
           {{ repo.description }}

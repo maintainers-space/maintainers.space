@@ -248,9 +248,9 @@ useHead(() => ({ title: `${displayName.value} · maintainers.space` }))
               :icon="!profile.avatar ? 'i-lucide-user' : undefined"
             />
             <div class="min-w-0 flex-1">
-              <h1 class="text-2xl font-semibold tracking-tight text-highlighted">
+              <h2 class="text-2xl font-semibold tracking-tight text-highlighted">
                 {{ displayName }}
-              </h1>
+              </h2>
               <div class="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted">
                 <span>@{{ profile.handle }}</span>
                 <span class="font-mono text-xs">· {{ shortDid(profile.did) }}</span>
