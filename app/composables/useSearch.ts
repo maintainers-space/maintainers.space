@@ -120,24 +120,35 @@ function threadSort(parsed: ParsedQuery): ThreadSearchQuery['sort'] {
 // popularity/recency signal, so a mixed-provider group reads as one ranked list
 // instead of "whichever provider's promise resolved first."
 
+/** Lowercase, with the separators names use (`vue-router`, `nuxt.com`, `owner/name`) read as spaces. */
+function normalizeText(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/[\s\-_./]+/g, ' ')
+    .trim()
+}
+
 function textScore(query: string, ...fields: Array<string | null | undefined>): number {
-  const q = query.trim().toLowerCase()
+  const q = normalizeText(query)
   if (!q) return 0
+  const words = q.split(' ')
   let best = 0
   fields.forEach((f, i) => {
     if (!f) return
-    const hay = f.toLowerCase()
+    const hay = normalizeText(f)
     const weight = i === 0 ? 3 : 1
     let s = 0
     if (hay === q) s = 30
     else if (hay.startsWith(q)) s = 20
     else if (hay.includes(q)) s = 10
+    // A multi-word query rarely appears as one phrase, so credit each word that matches.
+    else s = (8 * words.filter((word) => hay.includes(word)).length) / words.length
     best = Math.max(best, s * weight)
   })
   return best
 }
 
-function rankRepos(list: RepoCard[], terms: string): RepoCard[] {
+export function rankRepos(list: RepoCard[], terms: string): RepoCard[] {
   return list
     .map((r) => ({
       r,
@@ -239,11 +250,32 @@ export function useSearch() {
     const plainText = astToPlainText(q.root).trim()
     const tasks: Promise<void>[] = []
 
+    // Rank within each provider first, then interleave providers by dominance so results read as
+    // one fair, forge-agnostic list rather than "GitHub, then everyone else" once relevance ties
+    // are broken by GitHub's much larger star counts. This runs after every batch, so the list is
+    // ranked while slower forges are still answering instead of reshuffling at the very end.
+    const rerank = (): void => {
+      results.repos = balanceByDominance(rankRepos(results.repos, plainText))
+      results.issues = balanceByDominance(
+        rankIssues(results.issues, plainText).map((t) => ({
+          provider: forgeIdOf(t.ref),
+          thread: t
+        }))
+      ).map((x) => x.thread)
+      results.discussions = balanceByDominance(rankDiscussions(results.discussions, plainText))
+      results.users = balanceByDominance(rankUsers(results.users, plainText))
+      results.code = balanceByDominance(rankCode(results.code, plainText))
+    }
+
     const guard = (work: () => Promise<void>, failure: string): void => {
       tasks.push(
-        work().catch(() => {
-          noteSet.add(failure)
-        })
+        work()
+          .then(() => {
+            if (myToken === runToken) rerank()
+          })
+          .catch(() => {
+            noteSet.add(failure)
+          })
       )
     }
 
@@ -351,18 +383,6 @@ export function useSearch() {
       await Promise.all(tasks)
     } finally {
       if (myToken === runToken) {
-        const terms = plainText
-        // Rank within each provider first, then interleave providers by
-        // dominance so results read as one fair, forge-agnostic list rather
-        // than "GitHub, then everyone else" once relevance ties are broken by
-        // GitHub's much larger star counts.
-        results.repos = balanceByDominance(rankRepos(results.repos, terms))
-        results.issues = balanceByDominance(
-          rankIssues(results.issues, terms).map((t) => ({ provider: forgeIdOf(t.ref), thread: t }))
-        ).map((x) => x.thread)
-        results.discussions = balanceByDominance(rankDiscussions(results.discussions, terms))
-        results.users = balanceByDominance(rankUsers(results.users, terms))
-        results.code = balanceByDominance(rankCode(results.code, terms))
         notes.value = [...noteSet]
         loading.value = false
       }
