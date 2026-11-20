@@ -135,9 +135,9 @@ const examples = [
       <div v-if="isAuthenticated" class="mx-auto w-full max-w-5xl space-y-8 py-6">
         <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h1 class="text-2xl font-semibold tracking-tight text-highlighted">
+            <h2 class="text-2xl font-semibold tracking-tight text-highlighted">
               {{ greetingName ? `Welcome back, ${greetingName}` : 'Welcome back' }}
-            </h1>
+            </h2>
             <p class="mt-1 text-sm text-muted">
               Pick up where you left off, or jump into what needs your attention.
             </p>
@@ -237,9 +237,9 @@ const examples = [
       <!-- ============================ Anonymous =========================== -->
       <div v-else class="mx-auto w-full max-w-3xl space-y-10 py-6">
         <div class="space-y-3 text-center">
-          <h1 class="text-3xl font-semibold tracking-tight text-highlighted">
+          <h2 class="text-3xl font-semibold tracking-tight text-highlighted">
             One place for every forge.
-          </h1>
+          </h2>
           <p class="text-muted">
             Browse repositories on GitHub, GitLab, Codeberg, Gitea, Bitbucket and Tangled, and link
             your forge accounts to your atproto identity.

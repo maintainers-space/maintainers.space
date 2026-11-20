@@ -281,10 +281,10 @@ async function replyToReviewThread(comment: ReviewComment, body: string): Promis
 
     <template v-else-if="data">
       <div class="space-y-2 border-b border-default pb-4">
-        <h1 class="text-xl font-semibold text-highlighted">
+        <h2 class="text-xl font-semibold text-highlighted">
           {{ data.thread.title }}
           <span class="font-normal text-muted">#{{ threadNumberOf(data.thread.ref) }}</span>
-        </h1>
+        </h2>
         <div class="flex flex-wrap items-center gap-2 text-sm text-muted">
           <StateBadge :state="uiStateOf(data.thread)" kind="pull" />
           <UserLink :user="data.thread.author" />

@@ -177,6 +177,11 @@ test.describe('GitHub Markdown alerts', () => {
 
     await page.goto('/github/octo/alerts/issues/7')
 
+    // The navbar names the repository as the page's only h1; the thread title sits below it.
+    await expect(page.locator('h1')).toHaveCount(1)
+    await expect(page.locator('h1')).toHaveText('octo/alerts')
+    await expect(page.getByRole('heading', { level: 2, name: 'Alert rendering' })).toBeVisible()
+
     const alerts = page.locator('.github-markdown-alert')
     await expect(alerts).toHaveCount(5)
     await expect(alerts.nth(0)).toHaveAttribute('data-github-alert', 'note')
