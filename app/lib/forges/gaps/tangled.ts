@@ -1,6 +1,6 @@
-// GAP(forges): the Tangled provider reads issues, pulls and comments, but has no contents or CI
-// API, cannot resolve a handle or a repo name (it wants a DID and a TID rkey), and reports no
-// default branch. This module covers those through Bobbin and the knot via `provider.request()`.
+// Repos are read through the package, which resolves handles and names from the owner's atproto
+// records. GAP(forges): code, commits and CI still go through Bobbin and the knot via
+// `provider.request()`, and the appview reports no default branch.
 import type {
   Branch,
   ChangedFile,
@@ -15,7 +15,7 @@ import type {
   TreeEntry
 } from 'forges'
 
-import { resolveHandleToDid } from '~/lib/atproto/public'
+import { namespaceRef } from 'forges'
 
 interface RepoRecord {
   description?: string
@@ -63,83 +63,47 @@ export function resolveTangledRepo(
 }
 
 async function load(provider: ForgeProvider, handle: string, name: string): Promise<Repo> {
-  const did = handle.startsWith('did:') ? handle : await resolveHandleToDid(handle)
-  const list = await bobbin<{ items?: Array<{ uri: string; value: RepoRecord }> }>(
-    provider,
-    'sh.tangled.repo.listRepos',
-    { subject: did, limit: 100 }
-  )
-  const match =
-    list.items?.find((it) => it.value?.name === name) ??
-    list.items?.find((it) => it.uri.endsWith(`/${name}`))
-  if (!match)
-    throw createError({
-      statusCode: 404,
-      statusMessage: `Repository "${name}" was not found on Tangled for ${handle}.`
-    })
-  return toRepo(provider, handle, did, match)
+  const repo = await provider.repos.get({
+    forge: 'tangled',
+    instance: provider.instance,
+    name,
+    owner: handle
+  })
+  return withTangledRaw(repo, handle)
 }
 
 /** Every repo a Tangled account owns. */
 export async function listTangledRepos(provider: ForgeProvider, handle: string): Promise<Repo[]> {
-  const did = handle.startsWith('did:') ? handle : await resolveHandleToDid(handle)
-  const list = await bobbin<{ items?: Array<{ uri: string; value: RepoRecord }> }>(
-    provider,
-    'sh.tangled.repo.listRepos',
-    { subject: did, limit: 100 }
-  )
-  return Promise.all((list.items ?? []).map((it) => toRepo(provider, handle, did, it, 'main')))
+  const repos: Repo[] = []
+  for await (const repo of provider.repos.byOwner(namespaceRef(provider, handle))) {
+    repos.push(withTangledRaw(repo, handle))
+  }
+  return repos
 }
 
-async function toRepo(
-  provider: ForgeProvider,
-  handle: string,
-  did: string,
-  item: { uri: string; value: RepoRecord },
-  knownBranch?: string
-): Promise<Repo> {
-  const record = item.value
-  const rkey = item.uri.split('/').pop() ?? ''
-  const [defaultBranch, stars] = await Promise.all([
-    knownBranch ??
-      bobbin<{ name?: string }>(provider, 'sh.tangled.repo.getDefaultBranch', { repo: item.uri })
-        .then((d) => d.name || 'main')
-        .catch(() => 'main'),
-    record.repoDid
-      ? bobbin<{ count?: number }>(provider, 'sh.tangled.feed.countStars', {
-          subject: record.repoDid
-        })
-          .then((d) => d.count)
-          .catch(() => undefined)
-      : undefined
-  ])
+/** The package's record envelope, as `repos.get()` and `repos.byOwner()` return it in `raw`. */
+interface RepoRecordEnvelope {
+  uri: string
+  value: RepoRecord
+}
+
+/**
+ * Adds the fields the app reads from Tangled repos (handle, knot, spindle) to a package `Repo`.
+ * The appview reports no default branch, so it falls back to `main` like Tangled's web UI.
+ */
+function withTangledRaw(repo: Repo, handle: string): Repo {
+  const { uri, value: record } = repo.raw as RepoRecordEnvelope
+  const defaultBranch = repo.defaultBranch ?? 'main'
   const raw: TangledRepoRaw = {
-    atUri: item.uri,
+    atUri: uri,
     defaultBranch,
-    handle,
+    handle: repo.ref.ownerHandle ?? handle,
     knot: record.knot,
-    record,
+    record: { ...record, name: record.name ?? repo.ref.name },
     spindle: record.spindle,
-    stars
+    stars: repo.stars
   }
-  return {
-    ref: {
-      forge: 'tangled',
-      instance: provider.instance,
-      owner: did,
-      name: rkey,
-      externalId: record.repoDid
-    },
-    description: record.description,
-    defaultBranch,
-    visibility: 'public',
-    isFork: false,
-    isArchived: false,
-    topics: record.topics ?? [],
-    url: `https://tangled.org/${handle}/${record.name ?? rkey}`,
-    createdAt: record.createdAt ? new Date(record.createdAt) : undefined,
-    raw
-  }
+  return { ...repo, defaultBranch, raw }
 }
 
 function atUriOf(repo: RepoRef): string {
