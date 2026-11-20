@@ -112,5 +112,5 @@ export const PULL_STATE_ICON: Record<string, string> = {
 export const PROSE_CLASSES = [
   'prose prose-sm max-w-none dark:prose-invert',
   'prose-pre:bg-muted prose-pre:text-highlighted prose-pre:border prose-pre:border-default',
-  'prose-code:text-highlighted'
+  'prose-code:text-highlighted prose-code:[overflow-wrap:anywhere]'
 ].join(' ')

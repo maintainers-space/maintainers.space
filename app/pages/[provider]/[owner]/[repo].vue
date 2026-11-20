@@ -206,6 +206,11 @@ const tabs = computed(() => {
             highlight
             aria-label="Repository"
             class="mt-5 border-b border-default"
+            :ui="{
+              root: 'overflow-x-auto [scrollbar-width:none]',
+              list: 'min-w-max',
+              linkLabel: 'overflow-visible'
+            }"
           />
           <div class="mt-6">
             <NuxtPage />
