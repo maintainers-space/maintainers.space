@@ -23,6 +23,20 @@ function load(): void {
   _loaded = true
 }
 
+/** Forget every forge token on this device, e.g. on sign-out, so the next account can't use them. */
+export function clearForgeTokens(): void {
+  if (import.meta.client) {
+    const keys: string[] = []
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i)
+      if (key?.startsWith(STORAGE_PREFIX)) keys.push(key)
+    }
+    for (const key of keys) localStorage.removeItem(key)
+  }
+  _tokens.value = {}
+  _loaded = true
+}
+
 export function useForgeTokens() {
   load()
 
