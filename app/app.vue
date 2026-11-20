@@ -22,7 +22,7 @@ useHead({
 
 const title = 'maintainers.space — one place for every forge'
 const description =
-  'Browse repositories across GitHub and Tangled, and link your forge accounts to your AT Protocol identity.'
+  'Browse repositories on GitHub, GitLab, Codeberg, Gitea, Bitbucket and Tangled, and link your forge accounts to your AT Protocol identity.'
 
 useSeoMeta({
   title,

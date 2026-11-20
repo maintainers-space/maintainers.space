@@ -118,5 +118,7 @@ export const PULL_STATE_ICON: Record<string, string> = {
 export const PROSE_CLASSES = [
   'prose prose-sm max-w-none dark:prose-invert',
   'prose-pre:bg-muted prose-pre:text-highlighted prose-pre:border prose-pre:border-default',
-  'prose-code:text-highlighted prose-code:[overflow-wrap:anywhere]'
+  'prose-code:text-highlighted prose-code:[overflow-wrap:anywhere]',
+  // Typography wraps inline code in literal backticks; forges render it as a plain chip.
+  'prose-code:before:content-none prose-code:after:content-none'
 ].join(' ')
