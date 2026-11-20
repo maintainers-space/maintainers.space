@@ -294,7 +294,17 @@ async function replyToReviewThread(comment: ReviewComment, body: string): Promis
         </div>
       </div>
 
-      <UTabs v-model="tab" :items="tabItems" :content="false" size="sm" />
+      <UTabs
+        v-model="tab"
+        :items="tabItems"
+        :content="false"
+        size="sm"
+        :ui="{
+          root: 'overflow-x-auto [scrollbar-width:none]',
+          list: 'min-w-max',
+          label: 'overflow-visible'
+        }"
+      />
 
       <div v-show="tab === 'conversation'" class="@container">
         <div
