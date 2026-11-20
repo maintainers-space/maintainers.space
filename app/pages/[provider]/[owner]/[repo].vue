@@ -201,7 +201,12 @@ const tabs = computed(() => {
 
         <template v-else-if="meta">
           <ForgeRepoHeader :repo="meta" />
-          <UNavigationMenu :items="tabs" highlight class="mt-5 border-b border-default" />
+          <UNavigationMenu
+            :items="tabs"
+            highlight
+            aria-label="Repository"
+            class="mt-5 border-b border-default"
+          />
           <div class="mt-6">
             <NuxtPage />
           </div>

@@ -93,6 +93,7 @@ const friendsGroups = computed(() => groupByDay(aggregateTimeline(friendsItems.v
             variant="ghost"
             size="sm"
             :loading="activeLoading"
+            aria-label="Refresh timeline"
             @click="refresh"
           />
         </template>

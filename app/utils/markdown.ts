@@ -13,6 +13,9 @@ const GITHUB_ALERT_PATTERN =
 
 const SUGGESTION_PATTERN = /<pre><code class="language-suggestion">([\s\S]*?)<\/code><\/pre>/g
 
+// Code blocks scroll sideways, so keyboard users need to be able to focus them.
+const PRE_PATTERN = /<pre>/g
+
 /**
  * Render GitHub-flavored Markdown, including GitHub's standalone blockquote
  * alerts. Decorating parsed HTML rather than source Markdown ensures markers
@@ -32,4 +35,5 @@ export function renderMarkdown(content: string, breaks: boolean): string {
         : '<p class="markdown-suggestion__empty">Removes the selected lines.</p>'
       return `<div class="markdown-suggestion"><p class="markdown-suggestion__title">Suggested change</p>${suggestion}</div>`
     })
+    .replace(PRE_PATTERN, '<pre tabindex="0">')
 }
