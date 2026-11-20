@@ -75,7 +75,7 @@ onMounted(load)
                 {{ run.name || 'Workflow run' }}
               </p>
               <div class="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-muted">
-                <span v-if="run.eventRaw" class="capitalize">{{ run.eventRaw }}</span>
+                <span v-if="run.eventRaw">{{ ciEventLabel(run.eventRaw) }}</span>
                 <span v-if="run.branch" class="font-mono">· {{ run.branch }}</span>
                 <span v-if="run.sha" class="font-mono">· {{ run.sha.slice(0, 7) }}</span>
                 <span v-if="run.actor">· {{ actorLabel(run.actor) }}</span>
