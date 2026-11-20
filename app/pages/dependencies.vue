@@ -19,7 +19,7 @@ onMounted(() => {
             {{ groups.length }} group{{ groups.length === 1 ? '' : 's' }}
           </UBadge>
         </template>
-        <template #right>
+        <template v-if="isAuthenticated" #right>
           <UButton
             icon="i-lucide-refresh-cw"
             color="neutral"
@@ -35,15 +35,10 @@ onMounted(() => {
 
     <template #body>
       <div class="mx-auto w-full max-w-3xl space-y-4 py-2">
-        <div
+        <CommonSignInPrompt
           v-if="!isAuthenticated"
-          class="rounded-lg border border-dashed border-default py-16 text-center"
-        >
-          <UIcon name="i-lucide-lock" class="mx-auto size-8 text-muted" />
-          <p class="mt-3 text-sm text-muted">
-            Sign in to aggregate dependency updates across your repositories.
-          </p>
-        </div>
+          message="Sign in to aggregate dependency updates across your repositories."
+        />
 
         <template v-else>
           <div v-if="notes.length" class="space-y-2">

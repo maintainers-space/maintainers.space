@@ -59,7 +59,7 @@ function resolvedMeta(item: InboxItem): { icon: string; class: string } {
             {{ unreadCount }} unread
           </UBadge>
         </template>
-        <template #right>
+        <template v-if="isAuthenticated" #right>
           <UButton
             v-if="inboxItems.length"
             icon="i-lucide-check-check"
@@ -84,13 +84,10 @@ function resolvedMeta(item: InboxItem): { icon: string; class: string } {
 
     <template #body>
       <div class="mx-auto w-full max-w-3xl space-y-4 py-2">
-        <div
+        <CommonSignInPrompt
           v-if="!isAuthenticated"
-          class="rounded-lg border border-dashed border-default py-16 text-center"
-        >
-          <UIcon name="i-lucide-lock" class="mx-auto size-8 text-muted" />
-          <p class="mt-3 text-sm text-muted">Sign in to bundle notifications across your forges.</p>
-        </div>
+          message="Sign in to bundle notifications across your forges."
+        />
 
         <template v-else>
           <div v-if="allNotes.length" class="space-y-2">
