@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { ForgeComment, ForgePullReview, ForgePullReviewComment } from '~/types/forge'
+import type { Comment, Review, ReviewComment, ThreadRef } from 'forges'
 import {
   arrangePullTimeline,
   buildPullTimeline,
@@ -10,15 +10,14 @@ import {
 
 const props = withDefaults(
   defineProps<{
-    pullId: string
-    comments: ForgeComment[]
-    reviews: ForgePullReview[]
-    threads: ForgePullReviewComment[]
+    thread: ThreadRef
+    comments: Comment[]
+    reviews: Review[]
     reviewsSupported: boolean
     reviewsStatus: 'idle' | 'pending' | 'success' | 'error'
     forgeLabel: string
     canReply?: boolean
-    reply: (commentId: string, body: string) => Promise<boolean>
+    reply: (comment: ReviewComment, body: string) => Promise<boolean>
   }>(),
   { canReply: false }
 )
@@ -50,7 +49,7 @@ const activeFilter = computed(() => (props.reviewsSupported ? filter.value : 'al
 
 const entries = computed(() =>
   arrangePullTimeline(
-    buildPullTimeline(props.comments, props.reviews, props.threads),
+    buildPullTimeline(props.comments, props.reviews),
     activeFilter.value,
     sort.value
   )
@@ -62,23 +61,20 @@ const emptyMessage = computed(() => {
   return 'No activity yet.'
 })
 
-const REVIEW_MARKERS: Record<ForgePullReview['state'], { icon: string; class: string }> = {
-  APPROVED: { icon: 'i-lucide-check', class: 'text-success border-success/40 bg-success/10' },
-  CHANGES_REQUESTED: {
+const REVIEW_MARKERS: Record<Review['state'], { icon: string; class: string }> = {
+  approved: { icon: 'i-lucide-check', class: 'text-success border-success/40 bg-success/10' },
+  changes_requested: {
     icon: 'i-lucide-file-diff',
     class: 'text-warning border-warning/40 bg-warning/10'
   },
-  COMMENTED: { icon: 'i-lucide-eye', class: 'text-muted border-default bg-default' },
-  PENDING: { icon: 'i-lucide-clock', class: 'text-muted border-default bg-default' },
-  DISMISSED: { icon: 'i-lucide-circle-slash', class: 'text-muted border-default bg-default' },
-  UNKNOWN: { icon: 'i-lucide-eye', class: 'text-muted border-default bg-default' }
+  commented: { icon: 'i-lucide-eye', class: 'text-muted border-default bg-default' },
+  pending: { icon: 'i-lucide-clock', class: 'text-muted border-default bg-default' },
+  dismissed: { icon: 'i-lucide-circle-slash', class: 'text-muted border-default bg-default' },
+  unknown: { icon: 'i-lucide-eye', class: 'text-muted border-default bg-default' }
 }
 
 function marker(entry: PullTimelineEntry): { icon: string; class: string } {
   if (entry.kind === 'review') return REVIEW_MARKERS[entry.review.state]
-  if (entry.kind === 'thread') {
-    return { icon: 'i-lucide-file-code', class: 'text-muted border-default bg-default' }
-  }
   return { icon: 'i-lucide-message-square', class: 'text-muted border-default bg-default' }
 }
 </script>
@@ -150,23 +146,15 @@ function marker(entry: PullTimelineEntry): { icon: string; class: string } {
           <UIcon :name="marker(entry).icon" class="size-3.5" />
         </span>
         <div class="min-w-0 flex-1">
-          <CommentCard
-            v-if="entry.kind === 'comment'"
-            :comment="entry.comment"
-            thread-kind="pull"
-            :thread-id="pullId"
-          />
+          <CommentCard v-if="entry.kind === 'comment'" :comment="entry.comment" :thread="thread" />
           <PullReviewCard
-            v-else-if="entry.kind === 'review'"
+            v-else
             :review="entry.review"
-            :threads="entry.threads"
+            :conversations="entry.conversations"
             :forge-label="forgeLabel"
             :can-reply="canReply"
             :reply="reply"
           />
-          <article v-else class="overflow-hidden rounded-lg border border-default">
-            <PullReviewThread :thread="entry.thread" :can-reply="canReply" :reply="reply" />
-          </article>
         </div>
       </li>
     </ol>

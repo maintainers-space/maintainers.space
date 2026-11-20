@@ -1,10 +1,10 @@
-import type { ForgePullReview, ForgeUser } from '~/types/forge'
+import type { Actor, Review } from 'forges'
 
-export type PullReviewerState = 'APPROVED' | 'CHANGES_REQUESTED' | 'COMMENTED' | 'DISMISSED'
+export type PullReviewerState = 'approved' | 'changes_requested' | 'commented' | 'dismissed'
 
 export interface PullReviewer {
   key: string
-  user?: ForgeUser
+  user?: Actor
   state: PullReviewerState
 }
 
@@ -15,29 +15,26 @@ export interface PullReviewSummary {
   reviewers: PullReviewer[]
 }
 
-export function summarizePullReviews(
-  reviews: ForgePullReview[],
-  authorLogin?: string
-): PullReviewSummary {
+export function summarizePullReviews(reviews: Review[], authorLogin?: string): PullReviewSummary {
   const reviewers = new Map<string, PullReviewer>()
   let reviewCount = 0
   for (const review of reviews) {
-    if (review.state === 'PENDING') continue
-    const key = review.author?.login ?? `review:${review.id}`
+    if (review.state === 'pending') continue
+    const key = review.author?.login ?? `review:${review.ref.id}`
     if (authorLogin && key === authorLogin) continue
     reviewCount++
     const { state } = review
-    if (state === 'APPROVED' || state === 'CHANGES_REQUESTED' || state === 'DISMISSED') {
+    if (state === 'approved' || state === 'changes_requested' || state === 'dismissed') {
       reviewers.set(key, { key, user: review.author, state })
     } else if (!reviewers.has(key)) {
-      reviewers.set(key, { key, user: review.author, state: 'COMMENTED' })
+      reviewers.set(key, { key, user: review.author, state: 'commented' })
     }
   }
   const list = [...reviewers.values()]
   return {
     reviewCount,
-    approvals: list.filter((r) => r.state === 'APPROVED').length,
-    changesRequested: list.filter((r) => r.state === 'CHANGES_REQUESTED').length,
+    approvals: list.filter((r) => r.state === 'approved').length,
+    changesRequested: list.filter((r) => r.state === 'changes_requested').length,
     reviewers: list
   }
 }

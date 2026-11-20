@@ -8,7 +8,8 @@
  * `GET /api/tangled/<nsid>?<query>` -> `https://api.tangled.org/xrpc/<nsid>?<query>`
  */
 export default defineEventHandler(async (event) => {
-  const path = getRouterParam(event, 'path')
+  // `forges` addresses Bobbin as `<apiUrl>/xrpc/<nsid>`; older callers sent the bare nsid.
+  const path = getRouterParam(event, 'path')?.replace(/^xrpc\//, '')
   if (!path) throw createError({ statusCode: 400, statusMessage: 'Missing Tangled XRPC method' })
   return await proxyJson(event, `https://api.tangled.org/xrpc/${path}`, policyForNsid(path))
 })

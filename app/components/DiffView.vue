@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import type { BadgeProps } from '@nuxt/ui'
-import type { ForgeFileDiff } from '~/types/forge'
+import type { ChangedFile } from 'forges'
 
-const props = withDefaults(defineProps<{ files: ForgeFileDiff[]; commentable?: boolean }>(), {
+const props = withDefaults(defineProps<{ files: ChangedFile[]; commentable?: boolean }>(), {
   commentable: false
 })
 
@@ -130,8 +130,8 @@ async function submit(): Promise<void> {
           {{ file.status }}
         </UBadge>
         <span class="truncate font-mono text-xs text-default">
-          <span v-if="file.oldPath && file.oldPath !== file.path" class="text-muted"
-            >{{ file.oldPath }} → </span
+          <span v-if="file.previousPath && file.previousPath !== file.path" class="text-muted"
+            >{{ file.previousPath }} → </span
           >{{ file.path }}
         </span>
         <span class="ml-auto flex shrink-0 items-center gap-2 font-mono text-xs">

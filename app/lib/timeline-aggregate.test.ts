@@ -1,17 +1,18 @@
 import { describe, expect, it } from 'vitest'
-import type { ForgeContribution } from '~/types/forge'
+import type { Contribution } from '~/lib/activity'
 import { aggregateTimeline, totalCommitCount } from './timeline-aggregate'
 
 const repo = { owner: 'nuxt', name: 'nuxt', fullName: 'nuxt/nuxt' }
-const actor = { provider: 'github' as const, login: 'evan' }
+const actor = { login: 'evan' }
 
-function contribution(overrides: Partial<ForgeContribution> & { id: string }): ForgeContribution {
+function contribution(overrides: Partial<Contribution> & { id: string }): Contribution {
   return {
     provider: 'github',
     kind: 'push',
     actor,
     repo,
     createdAt: '2024-01-01T12:00:00Z',
+    impact: 0,
     ...overrides
   }
 }
@@ -80,7 +81,7 @@ describe('aggregateTimeline', () => {
     const otherActor = contribution({
       id: 'other-actor',
       createdAt: '2024-01-01T12:02:00Z',
-      actor: { provider: 'github', login: 'someone-else' }
+      actor: { login: 'someone-else' }
     })
 
     const entries = aggregateTimeline([otherActor, otherRepo, mine])

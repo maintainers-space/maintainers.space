@@ -4,7 +4,8 @@
 // (useOfflineRepos) both run through this so they write and read the exact same
 // shape under the `repo-code:<provider>:<owner>:<name>` cache key — a prefetched
 // landing page is indistinguishable from one the user opened themselves.
-import type { ForgeProvider, ForgeTreeEntry, RepoLocator } from '~/types/forge'
+import type { ForgeProvider, Repo, TreeEntry } from 'forges'
+import { readTree } from '~/lib/forges/reads'
 import type { HealthFile } from '~/components/forge/RepoHealthFiles.vue'
 
 const HEALTH: Record<string, { order: number; label: string; icon: string }> = {
@@ -34,27 +35,29 @@ function healthKey(fileName: string): string | null {
   return null
 }
 
+export function entryName(entry: TreeEntry): string {
+  return entry.path.split('/').pop() ?? entry.path
+}
+
 /**
  * Root tree plus the repo's health/README files, on `ref` (usually the default
  * branch). Throws when the forge is unreachable so callers can fall back to a
  * cached or errored state — health files in `.github` are best-effort.
  */
 export async function loadRepoCode(
-  f: ForgeProvider,
-  locator: RepoLocator,
-  owner: string,
-  repo: string,
+  provider: ForgeProvider,
+  repo: Repo,
   ref: string
-): Promise<{ entries: ForgeTreeEntry[]; health: HealthFile[] }> {
-  let entries: ForgeTreeEntry[]
-  if (f.features.codeRead?.getTree) entries = await f.features.codeRead!.getTree!(locator, ref, '')
-  else entries = (await f.features.repoRead.getOverview(owner, repo)).entries
+): Promise<{ entries: TreeEntry[]; health: HealthFile[] }> {
+  const entries = await readTree(provider, repo, ref)
 
   const candidates = [...entries]
-  const dotgithub = entries.find((e) => e.type === 'dir' && e.name.toLowerCase() === '.github')
-  if (dotgithub && f.features.codeRead?.getTree) {
+  const dotgithub = entries.find(
+    (e) => e.type === 'directory' && entryName(e).toLowerCase() === '.github'
+  )
+  if (dotgithub) {
     try {
-      candidates.push(...(await f.features.codeRead!.getTree!(locator, ref, dotgithub.path)))
+      candidates.push(...(await readTree(provider, repo, ref, dotgithub.path)))
     } catch {
       /* health files in .github are best-effort */
     }
@@ -64,16 +67,11 @@ export async function loadRepoCode(
   const health: HealthFile[] = []
   for (const e of candidates) {
     if (e.type !== 'file') continue
-    const key = healthKey(e.name)
+    const name = entryName(e)
+    const key = healthKey(name)
     if (!key || seen.has(key)) continue
     seen.add(key)
-    health.push({
-      key,
-      label: HEALTH[key]!.label,
-      icon: HEALTH[key]!.icon,
-      name: e.name,
-      path: e.path
-    })
+    health.push({ key, label: HEALTH[key]!.label, icon: HEALTH[key]!.icon, name, path: e.path })
   }
   health.sort((a, b) => HEALTH[a.key]!.order - HEALTH[b.key]!.order)
 

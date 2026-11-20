@@ -1,36 +1,42 @@
+import type { Review } from 'forges'
 import { describe, expect, it } from 'vitest'
-import type { ForgePullReview } from '~/types/forge'
 import { summarizePullReviews } from './pull-metadata'
 
-function review(
-  id: string,
-  login: string | undefined,
-  state: ForgePullReview['state']
-): ForgePullReview {
+const thread = {
+  forge: 'github',
+  instance: 'github.com',
+  kind: 'pull_request',
+  number: '1',
+  repo: { forge: 'github', instance: 'github.com', name: 'r', owner: 'o' }
+} as const
+
+function review(id: string, login: string | undefined, state: Review['state']): Review {
   return {
-    id,
-    state,
-    author: login ? { provider: 'github', login } : undefined,
-    submittedAt: null,
-    comments: []
+    author: login
+      ? { forge: 'github', id: login, instance: 'github.com', isBotHint: false, login }
+      : undefined,
+    comments: [],
+    raw: null,
+    ref: { forge: 'github', id, instance: 'github.com', thread },
+    state
   }
 }
 
 describe('summarizePullReviews', () => {
   it('keeps each reviewer’s latest decision across comment-only follow-ups', () => {
     const summary = summarizePullReviews([
-      review('1', 'bob', 'CHANGES_REQUESTED'),
-      review('2', 'carol', 'COMMENTED'),
-      review('3', 'bob', 'COMMENTED'),
-      review('4', 'carol', 'APPROVED'),
-      review('5', 'dave', 'APPROVED'),
-      review('6', 'dave', 'DISMISSED')
+      review('1', 'bob', 'changes_requested'),
+      review('2', 'carol', 'commented'),
+      review('3', 'bob', 'commented'),
+      review('4', 'carol', 'approved'),
+      review('5', 'dave', 'approved'),
+      review('6', 'dave', 'dismissed')
     ])
 
     expect(summary.reviewers.map(({ key, state }) => [key, state])).toEqual([
-      ['bob', 'CHANGES_REQUESTED'],
-      ['carol', 'APPROVED'],
-      ['dave', 'DISMISSED']
+      ['bob', 'changes_requested'],
+      ['carol', 'approved'],
+      ['dave', 'dismissed']
     ])
     expect(summary.reviewCount).toBe(6)
     expect(summary.approvals).toBe(1)
@@ -39,36 +45,34 @@ describe('summarizePullReviews', () => {
 
   it('lets a new approval replace an earlier change request', () => {
     const summary = summarizePullReviews([
-      review('1', 'bob', 'CHANGES_REQUESTED'),
-      review('2', 'bob', 'APPROVED')
+      review('1', 'bob', 'changes_requested'),
+      review('2', 'bob', 'approved')
     ])
 
-    expect(summary.reviewers).toEqual([
-      { key: 'bob', user: { provider: 'github', login: 'bob' }, state: 'APPROVED' }
-    ])
+    expect(summary.reviewers.map(({ key, state }) => [key, state])).toEqual([['bob', 'approved']])
     expect(summary.changesRequested).toBe(0)
   })
 
   it('ignores pending reviews and the author’s own replies', () => {
     const summary = summarizePullReviews(
       [
-        review('1', 'octo', 'COMMENTED'),
-        review('2', 'bob', 'PENDING'),
-        review('3', 'carol', 'UNKNOWN')
+        review('1', 'octo', 'commented'),
+        review('2', 'bob', 'pending'),
+        review('3', 'carol', 'unknown')
       ],
       'octo'
     )
 
     expect(summary.reviewers.map(({ key, state }) => [key, state])).toEqual([
-      ['carol', 'COMMENTED']
+      ['carol', 'commented']
     ])
     expect(summary.reviewCount).toBe(1)
   })
 
   it('keeps anonymous reviews apart instead of merging them', () => {
     const summary = summarizePullReviews([
-      review('1', undefined, 'APPROVED'),
-      review('2', undefined, 'APPROVED')
+      review('1', undefined, 'approved'),
+      review('2', undefined, 'approved')
     ])
 
     expect(summary.reviewers.map(({ key }) => key)).toEqual(['review:1', 'review:2'])

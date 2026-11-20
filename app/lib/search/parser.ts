@@ -13,7 +13,7 @@
 // A few "control" qualifiers never reach a provider — they configure the search
 // itself: `provider:`/`forge:`, `type:`/`is:<kind>`, `sort:`, `order:`.
 
-import type { ForgeId } from '~/types/forge'
+type ForgeId = string
 
 export type ResultType = 'repos' | 'code' | 'issues' | 'users' | 'discussions'
 

@@ -1,18 +1,19 @@
 <script setup lang="ts">
-import type { ForgeCommitDetail } from '~/types/forge'
+import type { Commit } from 'forges'
 import { useRepoContext } from '~/composables/useRepoContext'
+import { readCommit } from '~/lib/forges/reads'
 
 const route = useRoute()
-const { provider, owner, name, forge, locator } = useRepoContext()
+const { provider, owner, name, forge, meta } = useRepoContext()
 const sha = computed(() => String(route.params.sha))
 
-const { data, pending, error } = useLiveAsyncData<ForgeCommitDetail | null>(
+const { data, pending, error } = useLiveAsyncData<Commit | null>(
   () => `commit:${provider.value}:${owner.value}:${name.value}:${sha.value}`,
   async () => {
-    if (!forge.value?.features.commitRead?.getCommit) return null
-    return await forge.value.features.commitRead!.getCommit!(locator.value, sha.value)
+    if (!forge.value || !meta.value || !forge.value.can('commits.get')) return null
+    return await readCommit(forge.value, meta.value, sha.value)
   },
-  { lazy: true, watch: [() => route.fullPath] }
+  { lazy: true, watch: [() => route.fullPath, meta] }
 )
 
 const title = computed(() => data.value?.message.split('\n')[0] ?? '')
@@ -48,20 +49,26 @@ const bodyText = computed(() => {
         }}</pre>
         <div class="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted">
           <span v-if="data.author" class="inline-flex items-center gap-1.5">
-            <UAvatar v-if="data.author.avatarUrl" :src="data.author.avatarUrl" size="3xs" />
+            <UAvatar
+              v-if="data.author.actor?.avatarUrl"
+              :src="data.author.actor.avatarUrl"
+              size="3xs"
+            />
             <span class="font-medium text-default">{{
-              data.author.name || data.author.login
+              data.author.name || data.author.actor?.login
             }}</span>
             committed
-            <span v-if="data.author.when">{{ formatRelativeTime(data.author.when) }}</span>
+            <span v-if="data.author.date">{{ formatRelativeTime(data.author.date) }}</span>
           </span>
           <span class="rounded border border-default px-2 py-0.5 font-mono">{{
-            data.shortSha
+            data.sha.slice(0, 7)
           }}</span>
-          <span v-if="data.stat" class="flex items-center gap-2 font-mono">
-            <span v-if="data.stat.filesChanged">{{ data.stat.filesChanged }} files</span>
-            <span v-if="data.stat.additions" class="text-success">+{{ data.stat.additions }}</span>
-            <span v-if="data.stat.deletions" class="text-error">-{{ data.stat.deletions }}</span>
+          <span v-if="data.stats" class="flex items-center gap-2 font-mono">
+            <span v-if="data.files?.length">{{ data.files.length }} files</span>
+            <span v-if="data.stats.additions" class="text-success"
+              >+{{ data.stats.additions }}</span
+            >
+            <span v-if="data.stats.deletions" class="text-error">-{{ data.stats.deletions }}</span>
           </span>
         </div>
       </div>

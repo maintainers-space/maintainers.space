@@ -39,7 +39,10 @@ export function formatRelativeTime(input?: string | number | Date | null): strin
   return ''
 }
 
-export function formatDuration(startedAt?: string | null, completedAt?: string | null): string {
+export function formatDuration(
+  startedAt?: string | Date | null,
+  completedAt?: string | Date | null
+): string {
   if (!startedAt || !completedAt) return ''
   const ms = new Date(completedAt).getTime() - new Date(startedAt).getTime()
   if (!Number.isFinite(ms) || ms < 0) return ''
@@ -69,14 +72,6 @@ export function shortDid(did?: string | null): string {
   return `${prefix}${rest.slice(0, 4)}…${rest.slice(-4)}`
 }
 
-/** Best display label for a forge user reference. */
-export function userLabel(user?: { login?: string; displayName?: string | null } | null): string {
-  if (!user) return ''
-  if (user.displayName) return user.displayName
-  const login = user.login ?? ''
-  return login.startsWith('did:') ? shortDid(login) : login
-}
-
 const seg = (s: string): string => encodeURIComponent(s)
 
 /** Encode a slash-delimited path, preserving separators. */
@@ -91,10 +86,6 @@ export function repoPath(loc: { provider: string; owner: string; name: string },
 }
 
 /** Canonical in-app path for a user/org profile. */
-export function userPath(user: { provider: string; login: string }): string {
-  return `/${user.provider}/${seg(user.login)}`
-}
-
 /** GitLab calls them "merge requests" — every other forge says "pull requests". Same route, different word. */
 export function pullsTerm(
   provider: string,
@@ -103,18 +94,6 @@ export function pullsTerm(
   const word = provider === 'gitlab' ? 'merge request' : 'pull request'
   const withPlural = opts.plural ? `${word}s` : word
   return opts.capitalize ? withPlural.charAt(0).toUpperCase() + withPlural.slice(1) : withPlural
-}
-
-/** Canonical in-app path for an issue or pull request. */
-export function issuePath(issue: {
-  provider: string
-  id: string
-  isPull?: boolean
-  repo?: { owner: string; name: string } | null
-}): string {
-  if (!issue.repo) return '#'
-  const kind = issue.isPull ? 'pulls' : 'issues'
-  return `/${issue.provider}/${seg(issue.repo.owner)}/${seg(issue.repo.name)}/${kind}/${seg(issue.id)}`
 }
 
 /** Lucide icon per pull-request state — shared by StateBadge and the pulls list. */

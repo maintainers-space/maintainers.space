@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import type { ForgePullDetail, ForgePullReview } from '~/types/forge'
+import type { Review, Thread } from 'forges'
 import { summarizePullReviews, type PullReviewerState } from '~/lib/pull-metadata'
 
 const props = defineProps<{
-  pull: ForgePullDetail
-  reviews: ForgePullReview[]
+  pull: Thread
+  reviews: Review[]
   reviewsSupported: boolean
   reviewsStatus: 'idle' | 'pending' | 'success' | 'error'
 }>()
@@ -18,22 +18,20 @@ const reviewsLoading = computed(
 )
 
 const REVIEWER_STATES: Record<PullReviewerState, { icon: string; class: string; label: string }> = {
-  APPROVED: { icon: 'i-lucide-check', class: 'text-success', label: 'Approved' },
-  CHANGES_REQUESTED: {
+  approved: { icon: 'i-lucide-check', class: 'text-success', label: 'Approved' },
+  changes_requested: {
     icon: 'i-lucide-file-diff',
     class: 'text-warning',
     label: 'Requested changes'
   },
-  COMMENTED: { icon: 'i-lucide-message-square', class: 'text-muted', label: 'Commented' },
-  DISMISSED: { icon: 'i-lucide-circle-slash', class: 'text-muted', label: 'Review dismissed' }
+  commented: { icon: 'i-lucide-message-square', class: 'text-muted', label: 'Commented' },
+  dismissed: { icon: 'i-lucide-circle-slash', class: 'text-muted', label: 'Review dismissed' }
 }
 
 const closed = computed(() =>
-  props.pull.mergedAt
-    ? { label: 'Merged', at: props.pull.mergedAt }
-    : props.pull.closedAt
-      ? { label: 'Closed', at: props.pull.closedAt }
-      : null
+  props.pull.closedAt
+    ? { label: props.pull.state === 'merged' ? 'Merged' : 'Closed', at: props.pull.closedAt }
+    : null
 )
 </script>
 
@@ -66,12 +64,12 @@ const closed = computed(() =>
 
     <section :aria-labelledby="`${id}-labels`" class="px-4 py-3">
       <h2 :id="`${id}-labels`" class="font-semibold text-highlighted">Labels</h2>
-      <div v-if="pull.labels?.length" class="mt-2 flex flex-wrap gap-1.5">
+      <div v-if="pull.labels.length" class="mt-2 flex flex-wrap gap-1.5">
         <UBadge
           v-for="label in pull.labels"
           :key="label.name"
           :label="label.name"
-          :title="label.description ?? undefined"
+          :title="label.description"
           color="neutral"
           variant="subtle"
           size="xs"
@@ -91,7 +89,7 @@ const closed = computed(() =>
         <template v-if="pull.createdAt">
           <dt class="text-muted">Created</dt>
           <dd>
-            <time :datetime="pull.createdAt" :title="formatDate(pull.createdAt)">
+            <time :datetime="pull.createdAt.toISOString()" :title="formatDate(pull.createdAt)">
               {{ formatRelativeTime(pull.createdAt) }}
             </time>
           </dd>
@@ -99,7 +97,7 @@ const closed = computed(() =>
         <template v-if="pull.updatedAt">
           <dt class="text-muted">Updated</dt>
           <dd>
-            <time :datetime="pull.updatedAt" :title="formatDate(pull.updatedAt)">
+            <time :datetime="pull.updatedAt.toISOString()" :title="formatDate(pull.updatedAt)">
               {{ formatRelativeTime(pull.updatedAt) }}
             </time>
           </dd>
@@ -107,7 +105,7 @@ const closed = computed(() =>
         <template v-if="closed">
           <dt class="text-muted">{{ closed.label }}</dt>
           <dd>
-            <time :datetime="closed.at" :title="formatDate(closed.at)">
+            <time :datetime="closed.at.toISOString()" :title="formatDate(closed.at)">
               {{ formatRelativeTime(closed.at) }}
             </time>
           </dd>
@@ -122,26 +120,14 @@ const closed = computed(() =>
             <dd>{{ summary.changesRequested }}</dd>
           </template>
         </template>
-        <template v-if="pull.commitCount">
-          <dt class="text-muted">Commits</dt>
-          <dd>{{ pull.commitCount }}</dd>
-        </template>
-        <template v-if="pull.stat">
-          <dt class="text-muted">Changes</dt>
-          <dd>
-            <DiffStat
-              :additions="pull.stat.additions"
-              :deletions="pull.stat.deletions"
-              :files="pull.stat.filesChanged"
-            />
-          </dd>
-        </template>
-        <template v-if="pull.sourceBranch && pull.targetBranch">
+        <template v-if="pull.branches">
           <dt class="text-muted">Branches</dt>
           <dd class="min-w-0 font-mono text-xs leading-5">
-            <span class="block truncate" :title="pull.sourceBranch">{{ pull.sourceBranch }}</span>
-            <span class="block truncate text-muted" :title="pull.targetBranch"
-              >→ {{ pull.targetBranch }}</span
+            <span class="block truncate" :title="pull.branches.head.ref">{{
+              pull.branches.head.ref
+            }}</span>
+            <span class="block truncate text-muted" :title="pull.branches.base.ref"
+              >→ {{ pull.branches.base.ref }}</span
             >
           </dd>
         </template>

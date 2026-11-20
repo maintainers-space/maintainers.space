@@ -8,27 +8,27 @@
 // rolling time window on purpose: a window spanning multiple days can fold a
 // burst's newest event onto one day while its older events vanish from every
 // day in between, making days that genuinely had activity look empty.
-import type { ForgeContribution, ForgeId, ForgeUser } from '~/types/forge'
+import type { Contribution } from '~/lib/activity'
 
 export interface TimelineEntry {
   key: string
-  provider: ForgeId
-  actor: ForgeUser
+  provider: string
+  actor: Contribution['actor']
   repo: { owner: string; name: string; fullName: string; url?: string }
   /** Most recent event's timestamp — use this for sorting and day-bucketing. */
   createdAt: string
   /** The highest-impact event, whose kind/title/url/number drive the headline. */
-  primary: ForgeContribution
+  primary: Contribution
   /** Every event folded into this entry, newest first. */
-  events: ForgeContribution[]
+  events: Contribution[]
 }
 
-function subjectGroupKey(c: ForgeContribution): string {
+function subjectGroupKey(c: Contribution): string {
   if (c.number != null) return `subject:${c.provider}:${c.repo.fullName}:${c.number}`
   return `burst:${c.provider}:${c.actor.login}:${c.kind}:${c.repo.fullName}`
 }
 
-function highestImpact(events: ForgeContribution[]): ForgeContribution {
+function highestImpact(events: Contribution[]): Contribution {
   return events.reduce((best, e) => ((e.impact ?? 0) > (best.impact ?? 0) ? e : best))
 }
 
@@ -43,7 +43,7 @@ function sameCalendarDay(a: string, b: string): boolean {
 }
 
 /** `items` must already be sorted newest-first. */
-export function aggregateTimeline(items: ForgeContribution[]): TimelineEntry[] {
+export function aggregateTimeline(items: Contribution[]): TimelineEntry[] {
   const openByKey = new Map<string, TimelineEntry>()
   const order: TimelineEntry[] = []
 

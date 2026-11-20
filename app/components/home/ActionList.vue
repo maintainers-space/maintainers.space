@@ -1,11 +1,11 @@
 <script setup lang="ts">
-import type { ForgeIssue } from '~/types/forge'
+import type { WorkItem } from '~/lib/work'
 
 withDefaults(
   defineProps<{
     title: string
     icon: string
-    items: ForgeIssue[]
+    items: WorkItem[]
     loading?: boolean
     emptyText?: string
   }>(),
@@ -36,9 +36,9 @@ withDefaults(
     </div>
 
     <ul v-else class="divide-y divide-default">
-      <li v-for="it in items" :key="`${it.provider}:${it.repo?.fullName}:${it.id}`">
+      <li v-for="it in items" :key="`${it.provider}:${it.repo.fullName}:${it.id}`">
         <NuxtLink
-          :to="issuePath(it)"
+          :to="it.to"
           class="flex items-start gap-2.5 px-4 py-2.5 transition hover:bg-elevated/40"
         >
           <UIcon
@@ -49,8 +49,8 @@ withDefaults(
             <p class="truncate text-sm text-default">{{ it.title }}</p>
             <div class="mt-0.5 flex items-center gap-1.5 text-xs text-muted">
               <ForgeIcon :provider="it.provider" class="size-3 shrink-0" />
-              <span class="truncate">{{ it.repo?.fullName }}</span>
-              <span v-if="it.number" class="shrink-0">#{{ it.number }}</span>
+              <span class="truncate">{{ it.repo.fullName }}</span>
+              <span class="shrink-0">#{{ it.number }}</span>
               <span v-if="it.updatedAt" class="shrink-0"
                 >· {{ formatRelativeTime(it.updatedAt) }}</span
               >

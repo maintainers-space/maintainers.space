@@ -1,16 +1,16 @@
 <script setup lang="ts">
-import type { ForgeDiscussion } from '~/types/forge'
+import type { Thread } from 'forges'
 import { useRepoContext } from '~/composables/useRepoContext'
 import { cached, TTL } from '~/lib/cache'
+import { loadThreads } from '~/lib/forges/loaders'
 
-const { provider, owner, name, forge, locator } = useRepoContext()
-const { get: getToken } = useForgeTokens()
+const { provider, owner, name, forge, meta } = useRepoContext()
 const connectBanner = useDismissible('discussions-connect-github')
 const base = computed(() =>
   repoPath({ provider: provider.value, owner: owner.value, name: name.value })
 )
 
-const items = ref<ForgeDiscussion[]>([])
+const items = ref<Thread[]>([])
 const loading = ref(false)
 const error = ref<string | null>(null)
 const needsToken = ref(false)
@@ -19,15 +19,15 @@ const answerFilter = ref<'all' | 'answered' | 'unanswered'>('all')
 
 const filtered = computed(() => {
   let list = items.value
-  if (answerFilter.value === 'answered') list = list.filter((d) => d.answered)
-  else if (answerFilter.value === 'unanswered') list = list.filter((d) => !d.answered)
+  if (answerFilter.value === 'answered') list = list.filter((d) => d.stateReason === 'resolved')
+  else if (answerFilter.value === 'unanswered')
+    list = list.filter((d) => d.stateReason !== 'resolved')
   const term = q.value.trim().toLowerCase()
   if (term) {
     list = list.filter(
       (d) =>
         d.title.toLowerCase().includes(term) ||
-        (d.category ? d.category.toLowerCase().includes(term) : false) ||
-        (d.author ? userLabel(d.author).toLowerCase().includes(term) : false)
+        (d.author ? actorLabel(d.author).toLowerCase().includes(term) : false)
     )
   }
   return list
@@ -35,22 +35,15 @@ const filtered = computed(() => {
 
 async function load(): Promise<void> {
   const f = forge.value
-  if (!f?.features.discussionRead?.listDiscussions) return
-  const token = getToken(provider.value)
-  needsToken.value = !token
+  const repo = meta.value
+  // Discussions are GraphQL-only on GitHub, so an anonymous provider cannot list them.
+  needsToken.value = !!f && !f.can('threads.list', 'discussion')
+  if (!f || !repo || needsToken.value) return
   loading.value = true
   error.value = null
   try {
-    const key = `discussions:${provider.value}:${owner.value}:${name.value}:${token ? 'auth' : 'anon'}`
-    const page = await cached(
-      key,
-      () => f.features.discussionRead!.listDiscussions!(locator.value, { token, limit: 30 }),
-      {
-        ttl: TTL.SHORT
-      }
-    )
-    items.value = page.items
-    if (page.incomplete && !token) needsToken.value = true
+    const key = `discussions:${provider.value}:${owner.value}:${name.value}:auth`
+    items.value = await cached(key, () => loadThreads(f, repo, 'discussion'), { ttl: TTL.SHORT })
   } catch (e) {
     error.value = e instanceof Error ? e.message : 'Failed to load discussions.'
   } finally {
@@ -58,7 +51,7 @@ async function load(): Promise<void> {
   }
 }
 
-watch([provider, owner, name], load)
+watch([provider, owner, name, meta], load)
 onMounted(load)
 </script>
 
@@ -149,10 +142,10 @@ onMounted(load)
     </div>
 
     <ul v-else class="divide-y divide-default overflow-hidden rounded-lg border border-default">
-      <li v-for="d in filtered" :key="d.id">
+      <li v-for="d in filtered" :key="d.ref.number">
         <CommonOfflineLink
-          :to="`${base}/discussions/${encodeURIComponent(d.id)}`"
-          :cache-key="`discussion:${provider}:${owner}:${name}:${d.id}`"
+          :to="threadPathOf(d.ref)"
+          :cache-key="`discussion:${provider}:${owner}:${name}:${threadRouteId(d.ref)}`"
           class="flex items-start gap-3 px-4 py-3 transition hover:bg-elevated/40"
         >
           <template #default="{ offline }">
@@ -160,24 +153,23 @@ onMounted(load)
               :name="
                 offline
                   ? 'i-lucide-wifi-off'
-                  : d.answered
+                  : d.stateReason === 'resolved'
                     ? 'i-lucide-check-circle'
                     : 'i-lucide-messages-square'
               "
               class="mt-0.5 size-4 shrink-0"
-              :class="offline ? 'text-muted' : d.answered ? 'text-success' : 'text-muted'"
+              :class="
+                offline
+                  ? 'text-muted'
+                  : d.stateReason === 'resolved'
+                    ? 'text-success'
+                    : 'text-muted'
+              "
             />
             <div class="min-w-0 flex-1">
               <p class="truncate text-sm font-medium text-default">{{ d.title }}</p>
               <div class="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-muted">
-                <UBadge
-                  v-if="d.category"
-                  :label="d.category"
-                  color="neutral"
-                  variant="subtle"
-                  size="xs"
-                />
-                <span v-if="d.author">{{ userLabel(d.author) }}</span>
+                <span v-if="d.author">{{ actorLabel(d.author) }}</span>
                 <span v-if="d.createdAt">· {{ formatRelativeTime(d.createdAt) }}</span>
               </div>
             </div>

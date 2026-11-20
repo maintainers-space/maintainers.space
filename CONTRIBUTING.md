@@ -92,7 +92,7 @@ NUXT_CODEBERG_CLIENT_SECRET=your_client_secret
 
 ### Gitea
 
-[gitea.com](https://gitea.com) is Gitea's own hosted community instance (same Gitea-flavored REST API as Codeberg, just a different host — `app/lib/forges/gitea-shared/` implements both). Create an application at [gitea.com/user/settings/applications](https://gitea.com/user/settings/applications), with the redirect URI set to:
+[gitea.com](https://gitea.com) is Gitea's own hosted community instance (same Gitea-flavored REST API as Codeberg, just a different host — the `forges` package implements both). Create an application at [gitea.com/user/settings/applications](https://gitea.com/user/settings/applications), with the redirect URI set to:
 
 ```
 http://127.0.0.1:3000/api/auth/gitea/callback
@@ -113,7 +113,7 @@ Create an OAuth consumer under a workspace's **Settings → OAuth consumers** (`
 http://127.0.0.1:3000/api/auth/bitbucket/callback
 ```
 
-Unlike the other forges, Bitbucket's token exchange authenticates with HTTP Basic auth rather than a client id/secret in the request body — already handled generically by `tokenAuthStyle: 'basic'` in `server/utils/oauth-providers.ts`. Bitbucket's issue tracker isn't integrated (Atlassian is removing it), and there's no notifications, activity-feed, or follow-graph API to integrate at all — see the comment at the top of `app/lib/forges/bitbucket/index.ts` for the full list of verified platform limits. Set:
+Unlike the other forges, Bitbucket's token exchange authenticates with HTTP Basic auth rather than a client id/secret in the request body — already handled generically by `tokenAuthStyle: 'basic'` in `server/utils/oauth-providers.ts`. Bitbucket's issue tracker isn't integrated (Atlassian is removing it), and there's no notifications, activity-feed, or follow-graph API to integrate at all — see the `forges` Bitbucket provider page for the full list of verified platform limits. Set:
 
 ```bash
 NUXT_BITBUCKET_CLIENT_ID=your_key
@@ -147,7 +147,6 @@ app/            # Nuxt app
 ├── middleware/ # Route middleware
 ├── pages/      # File-based routing
 ├── plugins/    # Nuxt plugins
-├── types/      # Shared TypeScript types (app/types/forge.ts is the big one)
 └── utils/      # Auto-imported utilities
 
 server/         # Nitro server
@@ -158,20 +157,21 @@ server/         # Nitro server
 lexicons/       # maintainers.space's own atproto lexicon (space.maintainers.forgeAccount)
 ```
 
-Each forge implements the same `ForgeProvider` interface defined in `app/types/forge.ts`, mapping that provider's raw API responses into a common set of types (`ForgeRepo`, `ForgeIssue`, `ForgePull`, and so on) so the rest of the app never has to know which forge it's talking to. Registering a new forge is one entry in `app/lib/forges/index.ts` — every cross-forge surface (search, notifications, timeline, home dashboard) iterates that registry generically rather than hardcoding a provider list.
-
-GitHub, GitLab, Tangled and Bitbucket each live in their own folder (`app/lib/forges/{github,gitlab,tangled,bitbucket}/`), split the same way:
+Every forge call goes through the [`forges`](https://github.com/danielroe/forges) package: it owns the API clients, the normalised data model (`Repo`, `Thread`, `Review`, `Notification`, …), pagination, retries and typed errors. maintainers.space only adds what the package cannot know:
 
 ```
-app/lib/forges/github/
-├── types.ts    # raw *Response interfaces for that forge's API
-├── mappers.ts  # pure map*() functions + stateless helpers (no network calls)
-└── index.ts    # fetch/auth helpers + the exported ForgeProvider object
+app/lib/forges/
+├── registry.ts   # route ids (`codeberg`), branding, dominance, instance → package kind
+├── providers.ts  # builds one package provider per forge from tokens + the atproto session
+├── loaders.ts    # cached fetches shared by pages and the offline prefetcher
+├── reads.ts      # repo reads (tree, blob, commits, …) incl. the Tangled bridge
+├── view.ts       # JSON-safe `RepoCard` summaries for visit history and caches
+└── gaps/         # things the package does not model yet (stars, follows, activity feeds, …)
 ```
 
-Codeberg and Gitea share one implementation (`app/lib/forges/gitea-shared/`, following the same `types.ts`/`mappers.ts`/`index.ts` split behind a `createGiteaFamilyProvider(config)` factory parameterized by API/web base URL) since both are Gitea-flavored REST APIs; Forgejo could be added the same way later if a good second public instance turns up. `app/lib/forges/codeberg.ts` and `app/lib/forges/gitea.ts` are each just that factory called once with their instance's config — genuinely small, real files, not stubs.
+`useForges()` returns the shared registry and rebuilds it when a token or the atproto session changes. Everything under `gaps/` is marked `GAP(forges)` and goes through `provider.request()`, so it still uses the package's auth and typed errors; each file should disappear as the package grows the matching verb. Adding a forge is one entry in `registry.ts` plus a factory case in `providers.ts` — every cross-forge surface iterates the registry rather than naming providers.
 
-OAuth sign-in is likewise one generic, config-driven flow shared by every forge (Tangled excepted — it signs in via the atproto identity itself, not OAuth): `server/utils/oauth-providers.ts` holds each forge's endpoints/scope/auth-style, `server/api/auth/[provider]/{login,callback}.get.ts` are the only server routes, and `app/composables/useForgeAuth.ts` is the client-side counterpart. Adding a forge's OAuth support means one entry in each of those two files plus a `fetchUser`/`fetchUsername` function — nothing else needs touching, including `settings/accounts.vue`, which builds its list from the forge registry.
+OAuth sign-in is likewise one generic, config-driven flow shared by every forge (Tangled excepted — it signs in via the atproto identity itself, not OAuth): `server/utils/oauth-providers.ts` holds each forge's endpoints/scope/auth-style, `server/api/auth/[provider]/{login,callback}.get.ts` are the only server routes, and `app/composables/useForgeAuth.ts` is the client-side counterpart. Adding a forge's OAuth support means one entry in each of those two files plus a `host` entry in `useForgeAuth.ts` — nothing else needs touching, including `settings/accounts.vue`, which builds its list from the forge registry.
 
 ## Code style
 
@@ -188,7 +188,7 @@ pnpm test         # vitest run
 pnpm test:watch   # vitest, watch mode
 ```
 
-Tests are colocated as `*.test.ts` next to the file they cover (e.g. `app/lib/search/parser.test.ts`, `app/lib/forges/github/mappers.test.ts`), using [Vitest](https://vitest.dev) with `@nuxt/test-utils`'s Nuxt environment so both plain `lib/` modules and Nuxt-auto-import-dependent composables work the same way.
+Tests are colocated as `*.test.ts` next to the file they cover (e.g. `app/lib/search/parser.test.ts`, `app/lib/pull-timeline.test.ts`), using [Vitest](https://vitest.dev) with `@nuxt/test-utils`'s Nuxt environment so both plain `lib/` modules and Nuxt-auto-import-dependent composables work the same way.
 
 Note that oxlint only lints the `<script>` block of `.vue` files. It doesn't currently do Vue template linting (missing `:key` on `v-for`, accessibility attributes, and so on), so pay a little extra attention to templates in review since the linter won't catch everything there yet.
 

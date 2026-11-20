@@ -1,20 +1,11 @@
 <script setup lang="ts">
-import type { ForgeBlob } from '~/types/forge'
+import type { BlobData } from '~/lib/forges/reads'
 
-const props = defineProps<{ blob: ForgeBlob }>()
+const props = defineProps<{ blob: BlobData }>()
 
-const isImage = computed(() => props.blob.mimeType?.startsWith('image/') ?? false)
-const imageSrc = computed(() => {
-  if (!isImage.value) return ''
-  if (props.blob.encoding === 'base64')
-    return `data:${props.blob.mimeType};base64,${props.blob.content}`
-  return props.blob.content
-})
-
-const lines = computed(() => {
-  if (props.blob.isBinary || props.blob.encoding === 'base64') return []
-  return props.blob.content.replace(/\n$/, '').split('\n')
-})
+const lines = computed(() =>
+  props.blob.kind === 'text' ? props.blob.content.replace(/\n$/, '').split('\n') : []
+)
 
 const fileName = computed(() => props.blob.path.split('/').pop() ?? props.blob.path)
 </script>
@@ -27,11 +18,11 @@ const fileName = computed(() => props.blob.path.split('/').pop() ?? props.blob.p
       <span v-if="blob.size !== undefined" class="text-muted">· {{ formatBytes(blob.size) }}</span>
     </div>
 
-    <div v-if="isImage" class="flex justify-center bg-elevated/20 p-6">
-      <img :src="imageSrc" :alt="fileName" class="max-h-[70vh] max-w-full object-contain" />
+    <div v-if="blob.kind === 'image'" class="flex justify-center bg-elevated/20 p-6">
+      <img :src="blob.content" :alt="fileName" class="max-h-[70vh] max-w-full object-contain" />
     </div>
 
-    <div v-else-if="blob.isBinary" class="p-10 text-center text-sm text-muted">
+    <div v-else-if="blob.kind === 'binary'" class="p-10 text-center text-sm text-muted">
       <UIcon name="i-lucide-file-x" class="mx-auto mb-2 size-8" />
       Binary file not shown.
     </div>

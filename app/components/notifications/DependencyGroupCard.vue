@@ -30,7 +30,7 @@ function reportResult(result: GroupMergeResult, total: number): void {
     return
   }
   const names = result.failed
-    .map(({ item }) => `${item.repo.fullName}#${item.pull.number ?? item.pull.id}`)
+    .map(({ item }) => `${item.repo.fullName}#${threadNumberOf(item.thread.ref)}`)
     .join(' · ')
   const head = result.succeeded.length
     ? `Merged ${result.succeeded.length}, but ${failed} failed:`
@@ -98,22 +98,22 @@ async function onMergeItem(item: DependencyPr): Promise<void> {
           <ul class="divide-y divide-default">
             <li
               v-for="item in group.items"
-              :key="`${item.repo.provider}:${item.repo.fullName}#${item.pull.number ?? item.pull.id}`"
+              :key="`${item.repo.provider}:${item.repo.fullName}#${threadNumberOf(item.thread.ref)}`"
               class="flex items-center gap-3 px-4 py-2.5 text-sm"
             >
               <ForgeIcon :provider="item.repo.provider" class="size-3.5 shrink-0 text-muted" />
               <NuxtLink
-                :href="item.pull.url || undefined"
-                :target="item.pull.url ? '_blank' : undefined"
+                :href="item.thread.url || undefined"
+                :target="item.thread.url ? '_blank' : undefined"
                 class="min-w-0 flex-1 truncate text-default transition hover:text-primary"
               >
                 {{ item.repo.fullName }}
-                <span v-if="item.pull.number" class="text-muted">#{{ item.pull.number }}</span>
+                <span class="text-muted">#{{ threadNumberOf(item.thread.ref) }}</span>
               </NuxtLink>
               <span
-                v-if="item.pull.updatedAt"
+                v-if="item.thread.updatedAt"
                 class="hidden shrink-0 text-xs text-muted sm:inline"
-                >{{ formatRelativeTime(item.pull.updatedAt) }}</span
+                >{{ formatRelativeTime(item.thread.updatedAt) }}</span
               >
               <UButton
                 icon="i-lucide-git-merge"

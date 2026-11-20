@@ -1,17 +1,19 @@
 <script setup lang="ts">
 import type { DropdownMenuItem } from '@nuxt/ui'
-import type { ForgeRepo } from '~/types/forge'
+import type { Repo } from 'forges'
 import { useOfflineRepos, type RepoRef } from '~/composables/useOfflineRepos'
+import { toRepoCard } from '~/lib/forges/view'
 
-const props = defineProps<{ repo: ForgeRepo }>()
+const props = defineProps<{ repo: Repo }>()
+const card = computed(() => toRepoCard(props.repo))
 
 const offline = useOfflineRepos()
 const toast = useToast()
 const repoRef: RepoRef = {
-  provider: props.repo.provider,
-  owner: props.repo.owner,
-  name: props.repo.name,
-  isPrivate: props.repo.isPrivate
+  provider: card.value.provider,
+  owner: card.value.owner,
+  name: card.value.name,
+  isPrivate: card.value.isPrivate
 }
 
 const pinned = computed(() =>
@@ -42,19 +44,19 @@ const actionItems = computed<DropdownMenuItem[]>(() => {
   const items: DropdownMenuItem[] = [
     {
       type: 'label',
-      label: props.repo.owner,
-      avatar: props.repo.ownerAvatar ? { src: props.repo.ownerAvatar } : { icon: 'i-lucide-user' }
+      label: card.value.owner,
+      avatar: card.value.ownerAvatar ? { src: card.value.ownerAvatar } : { icon: 'i-lucide-user' }
     },
     {
-      label: `Open on ${props.repo.provider}`,
+      label: `Open on ${card.value.provider}`,
       icon: 'i-lucide-external-link',
-      to: props.repo.url,
+      to: card.value.url,
       external: true
     }
   ]
   // Private repos are never stored offline (public-only cache), so the pin
   // action only appears for public repos.
-  if (!props.repo.isPrivate) {
+  if (!card.value.isPrivate) {
     items.unshift({
       label: pinned.value ? 'Remove from offline availability' : 'Available offline',
       icon: pinned.value ? 'i-lucide-cloud' : 'i-lucide-cloud-off',
@@ -69,9 +71,9 @@ const actionItems = computed<DropdownMenuItem[]>(() => {
   <div class="space-y-4">
     <div class="flex flex-wrap items-start justify-between gap-3">
       <div class="min-w-0 space-y-1.5">
-        <div v-if="repo.isPrivate || repo.isFork" class="flex items-center gap-2">
+        <div v-if="card.isPrivate || card.isFork" class="flex items-center gap-2">
           <UBadge
-            v-if="repo.isPrivate"
+            v-if="card.isPrivate"
             color="neutral"
             variant="outline"
             size="sm"
@@ -79,7 +81,7 @@ const actionItems = computed<DropdownMenuItem[]>(() => {
             label="Private"
           />
           <UBadge
-            v-if="repo.isFork"
+            v-if="card.isFork"
             color="neutral"
             variant="outline"
             size="sm"
@@ -89,12 +91,12 @@ const actionItems = computed<DropdownMenuItem[]>(() => {
         </div>
 
         <h1 class="flex items-center gap-2 text-xl font-semibold text-highlighted">
-          <ForgeIcon :provider="repo.provider" class="size-5 shrink-0 text-muted" />
-          <NuxtLink :to="`/${repo.provider}/${repo.owner}`" class="text-primary hover:underline">
-            {{ repo.owner }}
+          <ForgeIcon :provider="card.provider" class="size-5 shrink-0 text-muted" />
+          <NuxtLink :to="`/${card.provider}/${card.owner}`" class="text-primary hover:underline">
+            {{ card.owner }}
           </NuxtLink>
           <span class="text-muted">/</span>
-          <span class="truncate">{{ repo.name }}</span>
+          <span class="truncate">{{ card.name }}</span>
         </h1>
 
         <p v-if="repo.description" class="max-w-2xl text-sm text-muted">
@@ -116,23 +118,25 @@ const actionItems = computed<DropdownMenuItem[]>(() => {
     </div>
 
     <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted">
-      <span v-if="repo.language" class="inline-flex items-center gap-1.5">
-        <span class="size-2.5 rounded-full bg-primary" />{{ repo.language }}
+      <span v-if="card.language" class="inline-flex items-center gap-1.5">
+        <span class="size-2.5 rounded-full bg-primary" />{{ card.language }}
       </span>
       <ForgeRepoStarButton :repo="repo" />
-      <span v-if="repo.forks !== undefined" class="inline-flex items-center gap-1">
-        <UIcon name="i-lucide-git-fork" class="size-4" />{{ formatCompactNumber(repo.forks) }}
+      <span v-if="card.forks !== undefined" class="inline-flex items-center gap-1">
+        <UIcon name="i-lucide-git-fork" class="size-4" />{{ formatCompactNumber(card.forks) }}
       </span>
-      <span v-if="repo.issues !== undefined" class="inline-flex items-center gap-1">
-        <UIcon name="i-lucide-circle-dot" class="size-4" />{{ formatCompactNumber(repo.issues) }}
+      <span v-if="repo.openIssueCount !== undefined" class="inline-flex items-center gap-1">
+        <UIcon name="i-lucide-circle-dot" class="size-4" />{{
+          formatCompactNumber(repo.openIssueCount)
+        }}
       </span>
       <a
-        v-if="repo.homepage"
-        :href="repo.homepage"
+        v-if="card.homepage"
+        :href="card.homepage"
         target="_blank"
         class="inline-flex items-center gap-1 text-primary hover:underline"
       >
-        <UIcon name="i-lucide-link" class="size-4" />{{ repo.homepage }}
+        <UIcon name="i-lucide-link" class="size-4" />{{ card.homepage }}
       </a>
       <span v-if="repo.updatedAt" class="inline-flex items-center gap-1">
         <UIcon name="i-lucide-history" class="size-4" />Updated
@@ -140,7 +144,7 @@ const actionItems = computed<DropdownMenuItem[]>(() => {
       </span>
     </div>
 
-    <div v-if="repo.topics?.length" class="flex flex-wrap gap-1.5">
+    <div v-if="repo.topics.length" class="flex flex-wrap gap-1.5">
       <UBadge
         v-for="t in repo.topics"
         :key="t"

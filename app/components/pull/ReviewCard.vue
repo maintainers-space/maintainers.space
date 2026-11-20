@@ -1,28 +1,29 @@
 <script setup lang="ts">
-import type { ForgePullReview, ForgePullReviewComment } from '~/types/forge'
+import type { Review, ReviewComment } from 'forges'
+import type { ReviewConversation } from '~/lib/pull-timeline'
 
 const props = withDefaults(
   defineProps<{
-    review: ForgePullReview
-    threads: ForgePullReviewComment[]
+    review: Review
+    conversations: ReviewConversation[]
     forgeLabel: string
     canReply?: boolean
-    reply: (commentId: string, body: string) => Promise<boolean>
+    reply: (comment: ReviewComment, body: string) => Promise<boolean>
   }>(),
   { canReply: false }
 )
 
-const ACTIONS: Record<ForgePullReview['state'], string> = {
-  APPROVED: 'approved these changes',
-  CHANGES_REQUESTED: 'requested changes',
-  COMMENTED: 'reviewed',
-  PENDING: 'started a pending review',
-  DISMISSED: 'left a review that was dismissed',
-  UNKNOWN: 'reviewed'
+const ACTIONS: Record<Review['state'], string> = {
+  approved: 'approved these changes',
+  changes_requested: 'requested changes',
+  commented: 'reviewed',
+  pending: 'started a pending review',
+  dismissed: 'left a review that was dismissed',
+  unknown: 'reviewed'
 }
 
 const hasBody = computed(() => !!props.review.body?.trim())
-const compact = computed(() => !hasBody.value && !props.threads.length)
+const compact = computed(() => !hasBody.value && !props.conversations.length)
 </script>
 
 <template>
@@ -72,14 +73,14 @@ const compact = computed(() => !hasBody.value && !props.threads.length)
     </div>
 
     <div
-      v-if="threads.length"
+      v-if="conversations.length"
       class="divide-y divide-default"
       :class="{ 'border-t border-default': hasBody }"
     >
       <PullReviewThread
-        v-for="thread in threads"
-        :key="thread.id"
-        :thread="thread"
+        v-for="conversation in conversations"
+        :key="conversation.id"
+        :conversation="conversation"
         :can-reply="canReply"
         :reply="reply"
       />

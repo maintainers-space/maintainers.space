@@ -1,4 +1,4 @@
-import type { ForgePull } from '~/types/forge'
+import type { Thread } from 'forges'
 
 export type DependencyBot = 'dependabot' | 'renovate'
 
@@ -12,7 +12,7 @@ export interface ParsedUpdate {
 }
 
 export interface DependencyPr {
-  pull: ForgePull
+  thread: Thread
   repo: { provider: string; owner: string; name: string; fullName: string; url?: string | null }
   bot: DependencyBot
   parsed: ParsedUpdate | null
@@ -39,9 +39,8 @@ function branchBotKindOf(branch?: string | null): DependencyBot | null {
   return null
 }
 
-function markerBotOf(pull: ForgePull): DependencyBot | null {
-  const text =
-    `${pull.body ?? ''} ${(pull.labels ?? []).map((l) => l.name).join(' ')}`.toLowerCase()
+function markerBotOf(pull: Thread): DependencyBot | null {
+  const text = `${pull.body ?? ''} ${pull.labels.map((l) => l.name).join(' ')}`.toLowerCase()
   const renovate = /renovate/.test(text)
   const dependabot = /dependabot/.test(text)
   if (dependabot && !renovate) return 'dependabot'
@@ -49,9 +48,11 @@ function markerBotOf(pull: ForgePull): DependencyBot | null {
   return null
 }
 
-export function detectDependencyBot(pull: ForgePull): DependencyBot | null {
+export function detectDependencyBot(pull: Thread): DependencyBot | null {
   return (
-    loginBotKindOf(pull.author?.login) ?? branchBotKindOf(pull.sourceBranch) ?? markerBotOf(pull)
+    loginBotKindOf(pull.author?.login) ??
+    branchBotKindOf(pull.branches?.head.ref) ??
+    markerBotOf(pull)
   )
 }
 
@@ -103,12 +104,12 @@ export function parseDependencyUpdate(
   return null
 }
 
-export function toDependencyPr(pull: ForgePull, repo: DependencyPr['repo']): DependencyPr | null {
+export function toDependencyPr(pull: Thread, repo: DependencyPr['repo']): DependencyPr | null {
   const bot = detectDependencyBot(pull)
   if (!bot) return null
   const parsed = parseDependencyUpdate(pull.title, bot)
   if (parsed && bot === 'renovate' && parsed.from == null) parsed.from = fromVersionOf(pull.body)
-  return { pull, repo, bot, parsed }
+  return { thread: pull, repo, bot, parsed }
 }
 
 function fromVersionOf(body: string | null | undefined): string | undefined {
@@ -129,14 +130,14 @@ export function groupDependencyPrs(prs: DependencyPr[]): DependencyGroup[] {
     const parsed = pr.parsed
     const key = parsed
       ? `${parsed.key}:source-${majorOf(parsed.from) ?? 'unknown'}`
-      : `unparsed:${pr.repo.provider}:${pr.repo.fullName}:${pr.pull.number ?? pr.pull.id}`
+      : `unparsed:${pr.repo.provider}:${pr.repo.fullName}:${threadNumberOf(pr.thread.ref)}`
     let g = groups.get(key)
     if (!g) {
       g = {
         key,
         name: parsed
           ? `Update ${parsed.dependency} to ${parsed.to}`
-          : pr.pull.title || '(unclassified dependency update)',
+          : pr.thread.title || '(unclassified dependency update)',
         items: [],
         unparsable: !parsed
       }
@@ -152,8 +153,8 @@ export function groupDependencyPrs(prs: DependencyPr[]): DependencyGroup[] {
       const firstB = b.items[0]!.parsed!
       return firstA.depKey.localeCompare(firstB.depKey) || firstA.to.localeCompare(firstB.to)
     }
-    const ua = a.items[0]!.pull.updatedAt ?? ''
-    const ub = b.items[0]!.pull.updatedAt ?? ''
-    return ub.localeCompare(ua)
+    const ua = a.items[0]!.thread.updatedAt?.getTime() ?? 0
+    const ub = b.items[0]!.thread.updatedAt?.getTime() ?? 0
+    return ub - ua
   })
 }

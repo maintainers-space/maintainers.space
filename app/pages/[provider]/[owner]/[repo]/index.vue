@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { loadRepoCode } from '~/lib/repo-code'
+import { readBlob } from '~/lib/forges/reads'
 import { useRepoContext } from '~/composables/useRepoContext'
 import { cached, invalidate, TTL } from '~/lib/cache'
 
-const { provider, owner, name, forge, locator, meta, defaultBranch } = useRepoContext()
+const { provider, owner, name, forge, meta, defaultBranch } = useRepoContext()
 const base = computed(() =>
   repoPath({ provider: provider.value, owner: owner.value, name: name.value })
 )
@@ -20,7 +21,7 @@ const { data, pending, error, refresh } = useLiveAsyncData<Awaited<
     // Wait for the parent-provided meta so we browse the correct default branch
     // (and avoid a duplicate repo-meta request — the parent already fetched it).
     if (!f || !meta.value) throw NOT_READY
-    return loadRepoCode(f, locator.value, owner.value, name.value, defaultBranch.value)
+    return loadRepoCode(f, meta.value, defaultBranch.value)
   },
   {
     lazy: true,
@@ -34,19 +35,16 @@ const { data, pending, error, refresh } = useLiveAsyncData<Awaited<
 
 async function loadDoc(path: string): Promise<string> {
   const f = forge.value
-  if (!f?.features.codeRead?.getBlob) return ''
+  if (!f || !meta.value) return ''
+  const repo = meta.value
   const key = `blob:${provider.value}:${owner.value}:${name.value}:${defaultBranch.value}:${path}`
-  const persist = !meta.value?.isPrivate
+  const persist = repo.visibility === 'public'
   if (!persist) invalidate(key)
-  const blob = await cached(
-    key,
-    () => f.features.codeRead!.getBlob!(locator.value, defaultBranch.value, path),
-    {
-      ttl: TTL.MEDIUM,
-      persist
-    }
-  )
-  return blob.isBinary ? '' : blob.content
+  const blob = await cached(key, () => readBlob(f, repo, defaultBranch.value, path), {
+    ttl: TTL.MEDIUM,
+    persist
+  })
+  return blob.kind === 'text' ? blob.content : ''
 }
 </script>
 

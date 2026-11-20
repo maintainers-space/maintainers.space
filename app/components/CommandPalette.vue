@@ -68,9 +68,9 @@ const groups = computed<CommandPaletteGroup<CommandPaletteItem>[]>(() => {
       ignoreFilter: true,
       items: results.issues.slice(0, 6).map((it) => ({
         label: it.title,
-        suffix: it.repo?.fullName,
-        icon: it.isPull ? 'i-lucide-git-pull-request' : 'i-lucide-circle-dot',
-        onSelect: () => go(issuePath(it))
+        suffix: repoFullName(it.ref.repo),
+        icon: it.kind === 'pull_request' ? 'i-lucide-git-pull-request' : 'i-lucide-circle-dot',
+        onSelect: () => go(threadPathOf(it.ref))
       }))
     })
   }
@@ -81,11 +81,11 @@ const groups = computed<CommandPaletteGroup<CommandPaletteItem>[]>(() => {
       label: 'People',
       ignoreFilter: true,
       items: results.users.slice(0, 5).map((u) => ({
-        label: userLabel(u),
+        label: actorLabel(u),
         suffix: `@${u.login}`,
         avatar: u.avatarUrl ? { src: u.avatarUrl } : undefined,
         icon: u.avatarUrl ? undefined : 'i-lucide-user',
-        onSelect: () => go(userPath(u))
+        onSelect: () => go(`/${u.provider}/${encodeURIComponent(u.login)}`)
       }))
     })
   }

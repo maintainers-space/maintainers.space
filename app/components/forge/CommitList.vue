@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import type { ForgeCommit } from '~/types/forge'
+import type { Commit } from 'forges'
 
 const props = defineProps<{
-  commits: ForgeCommit[]
+  commits: Commit[]
   provider: string
   owner: string
   repo: string
@@ -35,16 +35,14 @@ function title(message: string): string {
               {{ title(c.message) || '(no message)' }}
             </p>
             <div class="mt-0.5 flex items-center gap-2 text-xs text-muted">
-              <span v-if="c.author">{{
-                c.author.name || userLabel({ login: c.author.login })
-              }}</span>
-              <span v-if="c.author?.when">· {{ formatRelativeTime(c.author.when) }}</span>
+              <span v-if="c.author">{{ c.author.name || actorLabel(c.author.actor) }}</span>
+              <span v-if="c.author?.date">· {{ formatRelativeTime(c.author.date) }}</span>
             </div>
           </div>
           <span
             class="shrink-0 rounded border border-default px-2 py-0.5 font-mono text-xs text-muted"
           >
-            {{ c.shortSha }}
+            {{ c.sha.slice(0, 7) }}
           </span>
         </template>
       </CommonOfflineLink>

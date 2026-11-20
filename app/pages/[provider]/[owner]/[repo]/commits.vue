@@ -1,39 +1,57 @@
 <script setup lang="ts">
-import type { ForgeCommit } from '~/types/forge'
+import type { Commit, Cursor } from 'forges'
 import { useRepoContext } from '~/composables/useRepoContext'
 import { cached, TTL } from '~/lib/cache'
+import { readCommits } from '~/lib/forges/reads'
 
-const { provider, owner, name, forge, locator, defaultBranch } = useRepoContext()
+const { provider, owner, name, forge, meta, defaultBranch } = useRepoContext()
 
-const commits = ref<ForgeCommit[]>([])
-const cursor = ref<string | undefined>()
+const commits = ref<Commit[]>([])
+const cursor = ref<Cursor | undefined>()
 const loading = ref(false)
 const error = ref<string | null>(null)
 const done = ref(false)
 
 async function loadMore(reset = false): Promise<void> {
   const f = forge.value
-  if (loading.value || !f?.features.commitRead?.listCommits) return
+  const repo = meta.value
+  if (loading.value || !f || !repo || !f.can('commits.list')) return
   loading.value = true
   error.value = null
   try {
     // Only the first page is persisted/offline-cached — pagination cursors
     // are inherently online-only, and offline users just can't "load more".
-    const page = reset
-      ? await cached(
-          `commits:${provider.value}:${owner.value}:${name.value}:${defaultBranch.value}`,
-          () =>
-            f.features.commitRead!.listCommits!(locator.value, defaultBranch.value, { limit: 30 }),
-          { ttl: TTL.SHORT }
-        )
-      : await f.features.commitRead!.listCommits!(locator.value, defaultBranch.value, {
+    if (reset) {
+      const first = await cached(
+        `commits:${provider.value}:${owner.value}:${name.value}:${defaultBranch.value}`,
+        () => readCommits(f, repo, defaultBranch.value, 30),
+        { ttl: TTL.SHORT }
+      )
+      commits.value = first
+      // Tangled's bridge pages by sha; the package pages by cursor.
+      done.value = true
+      if (f.forge !== 'tangled') {
+        const page = await f.commits
+          .list(repo.ref, {
+            perPage: 30,
+            ref: defaultBranch.value
+          })
+          .page()
+        cursor.value = page.cursor
+        done.value = !page.cursor
+      }
+    } else {
+      const page = await f.commits
+        .list(repo.ref, {
           cursor: cursor.value,
-          limit: 30
+          perPage: 30,
+          ref: defaultBranch.value
         })
-    if (reset) commits.value = []
-    commits.value.push(...page.items)
-    cursor.value = page.cursor
-    done.value = !page.cursor || page.items.length === 0
+        .page()
+      commits.value.push(...page.items)
+      cursor.value = page.cursor
+      done.value = !page.cursor || page.items.length === 0
+    }
   } catch (e) {
     error.value = e instanceof Error ? e.message : 'Failed to load commits.'
   } finally {
@@ -41,7 +59,7 @@ async function loadMore(reset = false): Promise<void> {
   }
 }
 
-watch([provider, owner, name], () => {
+watch([provider, owner, name, meta], () => {
   done.value = false
   cursor.value = undefined
   loadMore(true)

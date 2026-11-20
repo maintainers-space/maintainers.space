@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { forgeList } from '~/lib/forges'
+import { forgeList } from '~/lib/forges/registry'
 import { buildSuggestions, type FilterSuggestion } from '~/lib/search/suggestions'
 
 const route = useRoute()
@@ -50,23 +50,12 @@ watch(input, () => {
   debounce = setTimeout(submit, 450)
 })
 
-// Browsers don't expose "hard vs. soft reload" to page JS — a full page
-// reload (Shift+F5/Cmd+Shift+R is always one) is the closest detectable signal
-// for "give me fresh results", so bypass the search cache once on the first
-// run after any reload.
-const isReload =
-  import.meta.client &&
-  (performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming | undefined)
-    ?.type === 'reload'
-let firstRun = true
-
 watch(
   () => route.query.q,
   (q) => {
     const s = String(q ?? '')
     if (s !== input.value) input.value = s
-    run(s, firstRun && isReload ? { noCache: true } : undefined)
-    firstRun = false
+    run(s)
   },
   { immediate: true }
 )
@@ -226,7 +215,7 @@ const syntax = [
             >
               <SearchResultIssue
                 v-for="(it, i) in results.issues"
-                :key="`${it.provider}:${it.id}:${i}`"
+                :key="`${it.ref.forge}:${it.ref.number}:${i}`"
                 :issue="it"
               />
             </SearchGroup>
@@ -239,7 +228,7 @@ const syntax = [
             >
               <SearchResultDiscussion
                 v-for="(d, i) in results.discussions"
-                :key="`${d.provider}:${d.id}:${i}`"
+                :key="`${d.provider}:${d.repo.fullName}:${d.number}:${i}`"
                 :discussion="d"
               />
             </SearchGroup>

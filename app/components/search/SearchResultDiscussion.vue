@@ -1,12 +1,11 @@
 <script setup lang="ts">
-import type { ForgeDiscussion } from '~/types/forge'
+import type { DiscussionHit } from '~/lib/forges/gaps/search-extra'
 
-const props = defineProps<{ discussion: ForgeDiscussion }>()
+const props = defineProps<{ discussion: DiscussionHit }>()
 
 const to = computed(() => {
-  const r = props.discussion.repo
-  if (!r) return props.discussion.url ?? '#'
-  return `/${r.provider}/${encodeURIComponent(r.owner)}/${encodeURIComponent(r.name)}/discussions/${props.discussion.id}`
+  const { provider, repo, number } = props.discussion
+  return `/${provider}/${encodeURIComponent(repo.owner)}/${encodeURIComponent(repo.name)}/discussions/${number}`
 })
 </script>
 
@@ -17,9 +16,9 @@ const to = computed(() => {
   >
     <div class="flex items-start gap-2">
       <UIcon
-        :name="discussion.answered ? 'i-lucide-check-circle' : 'i-lucide-messages-square'"
+        :name="discussion.isAnswered ? 'i-lucide-check-circle' : 'i-lucide-messages-square'"
         class="mt-0.5 size-4 shrink-0"
-        :class="discussion.answered ? 'text-success' : 'text-muted'"
+        :class="discussion.isAnswered ? 'text-success' : 'text-muted'"
       />
       <div class="min-w-0 flex-1">
         <span class="truncate font-medium text-default">{{ discussion.title }}</span>
@@ -34,7 +33,7 @@ const to = computed(() => {
             size="xs"
           />
           <span v-if="discussion.author" class="inline-flex items-center gap-1">
-            <UIcon name="i-lucide-user" class="size-3" />{{ userLabel(discussion.author) }}
+            <UIcon name="i-lucide-user" class="size-3" />{{ discussion.author }}
           </span>
           <span v-if="discussion.commentCount" class="inline-flex items-center gap-1">
             <UIcon name="i-lucide-message-square" class="size-3" />{{ discussion.commentCount }}
@@ -42,7 +41,12 @@ const to = computed(() => {
           <span v-if="discussion.createdAt">{{ formatRelativeTime(discussion.createdAt) }}</span>
         </div>
       </div>
-      <UBadge v-if="discussion.answered" color="success" variant="subtle" size="xs" class="shrink-0"
+      <UBadge
+        v-if="discussion.isAnswered"
+        color="success"
+        variant="subtle"
+        size="xs"
+        class="shrink-0"
         >Answered</UBadge
       >
     </div>
