@@ -75,6 +75,7 @@ function resolvedMeta(item: InboxItem): { icon: string; class: string } {
             variant="ghost"
             size="sm"
             :loading="loading || dependencyLoading"
+            aria-label="Refresh notifications"
             @click="onRefresh"
           />
         </template>

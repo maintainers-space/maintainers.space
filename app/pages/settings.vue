@@ -19,6 +19,7 @@ definePageMeta({ middleware: 'auth' })
             { label: 'Linked accounts', icon: 'i-lucide-link-2', to: '/settings/accounts' },
             { label: 'Offline access', icon: 'i-lucide-cloud-download', to: '/settings/offline' }
           ]"
+          aria-label="Settings"
           class="mb-4 border-b border-default"
         />
         <NuxtPage />

@@ -68,6 +68,12 @@ const nav = computed<NavigationMenuItem[]>(() => {
 </script>
 
 <template>
+  <a
+    href="#main-content"
+    class="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:rounded-md focus:bg-default focus:px-3 focus:py-2 focus:text-sm focus:font-medium focus:text-highlighted focus:ring-2 focus:ring-primary"
+  >
+    Skip to content
+  </a>
   <UDashboardGroup unit="rem">
     <UDashboardSidebar
       id="default"
@@ -100,7 +106,13 @@ const nav = computed<NavigationMenuItem[]>(() => {
           </template>
         </UButton>
 
-        <UNavigationMenu :collapsed="collapsed" :items="nav" orientation="vertical" tooltip />
+        <UNavigationMenu
+          :collapsed="collapsed"
+          :items="nav"
+          orientation="vertical"
+          tooltip
+          aria-label="Main"
+        />
       </template>
 
       <template #footer="{ collapsed }">
@@ -110,7 +122,9 @@ const nav = computed<NavigationMenuItem[]>(() => {
       </template>
     </UDashboardSidebar>
 
-    <slot />
+    <main id="main-content" class="flex min-w-0 flex-1 focus:outline-none" tabindex="-1">
+      <slot />
+    </main>
 
     <CommandPalette v-model:open="paletteOpen" />
   </UDashboardGroup>

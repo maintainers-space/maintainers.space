@@ -86,4 +86,9 @@ describe('renderMarkdown', () => {
     expect(container.querySelector('.markdown-suggestion')).toBeNull()
     expect(container.querySelector('code.language-ts')?.textContent).toBe('const a = 1\n')
   })
+
+  it('makes code blocks focusable so they can be scrolled with the keyboard', () => {
+    const container = render(renderMarkdown('```ts\nconst answer = 42\n```', true))
+    expect(container.querySelector('pre')?.getAttribute('tabindex')).toBe('0')
+  })
 })

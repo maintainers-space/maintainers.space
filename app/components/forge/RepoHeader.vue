@@ -112,7 +112,14 @@ const actionItems = computed<DropdownMenuItem[]>(() => {
           :content="{ align: 'end', side: 'bottom' }"
           :ui="{ content: 'w-60' }"
         >
-          <UButton color="neutral" variant="ghost" square icon="i-lucide-ellipsis" size="md" />
+          <UButton
+            color="neutral"
+            variant="ghost"
+            square
+            icon="i-lucide-ellipsis"
+            size="md"
+            aria-label="More repository actions"
+          />
         </UDropdownMenu>
       </div>
     </div>
