@@ -23,7 +23,7 @@ async function load(): Promise<void> {
     const key = `actions:${provider.value}:${owner.value}:${name.value}`
     items.value = await cached(key, () => loadRuns(f, repo), { ttl: TTL.SHORT })
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Failed to load workflow runs.'
+    error.value = forgeErrorMessage(e, 'Failed to load workflow runs.')
   } finally {
     loading.value = false
   }

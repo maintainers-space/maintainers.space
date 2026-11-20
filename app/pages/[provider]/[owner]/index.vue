@@ -56,9 +56,7 @@ const { data, pending, error, refresh } = useLiveAsyncData<RepoCard[]>(
           variant="subtle"
           icon="i-lucide-circle-alert"
           title="Could not load repositories"
-          :description="
-            error?.statusMessage || error?.message || `No repositories found for ${owner}.`
-          "
+          :description="forgeErrorMessage(error, `No repositories found for ${owner}.`)"
         >
           <template #actions>
             <UButton color="error" variant="soft" label="Retry" @click="refresh()" />

@@ -38,7 +38,7 @@ async function load(): Promise<void> {
       ttl: TTL.SHORT
     })
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Failed to load issues.'
+    error.value = forgeErrorMessage(e, 'Failed to load issues.')
   } finally {
     loading.value = false
   }

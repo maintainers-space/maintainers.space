@@ -56,7 +56,7 @@ const { data, pending, error } = useLiveAsyncData<BlobData | null>(
       variant="subtle"
       icon="i-lucide-circle-alert"
       title="Could not load file"
-      :description="error?.message"
+      :description="forgeErrorMessage(error)"
     />
     <ForgeBlobView v-else-if="data" :blob="data" />
   </div>

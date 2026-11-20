@@ -45,7 +45,7 @@ async function load(): Promise<void> {
     const key = `discussions:${provider.value}:${owner.value}:${name.value}:auth`
     items.value = await cached(key, () => loadThreads(f, repo, 'discussion'), { ttl: TTL.SHORT })
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Failed to load discussions.'
+    error.value = forgeErrorMessage(e, 'Failed to load discussions.')
   } finally {
     loading.value = false
   }

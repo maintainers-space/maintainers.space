@@ -60,7 +60,7 @@ const { data, pending, error } = useLiveAsyncData<ThreadDetail | null>(
       variant="subtle"
       icon="i-lucide-circle-alert"
       title="Could not load issue"
-      :description="error?.message"
+      :description="forgeErrorMessage(error)"
     />
 
     <template v-else-if="data">

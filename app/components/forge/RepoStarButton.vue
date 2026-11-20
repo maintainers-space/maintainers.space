@@ -26,7 +26,7 @@ async function onClick(): Promise<void> {
   } catch (e) {
     toast.add({
       title: 'Could not update star',
-      description: e instanceof Error ? e.message : undefined,
+      description: forgeErrorMessage(e),
       color: 'error'
     })
   }
