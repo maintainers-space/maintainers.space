@@ -66,6 +66,62 @@ test.describe('anonymous visitor', () => {
   })
 })
 
+test.describe('Markdown code blocks', () => {
+  test('can be focused to scroll, without breaking attributes or letting scripts through', async ({
+    page
+  }) => {
+    await page.route('https://api.github.com/repos/octo/code', (route) =>
+      route.fulfill({
+        json: {
+          owner: { login: 'octo' },
+          name: 'code',
+          full_name: 'octo/code',
+          default_branch: 'main',
+          html_url: 'https://github.com/octo/code',
+          has_issues: true
+        }
+      })
+    )
+    await page.route('https://api.github.com/repos/octo/code/issues/8', (route) =>
+      route.fulfill({
+        json: {
+          number: 8,
+          title: 'Code blocks',
+          state: 'open',
+          user: { login: 'octo' },
+          body: [
+            '```ts',
+            'const answer = 42',
+            '```',
+            '',
+            '<pre class="example">raw html block</pre>',
+            '',
+            '<div title="Use <pre> here">titled</div>',
+            '',
+            '<img src="x" onerror="window.__xss = true">'
+          ].join('\n'),
+          comments: 0,
+          html_url: 'https://github.com/octo/code/issues/8'
+        }
+      })
+    )
+    await page.route(
+      /^https:\/\/api\.github\.com\/repos\/octo\/code\/issues\/8\/comments(?:\?.*)?$/,
+      (route) => route.fulfill({ json: [] })
+    )
+
+    await page.goto('/github/octo/code/issues/8')
+
+    const blocks = page.locator('.prose pre')
+    await expect(blocks).toHaveCount(2)
+    await expect(blocks.nth(0)).toHaveAttribute('tabindex', '0')
+    await expect(blocks.nth(1)).toHaveAttribute('tabindex', '0')
+    await expect(page.locator('.prose div[title]')).toHaveAttribute('title', 'Use <pre> here')
+    await expect(page.locator('.prose img')).not.toHaveAttribute('onerror', /.*/)
+    expect(await page.evaluate(() => (window as { __xss?: boolean }).__xss)).toBeUndefined()
+  })
+})
+
 test.describe('GitHub Markdown alerts', () => {
   test('renders alerts in an issue and its comments', async ({ page }) => {
     await page.route('https://api.github.com/repos/octo/alerts', (route) =>

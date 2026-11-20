@@ -1,6 +1,5 @@
 <script setup lang="ts">
-import DOMPurify from 'dompurify'
-import { renderMarkdown } from '~/utils/markdown'
+import { renderSafeMarkdown } from '~/utils/markdown'
 
 const props = withDefaults(
   defineProps<{
@@ -25,8 +24,7 @@ const props = withDefaults(
 const html = computed(() => {
   const src = props.content?.trim()
   if (!src) return ''
-  const raw = renderMarkdown(src, props.breaks)
-  return DOMPurify.sanitize(raw)
+  return renderSafeMarkdown(src, props.breaks)
 })
 </script>
 
