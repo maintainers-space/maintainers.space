@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { ForgeRepo } from '~/types/forge'
+import type { RepoCard } from '~/lib/forges/view'
 import { useRepoVisits } from './useRepoVisits'
 
 const STORAGE_KEY = 'maintainers.space:repo-visits'
@@ -7,7 +7,7 @@ const STORAGE_KEY = 'maintainers.space:repo-visits'
 function repo(
   overrides: Partial<
     Pick<
-      ForgeRepo,
+      RepoCard,
       'provider' | 'owner' | 'name' | 'fullName' | 'description' | 'language' | 'stars'
     >
   > = {}

@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import type { ForgeBranch, ForgeTreeEntry } from '~/types/forge'
+import type { Branch, TreeEntry } from 'forges'
+import { readBranches } from '~/lib/forges/reads'
 import { useRepoContext } from '~/composables/useRepoContext'
 
 const props = defineProps<{
-  entries: ForgeTreeEntry[]
+  entries: TreeEntry[]
   base: string
   gitRef: string
   path?: string
@@ -11,22 +12,26 @@ const props = defineProps<{
   commitsHref?: string
 }>()
 
-const { provider, owner, name, forge, locator } = useRepoContext()
+const { provider, owner, name, forge, meta } = useRepoContext()
+
+function entryName(entry: TreeEntry): string {
+  return entry.path.split('/').pop() ?? entry.path
+}
 
 const sorted = computed(() =>
   [...props.entries].sort((a, b) => {
-    if (a.type !== b.type) return a.type === 'dir' ? -1 : 1
-    return a.name.localeCompare(b.name)
+    if (a.type !== b.type) return a.type === 'directory' ? -1 : 1
+    return entryName(a).localeCompare(entryName(b))
   })
 )
 
-function linkFor(entry: ForgeTreeEntry): string {
-  const kind = entry.type === 'dir' ? 'tree' : 'blob'
+function linkFor(entry: TreeEntry): string {
+  const kind = entry.type === 'directory' ? 'tree' : 'blob'
   return `${props.base}/${kind}/${encodeURIComponent(props.gitRef)}/${encodePathSegments(entry.path)}`
 }
 
-function cacheKeyFor(entry: ForgeTreeEntry): string {
-  const kind = entry.type === 'dir' ? 'tree' : 'blob'
+function cacheKeyFor(entry: TreeEntry): string {
+  const kind = entry.type === 'directory' ? 'tree' : 'blob'
   return `${kind}:${provider.value}:${owner.value}:${name.value}:${props.gitRef}:${entry.path}`
 }
 
@@ -46,16 +51,16 @@ const crumbs = computed(() => {
 
 // Branch switcher: fetched once per repo and reused across the whole file
 // browser, so jumping between branches doesn't require knowing the URL shape.
-const branches = ref<ForgeBranch[] | null>(null)
+const branches = ref<Branch[] | null>(null)
 const branchesLoading = ref(false)
 let branchesLoaded = false
 
 async function ensureBranches(): Promise<void> {
-  if (branchesLoaded || !forge.value?.features.codeRead?.listBranches) return
+  if (branchesLoaded || !forge.value || !meta.value) return
   branchesLoaded = true
   branchesLoading.value = true
   try {
-    branches.value = await forge.value.features.codeRead!.listBranches!(locator.value)
+    branches.value = await readBranches(forge.value, meta.value)
   } catch {
     branches.value = []
   } finally {
@@ -63,7 +68,7 @@ async function ensureBranches(): Promise<void> {
   }
 }
 onMounted(ensureBranches)
-watch(locator, () => {
+watch(meta, () => {
   branchesLoaded = false
   branches.value = null
   ensureBranches()
@@ -151,26 +156,22 @@ function onBranchChange(next: string | undefined): void {
               :name="
                 offline
                   ? 'i-lucide-wifi-off'
-                  : entry.type === 'dir'
+                  : entry.type === 'directory'
                     ? 'i-lucide-folder'
                     : 'i-lucide-file'
               "
               class="size-4 shrink-0"
-              :class="offline ? 'text-muted' : entry.type === 'dir' ? 'text-primary' : 'text-muted'"
+              :class="
+                offline ? 'text-muted' : entry.type === 'directory' ? 'text-primary' : 'text-muted'
+              "
             />
-            <span class="truncate text-default" :class="{ 'font-medium': entry.type === 'dir' }">{{
-              entry.name
-            }}</span>
             <span
-              v-if="entry.lastCommit?.message"
-              class="ml-2 hidden min-w-0 truncate text-muted md:inline"
-              >{{ entry.lastCommit.message }}</span
+              class="truncate text-default"
+              :class="{ 'font-medium': entry.type === 'directory' }"
+              >{{ entryName(entry) }}</span
             >
             <span class="ml-auto shrink-0 text-xs text-muted">
-              <span v-if="entry.lastCommit?.when">{{
-                formatRelativeTime(entry.lastCommit.when)
-              }}</span>
-              <span v-else-if="entry.type === 'file' && entry.size !== undefined">{{
+              <span v-if="entry.type === 'file' && entry.size !== undefined">{{
                 formatBytes(entry.size)
               }}</span>
             </span>

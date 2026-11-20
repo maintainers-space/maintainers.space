@@ -1,15 +1,16 @@
 <script setup lang="ts">
-import type { ForgeIssue, ForgeIssueState } from '~/types/forge'
+import type { Thread } from 'forges'
 import { useRepoContext } from '~/composables/useRepoContext'
 import { cached, TTL } from '~/lib/cache'
+import { loadThreads } from '~/lib/forges/loaders'
 
-const { provider, owner, name, forge, locator } = useRepoContext()
+const { provider, owner, name, forge, meta } = useRepoContext()
 const base = computed(() =>
   repoPath({ provider: provider.value, owner: owner.value, name: name.value })
 )
 
-const state = ref<ForgeIssueState>('open')
-const items = ref<ForgeIssue[]>([])
+const state = ref<'open' | 'closed'>('open')
+const items = ref<Thread[]>([])
 const loading = ref(false)
 const error = ref<string | null>(null)
 const q = ref('')
@@ -20,26 +21,22 @@ const filtered = computed(() => {
   return items.value.filter(
     (it) =>
       it.title.toLowerCase().includes(term) ||
-      String(it.number ?? '').includes(term) ||
-      (it.author ? userLabel(it.author).toLowerCase().includes(term) : false)
+      threadNumberOf(it.ref).includes(term) ||
+      (it.author ? actorLabel(it.author).toLowerCase().includes(term) : false)
   )
 })
 
 async function load(): Promise<void> {
   const f = forge.value
-  if (!f?.features.issueRead?.listIssues) return
+  const repo = meta.value
+  if (!f || !repo || !f.can('threads.list', 'issue')) return
   loading.value = true
   error.value = null
   try {
     const key = `issues:${provider.value}:${owner.value}:${name.value}:${state.value}`
-    const page = await cached(
-      key,
-      () => f.features.issueRead!.listIssues!(locator.value, { state: state.value, limit: 30 }),
-      {
-        ttl: TTL.SHORT
-      }
-    )
-    items.value = page.items
+    items.value = await cached(key, () => loadThreads(f, repo, 'issue', state.value), {
+      ttl: TTL.SHORT
+    })
   } catch (e) {
     error.value = e instanceof Error ? e.message : 'Failed to load issues.'
   } finally {
@@ -47,15 +44,15 @@ async function load(): Promise<void> {
   }
 }
 
-watch([provider, owner, name, state], load)
+watch([provider, owner, name, state, meta], load)
 onMounted(load)
 
-function itemLink(it: ForgeIssue): string {
-  return `${base.value}/issues/${encodeURIComponent(it.id)}`
+function itemLink(it: Thread): string {
+  return threadPathOf(it.ref)
 }
 
-function itemCacheKey(it: ForgeIssue): string {
-  return `issue:${provider.value}:${owner.value}:${name.value}:${it.id}`
+function itemCacheKey(it: Thread): string {
+  return `issue:${provider.value}:${owner.value}:${name.value}:${threadRouteId(it.ref)}`
 }
 </script>
 
@@ -106,7 +103,7 @@ function itemCacheKey(it: ForgeIssue): string {
     </div>
 
     <ul v-else class="divide-y divide-default overflow-hidden rounded-lg border border-default">
-      <li v-for="it in filtered" :key="it.id">
+      <li v-for="it in filtered" :key="it.ref.number">
         <CommonOfflineLink
           :to="itemLink(it)"
           :cache-key="itemCacheKey(it)"
@@ -129,8 +126,8 @@ function itemCacheKey(it: ForgeIssue): string {
             <div class="min-w-0 flex-1">
               <p class="truncate text-sm font-medium text-default">{{ it.title }}</p>
               <div class="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-muted">
-                <span v-if="it.number">#{{ it.number }}</span>
-                <span v-if="it.author">· {{ userLabel(it.author) }}</span>
+                <span>#{{ threadNumberOf(it.ref) }}</span>
+                <span v-if="it.author">· {{ actorLabel(it.author) }}</span>
                 <span v-if="it.updatedAt">· {{ formatRelativeTime(it.updatedAt) }}</span>
               </div>
             </div>

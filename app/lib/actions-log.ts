@@ -1,10 +1,24 @@
-import type { ForgeJobLog } from '~/types/forge'
+export interface LogSection {
+  lines: string[]
+  name: string
+}
+
+/** `sections` splits a job's log by step (GitHub/Gitea) or CI stage (GitLab); `raw` is the unsplit fallback. */
+export interface ParsedJobLog {
+  raw?: string
+  sections?: LogSection[]
+}
+
+/** Picks the parser for a forge's log dialect. */
+export function parseJobLog(text: string, forge: string): ParsedJobLog {
+  return forge === 'gitlab' ? parseGitlabJobTrace(text) : parseActionsRunnerLog(text)
+}
 
 const GROUP_START = /^(?:[^\s]+\s)?##\[group\](.*)$/
 const GROUP_END = /^(?:[^\s]+\s)?##\[endgroup\]$/
 
 /** Splits a GitHub/Gitea Actions runner log (##[group]/##[endgroup] markers) into per-step sections. */
-export function parseActionsRunnerLog(text: string): ForgeJobLog {
+export function parseActionsRunnerLog(text: string): ParsedJobLog {
   const sections: { name: string; lines: string[] }[] = []
   let current: { name: string; lines: string[] } | null = null
 
@@ -30,7 +44,7 @@ const ANSI_ESCAPE = /\x1b\[[0-9;]*[A-Za-z]/g
 const SECTION_TOKEN = /section_(start|end):\d+:([^\r\n[]+)(?:\[collapsed=\w+\])?\r?/g
 
 /** Splits a GitLab job trace (section_start/section_end markers) into named sections. */
-export function parseGitlabJobTrace(text: string): ForgeJobLog {
+export function parseGitlabJobTrace(text: string): ParsedJobLog {
   const stripped = text.replace(ANSI_ESCAPE, '')
   const sections: { name: string; lines: string[] }[] = []
   let open: { name: string; contentStart: number } | null = null

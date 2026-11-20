@@ -1,10 +1,13 @@
 <script setup lang="ts">
-import type { ForgeCommit, ForgeFileDiff, ForgePullDetail } from '~/types/forge'
+import type { ChangedFile, Commit, ReviewComment, ThreadRef } from 'forges'
 import { useRepoContext } from '~/composables/useRepoContext'
 import { cached, invalidate, TTL } from '~/lib/cache'
+import { loadThreadDetail } from '~/lib/forges/loaders'
+import type { ThreadDetail } from '~/lib/forges/loaders'
+import { getForge } from '~/lib/forges/registry'
 
 const route = useRoute()
-const { provider, owner, name, forge, locator, meta } = useRepoContext()
+const { provider, owner, name, forge, meta } = useRepoContext()
 const base = computed(() =>
   repoPath({ provider: provider.value, owner: owner.value, name: name.value })
 )
@@ -27,38 +30,35 @@ watch(
   { immediate: true }
 )
 
-const { data, pending, error, refresh } = useLiveAsyncData<ForgePullDetail | null>(
+const { data, pending, error, refresh } = useLiveAsyncData<ThreadDetail | null>(
   () => itemKey.value,
   async () => {
-    if (!forge.value?.features.pullRead?.getPull) return null
-    return await forge.value.features.pullRead!.getPull!(locator.value, id.value)
+    const f = forge.value
+    if (!f || !meta.value || !f.can('threads.get', 'pull_request')) return null
+    return await loadThreadDetail(f, meta.value, 'pull_request', id.value)
   },
-  { lazy: true, watch: [() => route.fullPath] }
+  { lazy: true, watch: [() => route.fullPath, meta] }
 )
 
-const { get: getToken } = useForgeTokens()
+const threadRef = computed<ThreadRef | undefined>(() => data.value?.thread.ref)
 const toast = useToast()
-const canWrite = computed(
-  () => !!getToken(provider.value) && !!forge.value?.features.write?.createComment
-)
+const canWrite = computed(() => !!forge.value?.can('threads.createComment', 'pull_request'))
 
 const tab = useRouteTab('tab', ['conversation', 'commits', 'files'] as const, 'conversation')
 
-const files = ref<ForgeFileDiff[] | null>(null)
+const files = ref<ChangedFile[] | null>(null)
 const filesLoading = ref(false)
-const commits = ref<ForgeCommit[] | null>(null)
+const commits = ref<Commit[] | null>(null)
 const commitsLoading = ref(false)
 const isOnline = useOnline()
 let requestGeneration = 0
 const {
   reviews,
-  threads: reviewThreads,
   status: reviewsStatus,
   supported: reviewsSupported,
   load: loadReviews,
-  reload: reloadReviews,
-  addReply: addReviewReply
-} = usePullReviews(itemKey, id)
+  reload: reloadReviews
+} = usePullReviews(itemKey, threadRef)
 
 watch(
   itemKey,
@@ -72,26 +72,27 @@ watch(
   { immediate: true }
 )
 
+async function collect<T>(source: AsyncIterable<T>): Promise<T[]> {
+  const items: T[] = []
+  for await (const item of source) items.push(item)
+  return items
+}
+
 async function ensureFiles(): Promise<void> {
-  const currentForge = forge.value
-  if (files.value || filesLoading.value || !currentForge?.features.pullRead?.getPullFiles) return
+  const f = forge.value
+  const ref = threadRef.value
+  if (files.value || filesLoading.value || !f || !ref || !f.can('threads.files')) return
   const generation = requestGeneration
   const currentKey = itemKey.value
-  const currentLocator = locator.value
-  const currentId = id.value
-  const persist = !meta.value?.isPrivate
+  const persist = meta.value?.visibility === 'public'
   filesLoading.value = true
   try {
     const key = `${currentKey}:files`
     if (!persist) invalidate(key)
-    const result = await cached(
-      key,
-      () => currentForge.features.pullRead!.getPullFiles!(currentLocator, currentId),
-      {
-        ttl: TTL.MEDIUM,
-        persist
-      }
-    )
+    const result = await cached(key, () => collect(f.threads.files(ref)), {
+      ttl: TTL.MEDIUM,
+      persist
+    })
     if (generation === requestGeneration) files.value = result
   } catch {
     if (generation === requestGeneration) files.value = []
@@ -101,26 +102,20 @@ async function ensureFiles(): Promise<void> {
 }
 
 async function ensureCommits(): Promise<void> {
-  const currentForge = forge.value
-  if (commits.value || commitsLoading.value || !currentForge?.features.pullRead?.getPullCommits)
-    return
+  const f = forge.value
+  const ref = threadRef.value
+  if (commits.value || commitsLoading.value || !f || !ref || !f.can('threads.commits')) return
   const generation = requestGeneration
   const currentKey = itemKey.value
-  const currentLocator = locator.value
-  const currentId = id.value
-  const persist = !meta.value?.isPrivate
+  const persist = meta.value?.visibility === 'public'
   commitsLoading.value = true
   try {
     const key = `${currentKey}:commits`
     if (!persist) invalidate(key)
-    const result = await cached(
-      key,
-      () => currentForge.features.pullRead!.getPullCommits!(currentLocator, currentId),
-      {
-        ttl: TTL.MEDIUM,
-        persist
-      }
-    )
+    const result = await cached(key, () => collect(f.threads.commits(ref)), {
+      ttl: TTL.MEDIUM,
+      persist
+    })
     if (generation === requestGeneration) commits.value = result
   } catch {
     if (generation === requestGeneration) commits.value = []
@@ -159,7 +154,7 @@ onMounted(() => {
 const tabItems = computed(() => [
   { label: 'Conversation', icon: 'i-lucide-message-square', value: 'conversation' },
   {
-    label: `Commits${data.value?.commitCount ? ' ' + data.value.commitCount : ''}`,
+    label: `Commits${commits.value?.length ? ' ' + commits.value.length : ''}`,
     icon: 'i-lucide-git-commit-horizontal',
     value: 'commits'
   },
@@ -174,140 +169,86 @@ const tabItems = computed(() => [
 const commentDraft = ref('')
 const postingComment = ref(false)
 const reviewDraft = ref('')
-const reviewSubmitting = ref<'' | 'APPROVE' | 'REQUEST_CHANGES' | 'COMMENT'>('')
+const reviewSubmitting = ref<'' | 'approve' | 'request_changes' | 'comment'>('')
 const canReplyToReviewThreads = computed(
-  () => !!getToken(provider.value) && !!forge.value?.features.write?.createPullReviewReply
+  () => !!forge.value?.can('threads.replyToReviewComment', 'pull_request')
 )
 
-// Writes prefer a repo-scoped token when the user added one to bypass org OAuth restrictions.
-const writeOpts = () => ({
-  token: getToken(provider.value, `${locator.value.owner}/${locator.value.name}`)
-})
+function notifyError(title: string, e: unknown): void {
+  const hint = describeForgeError(e, {
+    provider: provider.value,
+    owner: owner.value,
+    name: name.value
+  })
+  toast.add({
+    title,
+    description: hint.description,
+    color: 'error',
+    icon: 'i-lucide-circle-alert',
+    actions: hint.to ? [{ label: hint.linkLabel, to: hint.to, target: '_blank' }] : undefined
+  })
+}
 
 async function submitComment(): Promise<void> {
-  if (!forge.value?.features.write?.createComment || !commentDraft.value.trim()) return
+  const ref = threadRef.value
+  if (!forge.value || !ref || !commentDraft.value.trim()) return
   postingComment.value = true
   try {
-    await forge.value.features.write!.createComment!(
-      locator.value,
-      id.value,
-      commentDraft.value,
-      writeOpts()
-    )
+    await forge.value.threads.createComment(ref, commentDraft.value)
     commentDraft.value = ''
     toast.add({ title: 'Comment posted', color: 'success', icon: 'i-lucide-check' })
     await refresh()
   } catch (e) {
-    const hint = describeForgeError(e, {
-      provider: unref(provider),
-      owner: unref(locator)?.owner,
-      name: unref(locator)?.name
-    })
-    toast.add({
-      title: 'Could not post comment',
-      description: hint.description,
-      color: 'error',
-      icon: 'i-lucide-circle-alert',
-      actions: hint.to ? [{ label: hint.linkLabel, to: hint.to, target: '_blank' }] : undefined
-    })
+    notifyError('Could not post comment', e)
   } finally {
     postingComment.value = false
   }
 }
 
-async function submitReview(event: 'APPROVE' | 'REQUEST_CHANGES' | 'COMMENT'): Promise<void> {
-  if (!forge.value?.features.write?.createReview) return
+async function submitReview(event: 'approve' | 'request_changes' | 'comment'): Promise<void> {
+  const ref = threadRef.value
+  if (!forge.value || !ref) return
   reviewSubmitting.value = event
   try {
-    await forge.value.features.write!.createReview!(
-      locator.value,
-      id.value,
-      {
-        event,
-        body: reviewDraft.value || undefined
-      },
-      writeOpts()
-    )
+    await forge.value.threads.createReview(ref, { body: reviewDraft.value || undefined, event })
     reviewDraft.value = ''
     toast.add({ title: 'Review submitted', color: 'success', icon: 'i-lucide-check' })
     await refresh()
     void reloadReviews()
   } catch (e) {
-    const hint = describeForgeError(e, {
-      provider: unref(provider),
-      owner: unref(locator)?.owner,
-      name: unref(locator)?.name
-    })
-    toast.add({
-      title: 'Could not submit review',
-      description: hint.description,
-      color: 'error',
-      icon: 'i-lucide-circle-alert',
-      actions: hint.to ? [{ label: hint.linkLabel, to: hint.to, target: '_blank' }] : undefined
-    })
+    notifyError('Could not submit review', e)
   } finally {
     reviewSubmitting.value = ''
   }
 }
 
 async function onDiffComment(payload: { path: string; line: number; body: string }): Promise<void> {
-  if (!forge.value?.features.write?.createReview) return
+  const ref = threadRef.value
+  if (!forge.value || !ref) return
   try {
-    await forge.value.features.write!.createReview!(
-      locator.value,
-      id.value,
-      {
-        event: 'COMMENT',
-        comments: [{ path: payload.path, line: payload.line, body: payload.body }]
-      },
-      writeOpts()
-    )
+    await forge.value.threads.createReview(ref, {
+      comments: [{ body: payload.body, line: payload.line, path: payload.path, side: 'right' }],
+      event: 'comment'
+    })
     toast.add({ title: 'Comment added to the diff', color: 'success', icon: 'i-lucide-check' })
     void reloadReviews()
   } catch (e) {
-    const hint = describeForgeError(e, {
-      provider: unref(provider),
-      owner: unref(locator)?.owner,
-      name: unref(locator)?.name
-    })
-    toast.add({
-      title: 'Could not add comment',
-      description: hint.description,
-      color: 'error',
-      icon: 'i-lucide-circle-alert',
-      actions: hint.to ? [{ label: hint.linkLabel, to: hint.to, target: '_blank' }] : undefined
-    })
+    notifyError('Could not add comment', e)
   }
 }
 
 // Returns whether the reply posted, so the thread keeps its draft open and
 // editable when a network error means the user's text shouldn't be lost.
-async function replyToReviewThread(commentId: string, body: string): Promise<boolean> {
-  if (!forge.value?.features.write?.createPullReviewReply || !body.trim()) return false
+async function replyToReviewThread(comment: ReviewComment, body: string): Promise<boolean> {
+  const ref = threadRef.value
+  if (!forge.value || !ref || !body.trim()) return false
   try {
-    const reply = await forge.value.features.write!.createPullReviewReply!(
-      locator.value,
-      id.value,
-      commentId,
-      body,
-      writeOpts()
-    )
-    addReviewReply(reply)
+    await forge.value.threads.replyToReviewComment(ref, comment, body)
     toast.add({ title: 'Reply posted', color: 'success', icon: 'i-lucide-check' })
+    void reloadReviews()
     return true
   } catch (e) {
-    const hint = describeForgeError(e, {
-      provider: unref(provider),
-      owner: unref(locator)?.owner,
-      name: unref(locator)?.name
-    })
-    toast.add({
-      title: 'Could not post reply',
-      description: hint.description,
-      color: 'error',
-      icon: 'i-lucide-circle-alert',
-      actions: hint.to ? [{ label: hint.linkLabel, to: hint.to, target: '_blank' }] : undefined
-    })
+    notifyError('Could not post reply', e)
     return false
   }
 }
@@ -341,14 +282,14 @@ async function replyToReviewThread(commentId: string, body: string): Promise<boo
     <template v-else-if="data">
       <div class="space-y-2 border-b border-default pb-4">
         <h1 class="text-xl font-semibold text-highlighted">
-          {{ data.title }}
-          <span v-if="data.number" class="font-normal text-muted">#{{ data.number }}</span>
+          {{ data.thread.title }}
+          <span class="font-normal text-muted">#{{ threadNumberOf(data.thread.ref) }}</span>
         </h1>
         <div class="flex flex-wrap items-center gap-2 text-sm text-muted">
-          <StateBadge :state="data.state" kind="pull" />
-          <UserLink :user="data.author" />
-          <span v-if="data.sourceBranch && data.targetBranch" class="font-mono text-xs">
-            {{ data.sourceBranch }} → {{ data.targetBranch }}
+          <StateBadge :state="uiStateOf(data.thread)" kind="pull" />
+          <UserLink :user="data.thread.author" />
+          <span v-if="data.thread.branches" class="font-mono text-xs">
+            {{ data.thread.branches.head.ref }} → {{ data.thread.branches.base.ref }}
           </span>
         </div>
       </div>
@@ -363,9 +304,9 @@ async function replyToReviewThread(commentId: string, body: string): Promise<boo
             <header
               class="flex items-center gap-2 border-b border-default bg-elevated/40 px-4 py-2 text-sm"
             >
-              <UserLink :user="data.author" />
-              <span v-if="data.createdAt" class="text-muted"
-                >opened {{ formatRelativeTime(data.createdAt) }}</span
+              <UserLink :user="data.thread.author" />
+              <span v-if="data.thread.createdAt" class="text-muted"
+                >opened {{ formatRelativeTime(data.thread.createdAt) }}</span
               >
               <UPopover :content="{ align: 'end' }">
                 <UButton
@@ -379,7 +320,7 @@ async function replyToReviewThread(commentId: string, body: string): Promise<boo
                 />
                 <template #content>
                   <PullMetadata
-                    :pull="data"
+                    :pull="data.thread"
                     :reviews="reviews"
                     :reviews-supported="reviewsSupported"
                     :reviews-status="reviewsStatus"
@@ -389,19 +330,16 @@ async function replyToReviewThread(commentId: string, body: string): Promise<boo
               </UPopover>
             </header>
             <div class="px-4 py-3">
-              <MarkdownBody :content="data.body ?? ''" empty="No description provided." />
+              <MarkdownBody :content="data.thread.body ?? ''" empty="No description provided." />
             </div>
-            <ReactionBar
-              :reactions="data.reactions"
-              :target="{ kind: 'pull', threadId: data.id }"
-            />
+            <ReactionBar :reactions="data.thread.reactions" :target="data.thread.ref" />
           </article>
           <aside
             aria-label="Pull request details"
             class="hidden [contain:size] @3xl:col-start-2 @3xl:row-start-1 @3xl:block"
           >
             <PullMetadata
-              :pull="data"
+              :pull="data.thread"
               :reviews="reviews"
               :reviews-supported="reviewsSupported"
               :reviews-status="reviewsStatus"
@@ -410,13 +348,12 @@ async function replyToReviewThread(commentId: string, body: string): Promise<boo
           </aside>
           <PullTimeline
             class="@3xl:col-start-1"
-            :pull-id="data.id"
+            :thread="data.thread.ref"
             :comments="data.comments"
             :reviews="reviews"
-            :threads="reviewThreads"
             :reviews-supported="reviewsSupported"
             :reviews-status="reviewsStatus"
-            :forge-label="forge?.label ?? provider"
+            :forge-label="getForge(provider)?.label ?? provider"
             :can-reply="canReplyToReviewThreads"
             :reply="replyToReviewThread"
             @retry="loadReviews"
@@ -482,27 +419,27 @@ async function replyToReviewThread(commentId: string, body: string): Promise<boo
                 color="success"
                 variant="soft"
                 label="Approve"
-                :loading="reviewSubmitting === 'APPROVE'"
+                :loading="reviewSubmitting === 'approve'"
                 :disabled="!!reviewSubmitting"
-                @click="submitReview('APPROVE')"
+                @click="submitReview('approve')"
               />
               <UButton
                 icon="i-lucide-message-square"
                 color="neutral"
                 variant="soft"
                 label="Comment"
-                :loading="reviewSubmitting === 'COMMENT'"
+                :loading="reviewSubmitting === 'comment'"
                 :disabled="!!reviewSubmitting || !reviewDraft.trim()"
-                @click="submitReview('COMMENT')"
+                @click="submitReview('comment')"
               />
               <UButton
                 icon="i-lucide-file-warning"
                 color="warning"
                 variant="soft"
                 label="Request changes"
-                :loading="reviewSubmitting === 'REQUEST_CHANGES'"
+                :loading="reviewSubmitting === 'request_changes'"
                 :disabled="!!reviewSubmitting || !reviewDraft.trim()"
-                @click="submitReview('REQUEST_CHANGES')"
+                @click="submitReview('request_changes')"
               />
             </div>
           </div>

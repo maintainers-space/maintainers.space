@@ -1,34 +1,33 @@
 <script setup lang="ts">
-import { getForge, isForgeId } from '~/lib/forges'
+import type { Repo } from 'forges'
+import { isForgeId } from '~/lib/forges/registry'
+import { fetchRepo, repoSections } from '~/lib/forges/reads'
+import { toRepoCard } from '~/lib/forges/view'
 import { cacheExists, invalidateRepoCache } from '~/lib/cache'
-import type { ForgeRepo } from '~/types/forge'
 import { provideRepoContext, useRepoParams } from '~/composables/useRepoContext'
 
 const route = useRoute()
-const { provider, owner, name, forge, locator } = useRepoParams()
+const { provider, owner, name, forge } = useRepoParams()
 
 const {
   data: meta,
   pending,
   error,
   refresh
-} = useLiveAsyncData<ForgeRepo | null>(
+} = useLiveAsyncData<Repo | null>(
   () => `repo-meta:${provider.value}:${owner.value}:${name.value}`,
   async () => {
-    const f = getForge(provider.value)
+    const f = forge.value
     if (!f)
       throw createError({ statusCode: 404, statusMessage: `Unknown provider "${provider.value}"` })
-    if (f.features.repoRead.getRepo)
-      return await f.features.repoRead.getRepo!(owner.value, name.value)
-    const ov = await f.features.repoRead.getOverview(owner.value, name.value)
-    return ov?.repo
+    return await fetchRepo(f, owner.value, name.value)
   },
   { lazy: true, watch: [provider, owner, name], default: () => null }
 )
 
 const defaultBranch = computed(() => meta.value?.defaultBranch ?? 'main')
 
-provideRepoContext({ provider, owner, name, forge, locator, meta, defaultBranch })
+provideRepoContext({ provider, owner, name, forge, meta, defaultBranch })
 
 // Track visits locally so signed-in users get a personal recent/favourite feed.
 const { record, recordSection } = useRepoVisits()
@@ -37,17 +36,18 @@ watch(
   meta,
   (m) => {
     if (m) {
-      record(m)
-      if (m.isPrivate) {
+      const card = toRepoCard(m)
+      record(card)
+      if (card.isPrivate) {
         // Metadata is the first response that can identify visibility. Remove
         // any current or legacy IndexedDB entries before child pages load.
-        invalidateRepoCache(m.provider, m.owner, m.name)
+        invalidateRepoCache(card.provider, card.owner, card.name)
         return
       }
       // Fill the repo's bounded offline surface after the visible header has
       // loaded; the prefetcher deduplicates these entries with the page's own
       // requests and stays within the configured repository/request limits.
-      offline.visit(m)
+      offline.visit(card)
     }
   },
   { immediate: true }
@@ -56,7 +56,9 @@ watch(
 const base = computed(() =>
   repoPath({ provider: provider.value, owner: owner.value, name: name.value })
 )
-const caps = computed(() => forge.value?.features)
+const sections = computed(() =>
+  forge.value ? repoSections(forge.value, meta.value ?? undefined) : null
+)
 const isOnline = useOnline()
 const { get: getToken } = useForgeTokens()
 const sectionAvailability = ref<Record<string, boolean>>({})
@@ -110,7 +112,7 @@ const currentSection = computed<string | null>(() => {
 watch(
   [meta, currentSection],
   ([m, section]) => {
-    if (m && section) recordSection(m, section)
+    if (m && section) recordSection(toRepoCard(m), section)
   },
   { immediate: true }
 )
@@ -118,12 +120,6 @@ watch(
 const isCode = computed(
   () => route.path === base.value || ['tree', 'blob', 'commits', 'commit'].some(startsWith)
 )
-
-// Forge-level capability says this provider supports the feature at all;
-// per-repo `features` (when the forge reports it, e.g. GitHub Discussions is
-// opt-in per repo) says whether *this* repo actually has it turned on.
-// `undefined` means the forge didn't report it — don't hide on a guess.
-const features = computed(() => meta.value?.features)
 
 const tabs = computed(() => {
   const items = [
@@ -135,7 +131,7 @@ const tabs = computed(() => {
       disabled: unavailableOffline('code')
     }
   ]
-  if (caps.value?.issueRead && features.value?.issues !== false)
+  if (sections.value?.issues)
     items.push({
       label: 'Issues',
       icon: tabIcon('issues', 'i-lucide-circle-dot'),
@@ -143,7 +139,7 @@ const tabs = computed(() => {
       active: startsWith('issues'),
       disabled: unavailableOffline('issues')
     })
-  if (caps.value?.pullRead && features.value?.pulls !== false)
+  if (sections.value?.pulls)
     items.push({
       label: pullsTerm(provider.value, { plural: true, capitalize: true }),
       icon: tabIcon('pulls', 'i-lucide-git-pull-request'),
@@ -151,7 +147,7 @@ const tabs = computed(() => {
       active: startsWith('pulls'),
       disabled: unavailableOffline('pulls')
     })
-  if (caps.value?.actionRead)
+  if (sections.value?.actions)
     items.push({
       label: 'Actions',
       icon: tabIcon('actions', 'i-lucide-play'),
@@ -159,7 +155,7 @@ const tabs = computed(() => {
       active: startsWith('actions'),
       disabled: unavailableOffline('actions')
     })
-  if (caps.value?.discussionRead && features.value?.discussions !== false)
+  if (sections.value?.discussions)
     items.push({
       label: 'Discussions',
       icon: tabIcon('discussions', 'i-lucide-messages-square'),

@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import type { ForgeIssueDetail } from '~/types/forge'
 import { useRepoContext } from '~/composables/useRepoContext'
+import { loadThreadDetail } from '~/lib/forges/loaders'
+import type { ThreadDetail } from '~/lib/forges/loaders'
 
 const route = useRoute()
-const { provider, owner, name, forge, locator } = useRepoContext()
+const { provider, owner, name, forge, meta } = useRepoContext()
 const base = computed(() =>
   repoPath({ provider: provider.value, owner: owner.value, name: name.value })
 )
@@ -26,13 +27,14 @@ watch(
   { immediate: true }
 )
 
-const { data, pending, error } = useLiveAsyncData<ForgeIssueDetail | null>(
+const { data, pending, error } = useLiveAsyncData<ThreadDetail | null>(
   () => itemKey.value,
   async () => {
-    if (!forge.value?.features.issueRead?.getIssue) return null
-    return await forge.value.features.issueRead!.getIssue!(locator.value, id.value)
+    const f = forge.value
+    if (!f || !meta.value || !f.can('threads.get', 'issue')) return null
+    return await loadThreadDetail(f, meta.value, 'issue', id.value)
   },
-  { lazy: true, watch: [() => route.fullPath] }
+  { lazy: true, watch: [() => route.fullPath, meta] }
 )
 </script>
 
@@ -64,18 +66,20 @@ const { data, pending, error } = useLiveAsyncData<ForgeIssueDetail | null>(
     <template v-else-if="data">
       <div class="space-y-2 border-b border-default pb-4">
         <h1 class="text-xl font-semibold text-highlighted">
-          {{ data.title }}
-          <span v-if="data.number" class="font-normal text-muted">#{{ data.number }}</span>
+          {{ data.thread.title }}
+          <span class="font-normal text-muted">#{{ threadNumberOf(data.thread.ref) }}</span>
         </h1>
         <div class="flex flex-wrap items-center gap-2 text-sm text-muted">
-          <StateBadge :state="data.state" kind="issue" />
-          <UserLink :user="data.author" />
-          <span v-if="data.createdAt">opened {{ formatRelativeTime(data.createdAt) }}</span>
-          <span v-if="data.commentCount">· {{ data.commentCount }} comments</span>
+          <StateBadge :state="data.thread.state" kind="issue" />
+          <UserLink :user="data.thread.author" />
+          <span v-if="data.thread.createdAt"
+            >opened {{ formatRelativeTime(data.thread.createdAt) }}</span
+          >
+          <span v-if="data.thread.commentCount">· {{ data.thread.commentCount }} comments</span>
         </div>
-        <div v-if="data.labels?.length" class="flex flex-wrap gap-1.5">
+        <div v-if="data.thread.labels.length" class="flex flex-wrap gap-1.5">
           <UBadge
-            v-for="l in data.labels"
+            v-for="l in data.thread.labels"
             :key="l.name"
             :label="l.name"
             color="neutral"
@@ -90,22 +94,21 @@ const { data, pending, error } = useLiveAsyncData<ForgeIssueDetail | null>(
         <header
           class="flex items-center gap-2 border-b border-default bg-elevated/40 px-4 py-2 text-sm"
         >
-          <UserLink :user="data.author" />
-          <span v-if="data.createdAt" class="text-muted"
-            >commented {{ formatRelativeTime(data.createdAt) }}</span
+          <UserLink :user="data.thread.author" />
+          <span v-if="data.thread.createdAt" class="text-muted"
+            >commented {{ formatRelativeTime(data.thread.createdAt) }}</span
           >
         </header>
         <div class="px-4 py-3">
-          <MarkdownBody :content="data.body ?? ''" empty="No description provided." />
+          <MarkdownBody :content="data.thread.body ?? ''" empty="No description provided." />
         </div>
-        <ReactionBar :reactions="data.reactions" :target="{ kind: 'issue', threadId: data.id }" />
+        <ReactionBar :reactions="data.thread.reactions" :target="data.thread.ref" />
       </article>
 
       <CommentThread
         v-if="data.comments.length"
         :comments="data.comments"
-        thread-kind="issue"
-        :thread-id="data.id"
+        :thread="data.thread.ref"
       />
     </template>
   </div>

@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import type { ForgeInboxItem, ForgeNotificationKind } from '~/types/forge'
+import type { InboxItem, InboxKind } from '~/lib/inbox'
 
 const props = withDefaults(
-  defineProps<{ item: ForgeInboxItem; allowReply?: boolean; allowMarkRead?: boolean }>(),
+  defineProps<{ item: InboxItem; allowReply?: boolean; allowMarkRead?: boolean }>(),
   {
     allowReply: true,
     allowMarkRead: true
@@ -20,7 +20,7 @@ interface KindStyle {
 // Base icon + accent per kind. Colors are full, static class strings so Tailwind
 // keeps them in the build. An open PR now reads green instead of the grey that
 // always looked like a draft.
-const KIND_STYLE: Record<ForgeNotificationKind, KindStyle> = {
+const KIND_STYLE: Record<InboxKind, KindStyle> = {
   pull: { icon: 'i-lucide-git-pull-request', chip: 'bg-success/10 text-success' },
   issue: { icon: 'i-lucide-circle-dot', chip: 'bg-success/10 text-success' },
   discussion: { icon: 'i-lucide-messages-square', chip: 'bg-info/10 text-info' },
@@ -56,7 +56,7 @@ const REASON_LABELS: Record<string, string> = {
   review_requested: 'Review requested',
   mention: 'Mentioned',
   team_mention: 'Team mentioned',
-  assign: 'Assigned',
+  assigned: 'Assigned',
   author: 'Your thread'
 }
 const reasonLabel = computed(() =>
@@ -66,8 +66,7 @@ const reasonLabel = computed(() =>
 const canReply = computed(
   () =>
     props.allowReply &&
-    !!item.value.repo &&
-    !!item.value.number &&
+    !!item.value.thread &&
     (item.value.kind === 'pull' || item.value.kind === 'issue')
 )
 const expandable = computed(() => commentCount.value > 0 || canReply.value)
@@ -130,23 +129,10 @@ async function submitReply(): Promise<void> {
           </NuxtLink>
           <span v-if="item.author" class="inline-flex items-center gap-1">
             ·
-            <UAvatar
-              :src="item.author.avatarUrl ?? undefined"
-              :alt="item.author.login"
-              size="3xs"
-            />
-            {{ userLabel(item.author) }}
+            <UAvatar :src="item.author.avatarUrl" :alt="item.author.login" size="3xs" />
+            {{ actorLabel(item.author) }}
           </span>
           <span v-if="item.updatedAt">· {{ formatRelativeTime(item.updatedAt) }}</span>
-          <template v-if="item.stat">
-            <span>·</span>
-            <DiffStat
-              :additions="item.stat.additions"
-              :deletions="item.stat.deletions"
-              :files="item.stat.filesChanged"
-              :show-files="false"
-            />
-          </template>
           <UBadge v-if="reasonLabel" color="neutral" variant="subtle" size="xs">
             {{ reasonLabel }}
           </UBadge>

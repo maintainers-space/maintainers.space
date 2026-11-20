@@ -1,57 +1,82 @@
+import type { Comment, Review, ReviewComment } from 'forges'
 import { describe, expect, it } from 'vitest'
-import type { ForgeComment, ForgePullReview, ForgePullReviewComment } from '~/types/forge'
-import {
-  arrangePullTimeline,
-  buildPullTimeline,
-  diffHunkExcerpt,
-  findReviewComment
-} from './pull-timeline'
+import { arrangePullTimeline, buildPullTimeline, groupConversations } from './pull-timeline'
 
-function comment(id: string, createdAt: string | null): ForgeComment {
-  return { id, body: `Comment ${id}`, createdAt }
+const origin = { forge: 'github', instance: 'github.com' } as const
+const repo = { ...origin, name: 'r', owner: 'o' }
+const threadRef = { ...origin, kind: 'pull_request', number: '1', repo } as const
+
+function date(value: string | null): Date | undefined {
+  return value ? new Date(value) : undefined
 }
 
-function review(
-  id: string,
-  submittedAt: string | null,
-  overrides: Partial<ForgePullReview> = {}
-): ForgePullReview {
-  return { id, state: 'COMMENTED', body: `Review ${id}`, submittedAt, comments: [], ...overrides }
+function comment(id: string, createdAt: string | null): Comment {
+  return {
+    body: `Comment ${id}`,
+    createdAt: date(createdAt),
+    raw: null,
+    ref: { ...origin, id, thread: threadRef }
+  }
 }
 
-function thread(
-  id: string,
-  reviewId: string | undefined,
-  createdAt: string,
-  replies: ForgePullReviewComment[] = []
-): ForgePullReviewComment {
-  return { id, reviewId, body: `Thread ${id}`, path: 'src/a.ts', line: 3, createdAt, replies }
+function inline(id: string, createdAt: string, inReplyTo?: string): ReviewComment {
+  return {
+    body: `Inline ${id}`,
+    createdAt: date(createdAt),
+    inReplyTo,
+    line: 3,
+    path: 'src/a.ts',
+    raw: null,
+    ref: { ...origin, id, thread: threadRef }
+  }
 }
+
+function review(id: string, submittedAt: string | null, overrides: Partial<Review> = {}): Review {
+  return {
+    body: `Review ${id}`,
+    comments: [],
+    raw: null,
+    ref: { ...origin, id, thread: threadRef },
+    state: 'commented',
+    submittedAt: date(submittedAt),
+    ...overrides
+  }
+}
+
+describe('groupConversations', () => {
+  it('nests replies under the comment they answer, even from another review', () => {
+    const grouped = groupConversations([
+      review('r1', '2024-01-02T00:00:00Z', { comments: [inline('t1', '2024-01-02T00:00:00Z')] }),
+      review('r2', '2024-01-03T00:00:00Z', {
+        body: '',
+        comments: [inline('t2', '2024-01-03T00:00:00Z', 't1')]
+      })
+    ])
+
+    const conversations = grouped.get('r1')!
+    expect(conversations).toHaveLength(1)
+    expect(conversations[0]!.replies.map((reply) => reply.ref?.id)).toEqual(['t2'])
+    expect(grouped.has('r2')).toBe(false)
+  })
+})
 
 describe('buildPullTimeline', () => {
-  it('attaches inline threads to the review they were submitted with', () => {
+  it('attaches inline conversations to the review they were submitted with', () => {
     const entries = buildPullTimeline(
       [],
-      [review('r1', '2024-01-02T00:00:00Z')],
-      [thread('t1', 'r1', '2024-01-02T00:00:00Z'), thread('t2', 'r1', '2024-01-02T00:00:01Z')]
+      [
+        review('r1', '2024-01-02T00:00:00Z', {
+          comments: [inline('t1', '2024-01-02T00:00:00Z'), inline('t2', '2024-01-02T00:00:01Z')]
+        })
+      ]
     )
 
     expect(entries).toHaveLength(1)
     expect(entries[0]).toMatchObject({ kind: 'review', key: 'review:r1' })
-    expect(entries[0]!.kind === 'review' && entries[0]!.threads.map((t) => t.id)).toEqual([
+    expect(entries[0]!.kind === 'review' && entries[0]!.conversations.map((c) => c.id)).toEqual([
       't1',
       't2'
     ])
-  })
-
-  it('keeps threads without a known review as standalone entries', () => {
-    const entries = buildPullTimeline(
-      [],
-      [],
-      [thread('t1', 'missing', '2024-01-02T00:00:00Z'), thread('t2', undefined, '2024-01-03')]
-    )
-
-    expect(entries.map((entry) => entry.key)).toEqual(['thread:t1', 'thread:t2'])
   })
 
   it('drops empty comment-only reviews that exist only to carry thread replies', () => {
@@ -59,9 +84,8 @@ describe('buildPullTimeline', () => {
       [],
       [
         review('reply-carrier', '2024-01-03T00:00:00Z', { body: '  ' }),
-        review('approval', '2024-01-04T00:00:00Z', { state: 'APPROVED', body: '' })
-      ],
-      []
+        review('approval', '2024-01-04T00:00:00Z', { body: '', state: 'approved' })
+      ]
     )
 
     expect(entries.map((entry) => entry.key)).toEqual(['review:approval'])
@@ -71,22 +95,19 @@ describe('buildPullTimeline', () => {
 describe('arrangePullTimeline', () => {
   const entries = buildPullTimeline(
     [comment('c1', '2024-01-01T00:00:00Z'), comment('c2', '2024-01-03T00:00:00Z')],
-    [review('r1', '2024-01-02T00:00:00Z')],
-    [thread('t1', undefined, '2024-01-04T00:00:00Z')]
+    [review('r1', '2024-01-02T00:00:00Z')]
   )
 
-  it('interleaves comments, reviews and threads chronologically', () => {
+  it('interleaves comments and reviews chronologically', () => {
     expect(arrangePullTimeline(entries, 'all', 'oldest').map((entry) => entry.key)).toEqual([
       'comment:c1',
       'review:r1',
-      'comment:c2',
-      'thread:t1'
+      'comment:c2'
     ])
   })
 
   it('reverses the order for newest first', () => {
     expect(arrangePullTimeline(entries, 'all', 'newest').map((entry) => entry.key)).toEqual([
-      'thread:t1',
       'comment:c2',
       'review:r1',
       'comment:c1'
@@ -99,63 +120,20 @@ describe('arrangePullTimeline', () => {
       'comment:c2'
     ])
     expect(arrangePullTimeline(entries, 'reviews', 'oldest').map((entry) => entry.key)).toEqual([
-      'review:r1',
-      'thread:t1'
+      'review:r1'
     ])
   })
 
   it('places undated entries last while keeping their original order', () => {
     const undated = buildPullTimeline(
-      [comment('a', null), comment('b', '2024-01-01T00:00:00Z'), comment('c', 'not a date')],
-      [review('pending', null, { state: 'PENDING' })],
-      []
+      [comment('a', null), comment('b', '2024-01-01T00:00:00Z')],
+      [review('pending', null, { state: 'pending' })]
     )
 
     expect(arrangePullTimeline(undated, 'all', 'oldest').map((entry) => entry.key)).toEqual([
       'comment:b',
       'comment:a',
-      'comment:c',
       'review:pending'
     ])
-  })
-})
-
-describe('findReviewComment', () => {
-  it('finds nested replies', () => {
-    const reply = thread('reply', 'r1', '2024-01-02T00:00:00Z')
-    const threads = [thread('root', 'r1', '2024-01-01T00:00:00Z', [reply])]
-
-    expect(findReviewComment(threads, 'reply')).toBe(reply)
-    expect(findReviewComment(threads, 'unknown')).toBeUndefined()
-  })
-})
-
-describe('diffHunkExcerpt', () => {
-  const hunk = [
-    '@@ -1,6 +1,7 @@',
-    ' one',
-    ' two',
-    '-three',
-    '+THREE',
-    '+four',
-    ' ',
-    '\\ No newline at end of file'
-  ].join('\n')
-
-  it('returns the last four lines of the hunk without metadata', () => {
-    expect(diffHunkExcerpt(hunk, 5)).toEqual([
-      { type: 'del', text: 'three' },
-      { type: 'add', text: 'THREE' },
-      { type: 'add', text: 'four' },
-      { type: 'ctx', text: '' }
-    ])
-  })
-
-  it('widens the excerpt to cover a multi-line comment', () => {
-    expect(diffHunkExcerpt(hunk, 6, 1)).toHaveLength(6)
-  })
-
-  it('returns nothing without a hunk', () => {
-    expect(diffHunkExcerpt(null)).toEqual([])
   })
 })

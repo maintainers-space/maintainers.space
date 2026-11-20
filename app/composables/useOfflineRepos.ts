@@ -15,13 +15,15 @@
 // stored yet and otherwise leaves the copy alone, so it never competes with the
 // live page's own stale-while-revalidate freshness and never hammers the forge
 // on a repo the user has already visited (whose data refreshes naturally).
-import { getForge } from '~/lib/forges'
+import type { ForgeProvider, Repo } from 'forges'
 import { cacheExists, invalidate, prefetch } from '~/lib/cache'
+import { loadRuns, loadThreadDetail, loadThreads } from '~/lib/forges/loaders'
+import { fetchRepo, readBlob, readCommits } from '~/lib/forges/reads'
+import { repoRefOf } from '~/lib/forges/registry'
 import { idbKeys } from '~/lib/idb-store'
 import { loadRepoCode } from '~/lib/repo-code'
 import { isForgeRateLimit } from '~/utils/forge-errors'
 import { useRepoVisits } from './useRepoVisits'
-import type { ForgeId, ForgeProvider, ForgeRepo, RepoLocator } from '~/types/forge'
 
 export const OFFLINE_DEFAULT_MAX_COUNT = 100
 const MAX_COUNT_MIN = 10
@@ -159,56 +161,48 @@ function runRequest<T>(
   return prefetch(key, fetcher, { force })
 }
 
+/** The provider for a stored repo ref, honouring any repo-scoped token. */
+function providerOf(r: RepoRef): ForgeProvider | undefined {
+  const ref = repoRefOf(r.provider, r.owner, r.name)
+  return ref ? useForges().providerFor(ref) : undefined
+}
+
 /** Crawl one repo's offline surface (metadata + landing page + lists + watched detail pages). */
 async function seedRepo(r: RepoRef, force = false): Promise<void> {
-  const f = getForge(r.provider)
+  const f = providerOf(r)
   if (!f || !r.owner || !r.name || !isCacheable(r) || runExhausted()) return
   const prefix = `${r.provider}:${r.owner}:${r.name}`
   const metaKey = `repo-meta:${prefix}`
   const codeKey = `repo-code:${prefix}`
-  const locator = { owner: r.owner, name: r.name }
-  const repo = await runRequest<ForgeRepo>(
-    metaKey,
-    (): Promise<ForgeRepo> => {
-      if (f.features.repoRead.getRepo) return f.features.repoRead.getRepo!(r.owner, r.name)
-      return f.features.repoRead.getOverview(r.owner, r.name).then((ov) => ov?.repo)
-    },
-    force
-  )
+  const repo = await runRequest<Repo>(metaKey, () => fetchRepo(f, r.owner, r.name), force)
   if (runExhausted() || !repo?.defaultBranch) return
   // A watched/auto repo only becomes private once we look it up (the home feed
   // doesn't know visibility); drop its cached metadata and stop seeding.
-  if (repo.isPrivate) {
+  if (repo.visibility !== 'public') {
     invalidate(metaKey)
     return
   }
-  const code = await runRequest(
-    codeKey,
-    () => loadRepoCode(f, locator, r.owner, r.name, repo.defaultBranch),
-    force
-  )
-  if (code)
-    await prefetchRepoHealthFiles(f, locator, prefix, repo.defaultBranch, code.health, force)
-  await prefetchRepoLocales(f, locator, prefix, force)
-  await prefetchRepoCommits(f, locator, prefix, repo.defaultBranch, force)
+  const code = await runRequest(codeKey, () => loadRepoCode(f, repo, repo.defaultBranch!), force)
+  if (code) await prefetchRepoHealthFiles(f, repo, prefix, repo.defaultBranch, code.health, force)
+  await prefetchRepoLocales(f, repo, prefix, force)
+  await prefetchRepoCommits(f, repo, prefix, repo.defaultBranch, force)
 }
 
 /** Store the documentation surfaced on a repo landing page with the landing page itself. */
 async function prefetchRepoHealthFiles(
   f: ForgeProvider,
-  locator: RepoLocator,
+  repo: Repo,
   prefix: string,
   defaultBranch: string,
   health: Awaited<ReturnType<typeof loadRepoCode>>['health'],
   force = false
 ): Promise<void> {
-  if (!f.features.codeRead?.getBlob) return
   for (const file of health) {
     if (runExhausted()) return
     try {
       await runRequest(
         `blob:${prefix}:${defaultBranch}:${file.path}`,
-        () => f.features.codeRead!.getBlob!(locator, defaultBranch, file.path),
+        () => readBlob(f, repo, defaultBranch, file.path),
         force
       )
     } catch (e) {
@@ -220,86 +214,53 @@ async function prefetchRepoHealthFiles(
 /** Deduplicate the list of opener functions for the lists a forge can prefetch. */
 function itemListFetchers(
   f: ForgeProvider,
-  locator: RepoLocator,
-  prefix: string,
-  token: string | undefined
+  repo: Repo,
+  prefix: string
 ): Array<[string, () => Promise<unknown>]> {
   const lists: Array<[string, () => Promise<unknown>]> = []
   // Seed every state the live pages request, so each filter has an offline copy.
-  if (f.features.issueRead?.listIssues) {
-    lists.push([
-      `issues:${prefix}:open`,
-      () => f.features.issueRead!.listIssues!(locator, { token, state: 'open', limit: 30 })
-    ])
-    lists.push([
-      `issues:${prefix}:closed`,
-      () => f.features.issueRead!.listIssues!(locator, { token, state: 'closed', limit: 30 })
-    ])
+  if (f.can('threads.list', 'issue')) {
+    lists.push([`issues:${prefix}:open`, () => loadThreads(f, repo, 'issue', 'open')])
+    lists.push([`issues:${prefix}:closed`, () => loadThreads(f, repo, 'issue', 'closed')])
   }
-  if (f.features.pullRead?.listPulls) {
-    lists.push([
-      `pulls:${prefix}:open`,
-      () => f.features.pullRead!.listPulls!(locator, { token, state: 'open', limit: 30 })
-    ])
-    lists.push([
-      `pulls:${prefix}:closed`,
-      () => f.features.pullRead!.listPulls!(locator, { token, state: 'closed', limit: 30 })
-    ])
-    lists.push([
-      `pulls:${prefix}:merged`,
-      () => f.features.pullRead!.listPulls!(locator, { token, state: 'merged', limit: 30 })
-    ])
+  if (f.can('threads.list', 'pull_request')) {
+    lists.push([`pulls:${prefix}:open`, () => loadThreads(f, repo, 'pull_request', 'open')])
+    lists.push([`pulls:${prefix}:closed`, () => loadThreads(f, repo, 'pull_request', 'closed')])
+    lists.push([`pulls:${prefix}:merged`, () => loadThreads(f, repo, 'pull_request', 'merged')])
   }
-  if (f.features.discussionRead?.listDiscussions)
-    lists.push([
-      `discussions:${prefix}:${token ? 'auth' : 'anon'}`,
-      () => f.features.discussionRead!.listDiscussions!(locator, { token, limit: 30 })
-    ])
-  if (f.features.actionRead?.listActionRuns)
-    lists.push([
-      `actions:${prefix}`,
-      () => f.features.actionRead!.listActionRuns!(locator, { limit: 30 })
-    ])
+  if (f.can('threads.list', 'discussion'))
+    lists.push([`discussions:${prefix}:auth`, () => loadThreads(f, repo, 'discussion')])
+  if (f.can('ci.runs') || f.forge === 'tangled')
+    lists.push([`actions:${prefix}`, () => loadRuns(f, repo)])
   return lists
 }
 
 /** Resolve a single watched detail cache key into its forge fetcher, when supported. */
 function detailFetcher(
   f: ForgeProvider,
-  locator: RepoLocator,
-  key: string,
-  token: string | undefined
+  repo: Repo,
+  key: string
 ): (() => Promise<unknown>) | undefined {
   const [kind, , , , rawId] = key.split(':')
   if (!rawId) return undefined
   const itemId = rawId as string
-  if (kind === 'issue' && f.features.issueRead?.getIssue) {
-    const getIssue = f.features.issueRead.getIssue
-    return () => getIssue(locator, itemId, { token })
-  }
-  if (kind === 'pull' && f.features.pullRead?.getPull) {
-    const getPull = f.features.pullRead.getPull
-    return () => getPull(locator, itemId, { token })
-  }
-  if (kind === 'discussion' && f.features.discussionRead?.getDiscussion) {
-    const getDiscussion = f.features.discussionRead.getDiscussion
-    return () => getDiscussion(locator, itemId, { token })
-  }
+  if (kind === 'issue' && f.can('threads.get', 'issue'))
+    return () => loadThreadDetail(f, repo, 'issue', itemId)
+  if (kind === 'pull' && f.can('threads.get', 'pull_request'))
+    return () => loadThreadDetail(f, repo, 'pull_request', itemId)
+  if (kind === 'discussion' && f.can('threads.get', 'discussion'))
+    return () => loadThreadDetail(f, repo, 'discussion', itemId)
   return undefined
 }
 
 /** Prefetch a repo's item lists and any detail pages the user opened / watched. */
 async function prefetchRepoLocales(
   f: ForgeProvider,
-  locator: RepoLocator,
+  repo: Repo,
   prefix: string,
   force = false
 ): Promise<void> {
-  const { get: getToken } = useForgeTokens()
-  const providerId = prefix.split(':')[0] as ForgeId
-  const token = getToken(providerId)
-
-  for (const [key, fetcher] of itemListFetchers(f, locator, prefix, token)) {
+  for (const [key, fetcher] of itemListFetchers(f, repo, prefix)) {
     if (runExhausted()) return
     try {
       await runRequest(key, fetcher, force)
@@ -317,7 +278,7 @@ async function prefetchRepoLocales(
       !key.startsWith(`discussion:${prefix}:`)
     )
       continue
-    const fetcher = detailFetcher(f, locator, key, token)
+    const fetcher = detailFetcher(f, repo, key)
     if (!fetcher || runExhausted()) continue
     try {
       await runRequest(key, fetcher, force)
@@ -330,16 +291,17 @@ async function prefetchRepoLocales(
 /** Seed the same first commit page shown by the repo's commits screen. */
 async function prefetchRepoCommits(
   f: ForgeProvider,
-  locator: RepoLocator,
+  repo: Repo,
   prefix: string,
   defaultBranch: string,
   force = false
 ): Promise<void> {
-  if (!f.features.commitRead?.listCommits || runExhausted()) return
+  if (!f.can('commits.list') && f.forge !== 'tangled') return
+  if (runExhausted()) return
   try {
     await runRequest(
       `commits:${prefix}:${defaultBranch}`,
-      () => f.features.commitRead!.listCommits!(locator, defaultBranch, { limit: 30 }),
+      () => readCommits(f, repo, defaultBranch, 30),
       force
     )
   } catch (e) {

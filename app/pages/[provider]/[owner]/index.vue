@@ -1,20 +1,27 @@
 <script setup lang="ts">
-import { getForge } from '~/lib/forges'
+import type { Repo } from 'forges'
+import { getForge, repoRefOf } from '~/lib/forges/registry'
+import { listOwnerRepos } from '~/lib/forges/reads'
+import { toRepoCard } from '~/lib/forges/view'
+import type { RepoCard } from '~/lib/forges/view'
 
 const route = useRoute()
 const provider = computed(() => String(route.params.provider))
 const owner = computed(() => String(route.params.owner))
 
 const forge = computed(() => getForge(provider.value))
+const { providerFor } = useForges()
 
-const { data, pending, error, refresh } = useLiveAsyncData(
+const { data, pending, error, refresh } = useLiveAsyncData<RepoCard[]>(
   () => `owner-repos:${provider.value}:${owner.value}`,
   async () => {
-    const f = getForge(provider.value)
-    if (!f?.features.repoRead.listRepos) {
+    const ref = repoRefOf(provider.value, owner.value, '')
+    const f = ref ? providerFor(ref) : undefined
+    if (!f) {
       throw createError({ statusCode: 404, statusMessage: `Unknown provider "${provider.value}"` })
     }
-    return await f.features.repoRead.listRepos!(owner.value)
+    const list: Repo[] = await listOwnerRepos(f, owner.value)
+    return list.map(toRepoCard)
   },
   { lazy: true, watch: [provider, owner] }
 )
@@ -81,7 +88,7 @@ const { data, pending, error, refresh } = useLiveAsyncData(
             <p v-if="r.description" class="mt-1 line-clamp-2 text-sm text-muted">
               {{ r.description }}
             </p>
-            <div v-if="r.topics?.length" class="mt-2 flex flex-wrap gap-1">
+            <div v-if="r.topics.length" class="mt-2 flex flex-wrap gap-1">
               <UBadge
                 v-for="t in r.topics.slice(0, 4)"
                 :key="t"

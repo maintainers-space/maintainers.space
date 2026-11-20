@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { ForgeAccount } from '~/composables/useForgeAccounts'
-import { getForge } from '~/lib/forges'
+import { getForge } from '~/lib/forges/registry'
 
 const props = defineProps<{ account: ForgeAccount; verified?: boolean }>()
 const emit = defineEmits<{ unlink: [account: ForgeAccount] }>()

@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { ForgeRepo } from '~/types/forge'
+import type { RepoCard } from '~/lib/forges/view'
 import { useRepoVisits } from './useRepoVisits'
 import { clearOfflineState, useOfflineRepos } from './useOfflineRepos'
 
-function repo(owner: string): Pick<ForgeRepo, 'provider' | 'owner' | 'name' | 'fullName'> {
+function repo(owner: string): Pick<RepoCard, 'provider' | 'owner' | 'name' | 'fullName'> {
   return { provider: 'github', owner, name: 'repo', fullName: `${owner}/repo` }
 }
 

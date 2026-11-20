@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { forgeList, isForgeId, type KnownForgeId } from '~/lib/forges'
+import { forgeList, isForgeId, type KnownForgeId } from '~/lib/forges/registry'
 import type { ForgeAccount } from '~/composables/useForgeAccounts'
 
 const { accounts, pending, loaded, refresh, unlink } = useForgeAccounts()

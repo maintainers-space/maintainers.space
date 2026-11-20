@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { ForgeContribution, ForgeEventKind } from '~/types/forge'
+import type { Contribution, ContributionKind } from '~/lib/activity'
 import { totalCommitCount, type TimelineEntry } from '~/lib/timeline-aggregate'
 
 const props = withDefaults(defineProps<{ entry: TimelineEntry; showActor?: boolean }>(), {
@@ -14,7 +14,7 @@ interface KindStyle {
 
 // Icon + tinted chip (for the "Me" leading) and a plain text tone (for the small
 // kind marker on the "Friends" feed). Static class strings so Tailwind keeps them.
-const KIND_STYLE: Record<ForgeEventKind, KindStyle> = {
+const KIND_STYLE: Record<ContributionKind, KindStyle> = {
   push: {
     icon: 'i-lucide-git-commit-horizontal',
     chip: 'bg-elevated text-muted',
@@ -49,7 +49,7 @@ const KIND_STYLE: Record<ForgeEventKind, KindStyle> = {
   other: { icon: 'i-lucide-activity', chip: 'bg-elevated text-muted', tone: 'text-muted' }
 }
 
-const VERB: Record<ForgeEventKind, string> = {
+const VERB: Record<ContributionKind, string> = {
   push: 'pushed',
   pr_opened: 'opened',
   pr_merged: 'merged',
@@ -68,7 +68,7 @@ const e = computed(() => props.entry)
 const primary = computed(() => e.value.primary)
 const style = computed(() => KIND_STYLE[primary.value.kind])
 const repoTo = computed(() => repoPath({ provider: e.value.provider, ...e.value.repo }))
-const actorTo = computed(() => userPath(e.value.actor))
+const actorTo = computed(() => `/${e.value.provider}/${encodeURIComponent(e.value.actor.login)}`)
 const isPush = computed(() => primary.value.kind === 'push')
 const commitCount = computed(() => totalCommitCount(e.value))
 
@@ -102,7 +102,7 @@ const hiddenCommitCount = computed(() =>
   Math.max(0, commits.value.length - shownCommits.value.length)
 )
 
-function subEventLabel(ev: ForgeContribution): string {
+function subEventLabel(ev: Contribution): string {
   return VERB[ev.kind].charAt(0).toUpperCase() + VERB[ev.kind].slice(1)
 }
 </script>
@@ -113,7 +113,7 @@ function subEventLabel(ev: ForgeContribution): string {
     <NuxtLink v-if="showActor" :to="actorTo" class="mt-0.5 shrink-0">
       <UAvatar
         :src="e.actor.avatarUrl ?? undefined"
-        :alt="userLabel(e.actor)"
+        :alt="actorLabel(e.actor)"
         size="md"
         class="ring-1 ring-default"
       />
@@ -132,7 +132,7 @@ function subEventLabel(ev: ForgeContribution): string {
           v-if="showActor"
           :to="actorTo"
           class="font-medium text-highlighted hover:text-primary"
-          >{{ userLabel(e.actor) }}</NuxtLink
+          >{{ actorLabel(e.actor) }}</NuxtLink
         >
         <span class="text-muted">{{ showActor ? ' ' : '' }}{{ verbText }}&nbsp;</span>
         <template v-if="isPush">

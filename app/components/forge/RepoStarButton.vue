@@ -1,8 +1,10 @@
 <script setup lang="ts">
-import type { ForgeRepo } from '~/types/forge'
+import type { Repo } from 'forges'
+import { getRepoStats } from '~/lib/forges/gaps/repo-stats'
 import ConfirmModal from '~/components/ConfirmModal.vue'
 
-const props = defineProps<{ repo: ForgeRepo }>()
+const props = defineProps<{ repo: Repo }>()
+const fallbackStars = computed(() => getRepoStats(props.repo).stars)
 
 const { starred, stars, pending, loaded, canStar, toggle } = useRepoStar(toRef(props, 'repo'))
 const toast = useToast()
@@ -13,7 +15,7 @@ async function onClick(): Promise<void> {
   if (starred.value) {
     const ok = await confirmUnstar.open({
       title: 'Unstar this repository?',
-      description: `You won't see ${props.repo.name} in your starred repos anymore.`,
+      description: `You won't see ${props.repo.ref.name} in your starred repos anymore.`,
       confirmLabel: 'Unstar',
       color: 'error'
     }).result
@@ -59,7 +61,7 @@ async function onClick(): Promise<void> {
     <span class="tabular-nums">{{ formatCompactNumber(stars ?? 0) }}</span>
   </button>
 
-  <span v-else-if="repo.stars !== undefined" class="inline-flex items-center gap-1">
-    <UIcon name="i-lucide-star" class="size-4" />{{ formatCompactNumber(repo.stars) }}
+  <span v-else-if="fallbackStars !== undefined" class="inline-flex items-center gap-1">
+    <UIcon name="i-lucide-star" class="size-4" />{{ formatCompactNumber(fallbackStars) }}
   </span>
 </template>

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { ForgeInboxItem } from '~/types/forge'
+import type { InboxItem } from '~/lib/inbox'
 
 const {
   inboxItems,
@@ -38,7 +38,7 @@ function onRefresh(): void {
 }
 
 /** Icon + tint for a resolved thread's final state. */
-function resolvedMeta(item: ForgeInboxItem): { icon: string; class: string } {
+function resolvedMeta(item: InboxItem): { icon: string; class: string } {
   if (item.kind === 'pull') {
     if (item.state === 'merged') return { icon: 'i-lucide-git-merge', class: 'text-primary' }
     return { icon: 'i-lucide-git-pull-request-closed', class: 'text-error' }

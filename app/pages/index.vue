@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { forgeList, getForge } from '~/lib/forges'
+import { forgeList, getForge } from '~/lib/forges/registry'
 import ConfirmModal from '~/components/ConfirmModal.vue'
 import type { ContributionEntry } from '~/components/home/ContributionList.vue'
 
@@ -47,7 +47,7 @@ const contributions = computed<ContributionEntry[]>(() => {
 })
 const contributionsSeen = useSeenItems('home:contributions')
 function contributionId(entry: ContributionEntry): string {
-  return `${entry.kind}:${entry.item.provider}:${entry.item.repo?.fullName}:${entry.item.id}`
+  return `${entry.kind}:${entry.item.provider}:${entry.item.repo.fullName}:${entry.item.id}`
 }
 function isNewContribution(entry: ContributionEntry): boolean {
   return contributionsSeen.isNew(contributionId(entry))

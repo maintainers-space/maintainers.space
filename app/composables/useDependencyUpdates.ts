@@ -1,4 +1,5 @@
-import { forgeList, getForge } from '~/lib/forges'
+import type { MergeMethod, Repo, Thread } from 'forges'
+
 import { cached, TTL } from '~/lib/cache'
 import {
   groupDependencyPrs,
@@ -6,7 +7,8 @@ import {
   type DependencyGroup,
   type DependencyPr
 } from '~/lib/dependency-updates'
-import type { ForgePull, ForgeRepo, ForgeReviewInput, RepoLocator } from '~/types/forge'
+import { forgeIdOf } from '~/lib/forges/registry'
+import { toRepoCard } from '~/lib/forges/view'
 
 async function mapLimit<T, R>(
   items: T[],
@@ -25,31 +27,18 @@ async function mapLimit<T, R>(
   return results
 }
 
-function repoRef(repo: ForgeRepo, provider: string): DependencyPr['repo'] {
+/** Dependency bumps are noise in history, so squash when the repository allows it. */
+const MERGE_PREFERENCE: MergeMethod[] = ['squash', 'merge', 'rebase']
+
+function repoRef(repo: Repo): DependencyPr['repo'] {
+  const card = toRepoCard(repo)
   return {
-    provider,
-    owner: repo.owner,
-    name: repo.name,
-    fullName: repo.fullName,
-    url: repo.url
+    provider: card.provider,
+    owner: card.owner,
+    name: card.name,
+    fullName: card.fullName,
+    url: card.url
   }
-}
-
-function errorStatus(e: unknown): number | undefined {
-  const err = e as { response?: { status?: number }; statusCode?: number; status?: number }
-  return err.response?.status ?? err.statusCode ?? err.status
-}
-
-function errorMessage(e: unknown): string {
-  const err = e as { data?: { message?: string }; message?: string }
-  return String(err.data?.message ?? err.message ?? '')
-}
-
-function isGitHubSelfApprovalRejection(e: unknown): boolean {
-  if (errorStatus(e) !== 422) return false
-  const errors = (e as { data?: { errors?: { message?: string }[] } }).data?.errors ?? []
-  const any = `${errorMessage(e)} ${errors.map((er) => er.message ?? '').join(' ')}`
-  return /approve a pull request (authored|created) by/i.test(any)
 }
 
 export interface GroupMergeResult {
@@ -58,7 +47,8 @@ export interface GroupMergeResult {
 }
 
 export function useDependencyUpdates() {
-  const { get: getToken } = useForgeTokens()
+  const { tokens } = useForgeTokens()
+  const { forges } = useForges()
   const { did } = useAuth()
 
   const groups = useState<DependencyGroup[]>('dependency-groups', () => [])
@@ -70,17 +60,16 @@ export function useDependencyUpdates() {
   const totalCount = computed(() => groups.value.reduce((n, g) => n + g.items.length, 0))
 
   function prKey(item: DependencyPr): string {
-    return `${item.repo.provider}:${item.repo.fullName}#${item.pull.number ?? item.pull.id}`
+    return `${item.repo.provider}:${item.repo.fullName}#${threadNumberOf(item.thread.ref)}`
   }
 
   const isPending = (item: DependencyPr): boolean => pending.value.includes(prKey(item))
 
+  /** Forges with a connected account that can list its repos and pull requests. */
   const activeForges = () =>
-    forgeList.filter(
+    forges.value.providers.filter(
       (f) =>
-        f.features.repoRead.listAccessibleRepos &&
-        f.features.pullRead?.listPulls &&
-        !!getToken(f.id)
+        f.can('repos.list') && f.can('threads.list', 'pull_request') && !!tokens.value[forgeIdOf(f)]
     )
 
   async function load(force = false): Promise<void> {
@@ -95,32 +84,29 @@ export function useDependencyUpdates() {
       (
         await Promise.all(
           active.map(async (forge) => {
-            const token = getToken(forge.id)
+            const id = forgeIdOf(forge)
             try {
-              const repos = await forge.features.repoRead.listAccessibleRepos!({ token, viewer })
+              const repos: Repo[] = []
+              for await (const repo of forge.repos.list()) repos.push(repo)
               const listed = await mapLimit(repos, 6, async (repo) => {
                 try {
-                  const pulls: ForgePull[] = []
-                  let cursor: string | undefined
-                  do {
-                    const page = await forge.features.pullRead!.listPulls!(
-                      { owner: repo.owner, name: repo.name, ref: repo.ref },
-                      { state: 'open', limit: 50, cursor, token, viewer }
-                    )
-                    pulls.push(...page.items)
-                    cursor = page.cursor
-                  } while (cursor)
-                  return pulls.map((pull: ForgePull) =>
-                    toDependencyPr(pull, repoRef(repo, forge.id))
-                  )
+                  const pulls: Thread[] = []
+                  for await (const pull of forge.threads.list(repo.ref, {
+                    kind: 'pull_request',
+                    state: 'open'
+                  }))
+                    pulls.push(pull)
+                  return pulls.map((pull) => toDependencyPr(pull, repoRef(repo)))
                 } catch {
-                  noteSet.add(`Could not load dependency updates from ${repo.fullName}.`)
+                  noteSet.add(
+                    `Could not load dependency updates from ${toRepoCard(repo).fullName}.`
+                  )
                   return [] as DependencyPr[]
                 }
               })
               return listed.flat().filter((x): x is DependencyPr => !!x)
             } catch {
-              noteSet.add(`Could not load dependency updates from ${forge.label}.`)
+              noteSet.add(`Could not load dependency updates from ${id}.`)
               return [] as DependencyPr[]
             }
           })
@@ -130,7 +116,7 @@ export function useDependencyUpdates() {
     groups.value = groupDependencyPrs(
       await cached(
         `dependencies:${active
-          .map((f) => f.id)
+          .map((f) => forgeIdOf(f))
           .sort()
           .join(',')}:${viewer ?? 'anon'}`,
         fetcher,
@@ -143,46 +129,21 @@ export function useDependencyUpdates() {
   }
 
   async function approveAndMerge(item: DependencyPr): Promise<void> {
-    const forge = getForge(item.repo.provider)
-    if (!forge?.features.write?.mergePull)
+    const forge = forges.value.for(item.thread.ref)
+    if (!forge?.can('threads.approve') || !forge.can('threads.merge'))
       throw new Error(`Cannot merge on forge "${item.repo.provider}".`)
-    const token = getToken(item.repo.provider)
-    const loc: RepoLocator = { owner: item.repo.owner, name: item.repo.name }
-    const number = String(item.pull.number ?? item.pull.id)
-    if (!number) throw new Error('This update has no pull request number.')
 
-    let expectedHead: string | undefined
-    if (forge.features.pullRead?.getPull) {
-      const fresh = await forge.features.pullRead!.getPull!(loc, number, { token })
-      if (fresh.state === 'closed' || fresh.state === 'merged' || fresh.state === 'draft')
-        throw new Error(`This ${pullsTerm(forge.id)} is no longer open and unlocked.`)
-      expectedHead = fresh.headSha ?? undefined
-    }
+    // Re-read the pull so a stale list can never merge something that moved or closed.
+    const fresh = await forge.threads.get(item.thread.ref)
+    if (fresh.state !== 'open' || fresh.isDraft)
+      throw new Error(`This ${pullsTerm(item.repo.provider)} is no longer open and unlocked.`)
 
-    const input: ForgeReviewInput = {
-      event: 'APPROVE',
-      ...(expectedHead ? { expectedHead } : {})
-    }
-    let approvalError: unknown
-    if (forge.features.write?.createReview) {
-      try {
-        await forge.features.write!.createReview!(loc, number, input, { token })
-      } catch (e) {
-        const selfApproval = item.repo.provider === 'github' && isGitHubSelfApprovalRejection(e)
-        if (!selfApproval) throw e
-        approvalError = e
-      }
-    }
-    const res = await forge.features.write!.mergePull!(loc, number, {
-      token,
-      ...(expectedHead ? { expectedHead } : {})
+    const { mergeMethods } = await forge.repos.get(fresh.ref.repo)
+    await forge.threads.approve(fresh.ref)
+    await forge.threads.merge(fresh.ref, {
+      method: MERGE_PREFERENCE.find((m) => mergeMethods?.includes(m)),
+      sha: fresh.branches?.head.sha
     })
-    if (!res.merged) {
-      const reason = res.message || 'Merge was not completed.'
-      if (approvalError)
-        throw new Error(`${reason} (approval rejected: ${errorMessage(approvalError)})`)
-      throw new Error(reason)
-    }
   }
 
   async function mergeGroup(group: DependencyGroup): Promise<GroupMergeResult> {
@@ -211,7 +172,7 @@ export function useDependencyUpdates() {
   function mergeOne(item: DependencyPr): Promise<GroupMergeResult> {
     return mergeGroup({
       key: prKey(item),
-      name: item.pull.title,
+      name: item.thread.title,
       items: [item],
       unparsable: true
     })

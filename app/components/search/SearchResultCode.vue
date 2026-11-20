@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import type { ForgeSearchCode } from '~/types/forge'
+import type { CodeHit } from '~/lib/forges/gaps/search-extra'
 
-const props = defineProps<{ code: ForgeSearchCode }>()
+const props = defineProps<{ code: CodeHit }>()
 
 const to = computed(
   () =>
@@ -20,7 +20,7 @@ const to = computed(
       <span class="truncate font-mono text-xs text-default">{{ code.path }}</span>
     </div>
     <pre
-      v-if="code.fragments?.length"
+      v-if="code.fragments.length"
       class="mt-2 overflow-x-auto rounded bg-elevated/60 p-2 font-mono text-xs text-muted"
     ><code>{{ code.fragments[0] }}</code></pre>
   </div>

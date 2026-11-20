@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { getForge } from '~/lib/forges'
+import { getForge } from '~/lib/forges/registry'
 
 const props = withDefaults(defineProps<{ provider: string; class?: string }>(), { class: '' })
 

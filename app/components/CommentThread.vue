@@ -1,22 +1,15 @@
 <script setup lang="ts">
-import type { ForgeComment, ForgeReactionTargetKind } from '~/types/forge'
+import type { Comment, ThreadRef } from 'forges'
 
 defineProps<{
-  comments: ForgeComment[]
-  /** Thread this comment list belongs to, for reactions. Omit to hide the reaction bar. */
-  threadKind?: ForgeReactionTargetKind
-  threadId?: string
+  comments: Comment[]
+  /** Thread this comment list belongs to. Omit to hide the reaction bars. */
+  thread?: ThreadRef
 }>()
 </script>
 
 <template>
   <div class="space-y-4">
-    <CommentCard
-      v-for="c in comments"
-      :key="c.id"
-      :comment="c"
-      :thread-kind="threadKind"
-      :thread-id="threadId"
-    />
+    <CommentCard v-for="c in comments" :key="c.ref.id" :comment="c" :thread="thread" />
   </div>
 </template>

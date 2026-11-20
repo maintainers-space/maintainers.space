@@ -1,8 +1,12 @@
 <script setup lang="ts">
-import type { ForgeUser } from '~/types/forge'
+import type { Actor } from 'forges'
 
 const props = withDefaults(
-  defineProps<{ user?: ForgeUser | null; avatar?: boolean; class?: string }>(),
+  defineProps<{
+    user?: Pick<Actor, 'login' | 'name' | 'avatarUrl'> | null
+    avatar?: boolean
+    class?: string
+  }>(),
   {
     user: null,
     avatar: true,
@@ -10,7 +14,7 @@ const props = withDefaults(
   }
 )
 
-const label = computed(() => userLabel(props.user))
+const label = computed(() => actorLabel(props.user))
 const isDid = computed(() => (props.user?.login ?? '').startsWith('did:'))
 </script>
 

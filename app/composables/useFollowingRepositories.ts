@@ -1,8 +1,11 @@
-import { forgeList, getForge } from '~/lib/forges'
 import { fetchFollows } from '~/lib/atproto/public'
 import { cached, TTL } from '~/lib/cache'
 import { balanceByDominance } from '~/lib/forge-balance'
-import type { ForgeRepo } from '~/types/forge'
+import { listFollowedRepos } from '~/lib/forges/gaps/social'
+import { listTangledRepos } from '~/lib/forges/gaps/tangled'
+import { forgeIdOf } from '~/lib/forges/registry'
+import { toRepoCard } from '~/lib/forges/view'
+import type { RepoCard } from '~/lib/forges/view'
 
 /** Bounded-concurrency map so the Tangled repository fan-out stays responsive. */
 async function mapLimit<T, R>(
@@ -22,7 +25,7 @@ async function mapLimit<T, R>(
   return results
 }
 
-function dedupe(repos: ForgeRepo[]): ForgeRepo[] {
+function dedupe(repos: RepoCard[]): RepoCard[] {
   const seen = new Set<string>()
   return repos.filter((repo) => {
     const key = `${repo.provider}:${repo.fullName}`
@@ -32,55 +35,41 @@ function dedupe(repos: ForgeRepo[]): ForgeRepo[] {
   })
 }
 
-/** Rewrite a Tangled repo listed by DID to display the followed account's handle. */
-function withOwner(repo: ForgeRepo, owner: string): ForgeRepo {
-  if (repo.owner === owner) return repo
-  return {
-    ...repo,
-    owner,
-    fullName: `${owner}/${repo.name}`,
-    url: `https://tangled.org/${owner}/${repo.name}`,
-    ownerUrl: `https://tangled.org/${owner}`
-  }
-}
-
 /** Repositories maintained by accounts the signed-in viewer follows. */
 export function useFollowingRepositories() {
-  const { get: getToken } = useForgeTokens()
+  const { tokens } = useForgeTokens()
+  const { forges } = useForges()
   const { did, isAuthenticated } = useAuth()
 
-  const repos = ref<ForgeRepo[]>([])
+  const repos = ref<RepoCard[]>([])
   const loading = ref(false)
   let request = 0
 
-  async function fetchRepos(): Promise<ForgeRepo[]> {
-    const collected: ForgeRepo[] = []
+  async function fetchRepos(): Promise<RepoCard[]> {
+    const collected: RepoCard[] = []
 
     await Promise.all(
-      forgeList.map(async (forge) => {
-        if (!forge.features.repoRead.listFollowedRepos) return
-        const token = getToken(forge.id)
-        if (!token) return
+      forges.value.providers.map(async (forge) => {
+        if (forge.forge === 'tangled' || !tokens.value[forgeIdOf(forge)]) return
         try {
-          collected.push(...(await forge.features.repoRead.listFollowedRepos!({ token })))
+          collected.push(...(await listFollowedRepos(forge)))
         } catch {
           /* A single unavailable forge must not hide results from the others. */
         }
       })
     )
 
-    const tangled = getForge('tangled')
-    if (tangled?.features.repoRead.listRepos && did.value) {
+    const tangled = forges.value.get('tangled')
+    if (tangled && did.value) {
       try {
         const follows = await fetchFollows(did.value, 60)
         const chunks = await mapLimit(follows.slice(0, 12), 3, async (follow) => {
           try {
-            const list = await tangled.features.repoRead.listRepos!(follow.did)
             const owner =
               follow.handle && !follow.handle.endsWith('.invalid') ? follow.handle : follow.did
-            return list.map((repo) => withOwner(repo, owner))
+            return (await listTangledRepos(tangled, owner)).map(toRepoCard)
           } catch {
-            return [] as ForgeRepo[]
+            return [] as RepoCard[]
           }
         })
         collected.push(...chunks.flat())

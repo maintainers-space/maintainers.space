@@ -1,9 +1,8 @@
-import { getForge } from './forges'
-import type { ForgeId } from '~/types/forge'
+import { getForge } from './forges/registry'
 
 const DEFAULT_DOMINANCE = 1
 
-function weightOf(id: ForgeId): number {
+function weightOf(id: string): number {
   return 1 / (getForge(id)?.dominance ?? DEFAULT_DOMINANCE)
 }
 
@@ -18,8 +17,8 @@ function weightOf(id: ForgeId): number {
  * giving weaker forges outsized (but not exclusive) representation. Once a
  * provider's items run out it simply drops out of the rotation.
  */
-export function balanceByDominance<T extends { provider: ForgeId }>(items: T[]): T[] {
-  const buckets = new Map<ForgeId, T[]>()
+export function balanceByDominance<T extends { provider: string }>(items: T[]): T[] {
+  const buckets = new Map<string, T[]>()
   for (const item of items) {
     const bucket = buckets.get(item.provider)
     if (bucket) bucket.push(item)
@@ -27,12 +26,12 @@ export function balanceByDominance<T extends { provider: ForgeId }>(items: T[]):
   }
   if (buckets.size <= 1) return items
 
-  const current = new Map<ForgeId, number>()
+  const current = new Map<string, number>()
   const out: T[] = []
 
   for (let remaining = items.length; remaining > 0; remaining--) {
     let totalWeight = 0
-    let picked: ForgeId | null = null
+    let picked: string | null = null
     for (const [id, bucket] of buckets) {
       if (!bucket.length) continue
       const w = weightOf(id)

@@ -1,4 +1,4 @@
-import type { ForgeComment, ForgePullReview, ForgePullReviewComment } from '~/types/forge'
+import type { Comment, Review, ReviewComment } from 'forges'
 
 export const PULL_TIMELINE_FILTERS = ['all', 'comments', 'reviews'] as const
 export type PullTimelineFilter = (typeof PULL_TIMELINE_FILTERS)[number]
@@ -6,55 +6,83 @@ export type PullTimelineFilter = (typeof PULL_TIMELINE_FILTERS)[number]
 export const PULL_TIMELINE_SORTS = ['oldest', 'newest'] as const
 export type PullTimelineSort = (typeof PULL_TIMELINE_SORTS)[number]
 
-export type PullTimelineEntry =
-  | { kind: 'comment'; key: string; at?: string | null; comment: ForgeComment }
-  | {
-      kind: 'review'
-      key: string
-      at?: string | null
-      review: ForgePullReview
-      threads: ForgePullReviewComment[]
-    }
-  | { kind: 'thread'; key: string; at?: string | null; thread: ForgePullReviewComment }
-
-export interface DiffExcerptLine {
-  type: 'add' | 'del' | 'ctx'
-  text: string
+/** An inline conversation on the diff: the comment that started it, then its replies in order. */
+export interface ReviewConversation {
+  id: string
+  replies: ReviewComment[]
+  resolved: boolean
+  root: ReviewComment
 }
 
-export function buildPullTimeline(
-  comments: ForgeComment[],
-  reviews: ForgePullReview[],
-  threads: ForgePullReviewComment[]
-): PullTimelineEntry[] {
-  const reviewIds = new Set(reviews.map((review) => review.id))
-  const threadsByReview = new Map<string, ForgePullReviewComment[]>()
+export type PullTimelineEntry =
+  | { kind: 'comment'; key: string; at?: Date; comment: Comment }
+  | { kind: 'review'; key: string; at?: Date; review: Review; conversations: ReviewConversation[] }
+
+/**
+ * Groups every inline comment of a pull request into conversations. A reply may sit in a
+ * different review than the comment it answers, so conversations are keyed by root comment.
+ */
+export function groupConversations(reviews: Review[]): Map<string, ReviewConversation[]> {
+  const all = reviews.flatMap((review) =>
+    (review.comments || []).map((comment) => ({ comment, reviewId: review.ref.id }))
+  )
+  const byId = new Map(all.map((item) => [item.comment.ref?.id ?? '', item]))
+  const rootOf = (comment: ReviewComment): ReviewComment => {
+    let current = comment
+    const seen = new Set<string>()
+    while (current.inReplyTo && !seen.has(current.inReplyTo)) {
+      seen.add(current.inReplyTo)
+      const parent = byId.get(current.inReplyTo)?.comment
+      if (!parent) break
+      current = parent
+    }
+    return current
+  }
+
+  const conversations = new Map<string, ReviewConversation>()
+  const reviewOfRoot = new Map<string, string>()
+  for (const { comment, reviewId } of all) {
+    const root = rootOf(comment)
+    const id = root.ref?.id ?? ''
+    let conversation = conversations.get(id)
+    if (!conversation) {
+      conversation = { id, replies: [], resolved: root.thread?.resolved ?? false, root }
+      conversations.set(id, conversation)
+    }
+    if (comment !== root) conversation.replies.push(comment)
+    else reviewOfRoot.set(id, reviewId)
+  }
+
+  const byReview = new Map<string, ReviewConversation[]>()
+  for (const [id, conversation] of conversations) {
+    conversation.replies.sort(
+      (a, b) => (a.createdAt?.getTime() ?? 0) - (b.createdAt?.getTime() ?? 0)
+    )
+    const reviewId = reviewOfRoot.get(id)
+    if (reviewId === undefined) continue
+    byReview.set(reviewId, [...(byReview.get(reviewId) ?? []), conversation])
+  }
+  return byReview
+}
+
+export function buildPullTimeline(comments: Comment[], reviews: Review[]): PullTimelineEntry[] {
+  const byReview = groupConversations(reviews)
   const entries: PullTimelineEntry[] = comments.map((comment) => ({
     kind: 'comment',
-    key: `comment:${comment.id}`,
+    key: `comment:${comment.ref.id}`,
     at: comment.createdAt,
     comment
   }))
 
-  for (const thread of threads) {
-    if (thread.reviewId && reviewIds.has(thread.reviewId)) {
-      const grouped = threadsByReview.get(thread.reviewId)
-      if (grouped) grouped.push(thread)
-      else threadsByReview.set(thread.reviewId, [thread])
-    } else {
-      entries.push({ kind: 'thread', key: `thread:${thread.id}`, at: thread.createdAt, thread })
-    }
-  }
-
   for (const review of reviews) {
-    const reviewThreads = threadsByReview.get(review.id) ?? []
-    if (review.state === 'COMMENTED' && !review.body?.trim() && !reviewThreads.length) continue
+    const conversations = byReview.get(review.ref.id) ?? []
+    if (review.state === 'commented' && !review.body?.trim() && !conversations.length) continue
     entries.push({
       kind: 'review',
-      key: `review:${review.id}`,
+      key: `review:${review.ref.id}`,
       at: review.submittedAt,
       review,
-      threads: reviewThreads
+      conversations
     })
   }
 
@@ -62,7 +90,7 @@ export function buildPullTimeline(
 }
 
 function timestamp(entry: PullTimelineEntry): number {
-  const time = entry.at ? Date.parse(entry.at) : Number.NaN
+  const time = entry.at?.getTime() ?? Number.NaN
   return Number.isNaN(time) ? Number.POSITIVE_INFINITY : time
 }
 
@@ -77,34 +105,4 @@ export function arrangePullTimeline(
     .sort((a, b) => (a.time === b.time ? 0 : a.time < b.time ? -1 : 1))
     .map(({ entry }) => entry)
   return sort === 'newest' ? ordered.toReversed() : ordered
-}
-
-export function findReviewComment(
-  comments: ForgePullReviewComment[],
-  commentId: string
-): ForgePullReviewComment | undefined {
-  for (const comment of comments) {
-    if (comment.id === commentId) return comment
-    const reply = findReviewComment(comment.replies ?? [], commentId)
-    if (reply) return reply
-  }
-  return undefined
-}
-
-export function diffHunkExcerpt(
-  diffHunk: string | null | undefined,
-  line?: number,
-  startLine?: number
-): DiffExcerptLine[] {
-  if (!diffHunk) return []
-  const span = line && startLine && startLine < line ? line - startLine + 1 : 1
-  const count = Math.min(Math.max(span, 4), 12)
-  return diffHunk
-    .split('\n')
-    .filter((text) => text && !text.startsWith('@@') && !text.startsWith('\\'))
-    .slice(-count)
-    .map((text) => ({
-      type: text.startsWith('+') ? 'add' : text.startsWith('-') ? 'del' : 'ctx',
-      text: text.slice(1)
-    }))
 }

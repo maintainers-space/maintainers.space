@@ -1,11 +1,11 @@
 <script setup lang="ts">
-import type { ForgeIssue } from '~/types/forge'
+import type { WorkItem } from '~/lib/work'
 
 export type ContributionKind = 'authored' | 'review' | 'assigned'
 
 export interface ContributionEntry {
   kind: ContributionKind
-  item: ForgeIssue
+  item: WorkItem
 }
 
 withDefaults(
@@ -58,10 +58,10 @@ const KIND_META: Record<
     <ul v-else class="divide-y divide-default">
       <li
         v-for="entry in entries"
-        :key="`${entry.kind}:${entry.item.provider}:${entry.item.repo?.fullName}:${entry.item.id}`"
+        :key="`${entry.kind}:${entry.item.provider}:${entry.item.repo.fullName}:${entry.item.id}`"
       >
         <NuxtLink
-          :to="issuePath(entry.item)"
+          :to="entry.item.to"
           class="flex items-start gap-3 px-4 py-3 transition hover:bg-elevated/40"
         >
           <span
@@ -89,8 +89,8 @@ const KIND_META: Record<
             <p class="mt-1 truncate text-sm text-default">{{ entry.item.title }}</p>
             <div class="mt-0.5 flex items-center gap-1.5 text-xs text-muted">
               <ForgeIcon :provider="entry.item.provider" class="size-3 shrink-0" />
-              <span class="truncate">{{ entry.item.repo?.fullName }}</span>
-              <span v-if="entry.item.number" class="shrink-0">#{{ entry.item.number }}</span>
+              <span class="truncate">{{ entry.item.repo.fullName }}</span>
+              <span class="shrink-0">#{{ entry.item.number }}</span>
             </div>
           </div>
           <span

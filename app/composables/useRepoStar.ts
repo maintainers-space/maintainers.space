@@ -2,8 +2,9 @@ import { ok } from '@atcute/client'
 import type {} from '@atcute/atproto'
 import type { Did, Nsid } from '@atcute/lexicons'
 import type { Ref } from 'vue'
-import { getForge } from '~/lib/forges'
-import type { ForgeId, ForgeRepo, RepoLocator } from '~/types/forge'
+import type { Repo } from 'forges'
+import { canStar, isStarred, setStarred } from '~/lib/forges/gaps/social'
+import { getRepoStats } from '~/lib/forges/gaps/repo-stats'
 
 const TANGLED_STAR_COLLECTION = 'sh.tangled.feed.star'
 
@@ -14,11 +15,11 @@ interface TangledStarRecord {
 
 /**
  * Reactive star state for a single repository, unified across providers.
- * Token forges (GitHub/GitLab/…) go through the provider `isStarred`/`setStar`
- * methods; Tangled writes a `sh.tangled.feed.star` record via the atproto session.
+ * Token forges (GitHub/GitLab/…) go through the star gap in ~/lib/forges/gaps/social;
+ * Tangled writes a `sh.tangled.feed.star` record via the atproto session.
  */
-export function useRepoStar(repo: Ref<ForgeRepo | null>) {
-  const { get: getToken } = useForgeTokens()
+export function useRepoStar(repo: Ref<Repo | null>) {
+  const { isConnected, providerFor } = useForges()
   const { did, runAuthed } = useAuth()
 
   const starred = ref(false)
@@ -27,23 +28,20 @@ export function useRepoStar(repo: Ref<ForgeRepo | null>) {
   const loaded = ref(false)
   const tangledRkey = ref<string | null>(null)
 
-  const forge = computed(() => (repo.value ? getForge(repo.value.provider) : undefined))
-  const locator = computed<RepoLocator | null>(() =>
-    repo.value ? { owner: repo.value.owner, name: repo.value.name, ref: repo.value.ref } : null
-  )
+  const forge = computed(() => (repo.value ? providerFor(repo.value.ref) : undefined))
 
-  const isTangled = computed(() => repo.value?.provider === 'tangled')
+  const isTangled = computed(() => repo.value?.ref.forge === 'tangled')
 
-  const canStar = computed(() => {
+  const starable = computed(() => {
     const r = repo.value
     const f = forge.value
-    if (!r || !f?.features.write?.setStar) return false
-    if (isTangled.value) return !!did.value && !!r.ref?.repoDid
-    return !!getToken(r.provider as ForgeId) && !!f.features.write?.setStar
+    if (!r || !f) return false
+    if (isTangled.value) return !!did.value && !!r.ref.externalId
+    return canStar(f) && isConnected(r.ref)
   })
 
   function repoDid(): string | undefined {
-    return repo.value?.ref?.repoDid as string | undefined
+    return repo.value?.ref.externalId
   }
 
   async function loadTangled(): Promise<void> {
@@ -68,20 +66,18 @@ export function useRepoStar(repo: Ref<ForgeRepo | null>) {
 
   async function load(): Promise<void> {
     const r = repo.value
-    stars.value = r?.stars
+    stars.value = r ? getRepoStats(r).stars : undefined
     starred.value = false
     tangledRkey.value = null
-    if (!r || !canStar.value) {
+    if (!r || !starable.value) {
       loaded.value = true
       return
     }
     try {
       if (isTangled.value) {
         await loadTangled()
-      } else if (locator.value && forge.value?.features.activityRead?.isStarred) {
-        starred.value = await forge.value.features.activityRead!.isStarred!(locator.value, {
-          token: getToken(r.provider as ForgeId)
-        })
+      } else if (forge.value) {
+        starred.value = await isStarred(forge.value, r.ref.owner, r.ref.name)
       }
     } catch {
       // Best-effort: an unreadable star state just shows as not-starred.
@@ -126,7 +122,7 @@ export function useRepoStar(repo: Ref<ForgeRepo | null>) {
 
   async function toggle(): Promise<void> {
     const r = repo.value
-    if (!r || !canStar.value || pending.value) return
+    if (!r || !starable.value || pending.value) return
     const next = !starred.value
     starred.value = next
     if (typeof stars.value === 'number') {
@@ -136,14 +132,9 @@ export function useRepoStar(repo: Ref<ForgeRepo | null>) {
     try {
       if (isTangled.value) {
         await toggleTangled(next)
-      } else if (locator.value && forge.value?.features.write?.setStar) {
-        const res = await forge.value.features.write!.setStar!(locator.value, next, {
-          token: getToken(r.provider as ForgeId)
-        })
-        starred.value = res.starred
-        if (typeof res.stars === 'number') {
-          stars.value = res.stars
-        }
+      } else if (forge.value) {
+        const total = await setStarred(forge.value, r.ref.owner, r.ref.name, next)
+        if (typeof total === 'number') stars.value = total
       }
     } catch (e) {
       starred.value = !next
@@ -157,7 +148,7 @@ export function useRepoStar(repo: Ref<ForgeRepo | null>) {
   }
 
   watch(
-    [() => repo.value?.provider, () => repo.value?.owner, () => repo.value?.name, did],
+    [() => repo.value?.ref.forge, () => repo.value?.ref.owner, () => repo.value?.ref.name, did],
     () => {
       loaded.value = false
       load()
@@ -165,5 +156,5 @@ export function useRepoStar(repo: Ref<ForgeRepo | null>) {
     { immediate: true }
   )
 
-  return { starred, stars, pending, loaded, canStar, toggle }
+  return { starred, stars, pending, loaded, canStar: starable, toggle }
 }
