@@ -165,6 +165,23 @@ const tabs = computed(() => {
     })
   return items
 })
+
+// On narrow screens the tab bar scrolls sideways, so a deep link to a later tab (Actions, say)
+// would leave the active tab out of view. Only the bar scrolls, never the page.
+const tabBar = useTemplateRef<HTMLElement>('tabBar')
+watch(
+  [() => route.path, meta],
+  () => {
+    const bar = tabBar.value?.querySelector('nav')
+    const active = bar?.querySelector('[data-active]')
+    if (!bar || !active) return
+    const barBox = bar.getBoundingClientRect()
+    const box = active.getBoundingClientRect()
+    if (box.left < barBox.left) bar.scrollLeft -= barBox.left - box.left
+    else if (box.right > barBox.right) bar.scrollLeft += box.right - barBox.right
+  },
+  { flush: 'post' }
+)
 </script>
 
 <template>
@@ -199,17 +216,19 @@ const tabs = computed(() => {
 
         <template v-else-if="meta">
           <ForgeRepoHeader :repo="meta" :show-topics="route.path === base" />
-          <UNavigationMenu
-            :items="tabs"
-            highlight
-            aria-label="Repository"
-            class="mt-5 border-b border-default"
-            :ui="{
-              root: 'overflow-x-auto [scrollbar-width:none]',
-              list: 'min-w-max',
-              linkLabel: 'overflow-visible'
-            }"
-          />
+          <div ref="tabBar">
+            <UNavigationMenu
+              :items="tabs"
+              highlight
+              aria-label="Repository"
+              class="mt-5 border-b border-default"
+              :ui="{
+                root: 'overflow-x-auto [scrollbar-width:none]',
+                list: 'min-w-max',
+                linkLabel: 'overflow-visible'
+              }"
+            />
+          </div>
           <div class="mt-6">
             <NuxtPage />
           </div>
