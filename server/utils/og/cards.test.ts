@@ -17,7 +17,7 @@ describe('renderCard', () => {
       state: 'open',
       title: '<script>alert(1)</script> & friends'
     }
-    const html = renderCard(card, { logo: 'data:image/svg+xml,', seed: 'test' })
+    const html = renderCard(card, { seed: 'test' })
     expect(html).not.toContain('<script>')
     expect(html).not.toContain('<img src=x')
     expect(html).toContain('&lt;script&gt;alert(1)&lt;/script&gt; &amp; friends')
@@ -26,7 +26,7 @@ describe('renderCard', () => {
   it('shows the merged state on a merged pull request', () => {
     const html = renderCard(
       { forge, kind: 'pull', number: '2', owner: 'o', repo: 'r', state: 'merged', title: 'x' },
-      { logo: '', seed: 'test' }
+      { seed: 'test' }
     )
     expect(html).toContain('Merged')
   })
