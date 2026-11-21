@@ -1,6 +1,8 @@
 <script setup lang="ts">
+// Colibri's own client, mounted into this page for one community. It talks to the AppView and the
+// viewer's PDS itself, as the signed-in account; we hand it an agent, our theme and the channel
+// to open, and hear back where the viewer navigated.
 import { Agent } from '@atproto/api'
-import type { OAuthUserAgent } from '@atcute/oauth-browser-client'
 import { mountColibri, type EmbedEvent, type EmbedHandle } from '@colibri-social/client/embed'
 import '@colibri-social/client/embed.css'
 import { ACCENT_COLORS } from '~/composables/useAccentColor'
@@ -14,30 +16,28 @@ const emit = defineEmits<{
 
 const { agent, logout } = useAuth()
 const { current: accent } = useAccentColor()
+const colorMode = useColorMode()
 const config = useRuntimeConfig()
 
-const container = ref<HTMLElement | null>(null)
+const container = useTemplateRef<HTMLElement>('container')
 let handle: EmbedHandle | null = null
 let reportedChannel: string | undefined
 
-const accentTheme = computed(() => {
-  const option = ACCENT_COLORS.find((c) => c.id === accent.value)
-  return {
-    primary: option?.swatch ?? '#eab308',
-    foreground: option?.needsDarkText ? '#18181b' : '#fafafa'
-  }
-})
+const colorScheme = computed(() => (colorMode.value === 'dark' ? 'dark' : 'light'))
 
 function themeTokens(): Record<string, string> {
+  const option = ACCENT_COLORS.find((c) => c.id === accent.value)
+  const primary = option?.swatch ?? '#eab308'
+  const foreground = option?.needsDarkText ? '#18181b' : '#fafafa'
   return {
-    primary: accentTheme.value.primary,
-    'primary-hover': accentTheme.value.primary,
-    'primary-foreground': accentTheme.value.foreground,
-    'sidebar-primary': accentTheme.value.primary,
-    'sidebar-primary-foreground': accentTheme.value.foreground,
-    ring: accentTheme.value.primary,
     'font-sans': "'Geist Variable', ui-sans-serif, system-ui, sans-serif",
-    radius: '0.5rem'
+    primary,
+    'primary-foreground': foreground,
+    'primary-hover': primary,
+    radius: '0.5rem',
+    ring: primary,
+    'sidebar-primary': primary,
+    'sidebar-primary-foreground': foreground
   }
 }
 
@@ -54,7 +54,7 @@ function onEvent(event: EmbedEvent): void {
       void logout()
       break
     case 'error':
-      console.warn('[colibri]', event.code)
+      console.warn('[community]', event.code)
       break
   }
 }
@@ -66,32 +66,28 @@ function unmount(): void {
 
 function mount(): void {
   unmount()
-
-  const oauth = agent.value as OAuthUserAgent | null
+  const oauth = agent.value
   if (!oauth || !container.value) return
-
+  reportedChannel = props.channel ?? undefined
   handle = mountColibri(container.value, {
-    agent: new Agent({
-      did: oauth.sub,
-      fetchHandler: (url, init) => oauth.handle(url, init)
-    }),
-    scope: oauth.session.token.scope,
-    community: props.communityUri,
-    channel: props.channel ?? undefined,
+    agent: new Agent({ did: oauth.sub, fetchHandler: (url, init) => oauth.handle(url, init) }),
     appViewUrl: config.public.colibriAppviewUrl,
-    colorScheme: 'dark',
-    theme: themeTokens(),
+    channel: props.channel ?? undefined,
+    colorScheme: colorScheme.value,
+    community: props.communityUri,
+    onEvent,
+    scope: oauth.session.token.scope,
     sentry: false,
-    onEvent
+    storagePrefix: 'maintainers.space:community:',
+    theme: themeTokens()
   })
 }
 
 onMounted(mount)
 onBeforeUnmount(unmount)
 
-watch([() => props.communityUri, agent], () => {
-  mount()
-})
+// The embed takes its colour scheme only when mounting.
+watch([() => props.communityUri, agent, colorScheme], mount)
 
 watch(
   () => props.channel,
@@ -100,9 +96,7 @@ watch(
   }
 )
 
-watch(accentTheme, () => {
-  handle?.setTheme(themeTokens())
-})
+watch(accent, () => handle?.setTheme(themeTokens()))
 </script>
 
 <template>

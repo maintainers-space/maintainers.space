@@ -159,7 +159,7 @@ export async function verifyOwnerAdmin(
           : ({ result: 'unsupported' } as const)
 
   if (outcome.result === 'denied') {
-    console.warn('[chat] org admin check denied', {
+    console.warn('[community] org admin check denied', {
       provider,
       owner,
       reason: outcome.reason,
@@ -182,7 +182,7 @@ export function describeOrgDenial(reason: OrgAdminDenial, provider: string, owne
     case 'not-a-member':
       return `${provider} doesn't report you as a member of ${owner}. If you are, check that maintainers.space is approved for the organisation.`
     case 'not-admin':
-      return `You need to be an owner or admin of ${owner} on ${provider} to enable chat for it.`
+      return `You need to be an owner or admin of ${owner} on ${provider} to set up its Community.`
     case 'error':
       return `Could not check your role in ${owner} on ${provider}. Please try again.`
   }

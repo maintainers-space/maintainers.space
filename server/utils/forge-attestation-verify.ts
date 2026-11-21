@@ -1,5 +1,5 @@
 // Server-side counterpart of app/lib/atproto/attestation.ts's verifyForgeAttestation,
-// used by register-binding.post.ts. Deliberately not a shared import: that file
+// used by server/api/community/admin-attestation.post.ts. Deliberately not a shared import: that file
 // branches on `import.meta.client` and references `window`, which is fine in the
 // app bundle but fails Nitro's server-side typecheck (no DOM lib there) since
 // importing it pulls the whole file into the server TS project. The verification
@@ -81,7 +81,7 @@ export async function verifyForgeAttestationServer(
       claims.username === account.username
     return matches ? 'ok' : 'invalid'
   } catch (e) {
-    console.warn('[chat] attestation signature check failed', {
+    console.warn('[community] attestation signature check failed', {
       issuerOrigin,
       error: e instanceof Error ? e.message : String(e)
     })

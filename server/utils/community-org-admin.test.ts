@@ -9,7 +9,7 @@ const githubOk = (state: string, role: string) => ({
   headers: new Headers({ 'x-oauth-scopes': 'read:user, read:org' })
 })
 
-const { verifyOwnerAdmin } = await import('./chat-org-admin')
+const { verifyOwnerAdmin } = await import('./community-org-admin')
 
 beforeEach(() => {
   fetchMock.mockReset()

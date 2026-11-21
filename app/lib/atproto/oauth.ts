@@ -1,5 +1,5 @@
 import { configureOAuth } from '@atcute/oauth-browser-client'
-import { OAUTH_SCOPE, clientMetadataUrl, oauthRedirectUri } from '#shared/atproto-oauth'
+import { clientMetadataUrl, communityScope, oauthRedirectUri } from '#shared/atproto-oauth'
 import { identityResolver } from './identity'
 
 let configured = false
@@ -23,7 +23,7 @@ export function getOAuthMetadata(): { client_id: string; redirect_uri: string } 
     const client_id =
       `http://localhost` +
       `?redirect_uri=${encodeURIComponent(redirect_uri)}` +
-      `&scope=${encodeURIComponent(OAUTH_SCOPE)}`
+      `&scope=${encodeURIComponent(communityScope(useRuntimeConfig().public.colibriAppviewUrl))}`
     return { client_id, redirect_uri }
   }
 

@@ -66,7 +66,15 @@ export default defineNuxtConfig({
     public: {
       // OAuth client id for production; overridden per-env. Empty => localhost dev client.
       atprotoClientId: '',
-      appUrl: ''
+      appUrl: '',
+      // The Colibri AppView behind Community. Its host becomes the `did:web` that Colibri's
+      // permission sets and service-auth tokens pin to, so it must be a host a PDS can resolve: a
+      // PDS silently drops every `include:` scope whose audience it cannot resolve. Set
+      // NUXT_PUBLIC_COLIBRI_APPVIEW_URL.
+      colibriAppviewUrl: 'https://api.colibri.social',
+      // Where our own AppView calls go when that differs from the identity above, e.g. a local
+      // AppView in development. Set NUXT_PUBLIC_COLIBRI_APPVIEW_DIAL_URL.
+      colibriAppviewDialUrl: ''
     }
   },
 
@@ -91,7 +99,15 @@ export default defineNuxtConfig({
     '/settings': { headers: { 'x-robots-tag': 'noindex, nofollow' } },
     '/settings/**': { headers: { 'x-robots-tag': 'noindex, nofollow' } },
     '/tangled/**': { headers: { 'x-robots-tag': 'noindex, nofollow' } },
-    '/timeline': { headers: { 'x-robots-tag': 'noindex, nofollow' } }
+    '/timeline': { headers: { 'x-robots-tag': 'noindex, nofollow' } },
+    '/community/**': { headers: { 'x-robots-tag': 'noindex, nofollow' } },
+    // Voice channels in a Community use the microphone, camera and screen sharing. `self` is the
+    // default already; this keeps a host that injects a stricter policy from breaking voice.
+    '/**': {
+      headers: {
+        'Permissions-Policy': 'microphone=(self), camera=(self), display-capture=(self)'
+      }
+    }
   },
 
   // Prerender the (route-agnostic, since ssr:false) app shell to a static
@@ -137,11 +153,34 @@ export default defineNuxtConfig({
       // Without an explicit glob, nothing under `_nuxt/` (the actual JS/CSS
       // app bundle) gets precached — the module doesn't default this itself.
       globPatterns: ['**/*.{js,css,html,ico,png,svg,webmanifest,woff,woff2}'],
+      // The Community embed bundles voice and video into one chunk of about 4 MB, which Rolldown
+      // names by hash alone. Filtering by size keeps it, and any future outsized chunk, out of the
+      // install. Workbox checks its own limit before the transform and the PWA plugin fails the
+      // build on that warning, so the limit is raised and the filter does the real work.
+      maximumFileSizeToCacheInBytes: 16 * 1024 * 1024,
+      manifestTransforms: [
+        (entries) => ({
+          manifest: entries.filter((entry) => (entry.size ?? 0) <= 2_000_000),
+          warnings: []
+        })
+      ],
       navigateFallback: '/',
       // OAuth handshakes are one-shot, must always hit the network, and must
       // never be served from (or written to) the cache.
-      navigateFallbackDenylist: [/^\/oauth\//, /^\/api\//],
+      // `/twemoji/**` and `/noise/**` are proxied assets for Community, which workbox would
+      // otherwise answer with the app shell when opened directly.
+      navigateFallbackDenylist: [/^\/oauth\//, /^\/api\//, /^\/twemoji\//, /^\/noise\//],
       runtimeCaching: [
+        {
+          // Community's emoji, proxied by server/routes/twemoji. Immutable per codepoint.
+          urlPattern: /^\/twemoji\//,
+          handler: 'CacheFirst',
+          options: {
+            cacheName: 'twemoji-cache',
+            expiration: { maxEntries: 600, maxAgeSeconds: 31_536_000 },
+            cacheableResponse: { statuses: [0, 200] }
+          }
+        },
         {
           // This server's own read proxies (search, tangled, github actions-log)
           // — never `/api/auth/**`, whose OAuth redirects must always hit the
@@ -166,6 +205,14 @@ export default defineNuxtConfig({
   devServer: {
     host: '127.0.0.1',
     port: 3000
+  },
+
+  vite: {
+    optimizeDeps: {
+      // Reached only from the lazily mounted Community embed, so Vite's scanner would discover
+      // them on first navigation and reload the page mid-session.
+      include: ['@colibri-social/client/embed', '@atproto/api']
+    }
   },
 
   compatibilityDate: '2026-06-30',

@@ -88,6 +88,37 @@ export async function signForgeAttestation(input: {
   return { attestation, attestedBy: input.origin }
 }
 
+/** JWS audience for community admin attestations, so they can't pass as forge-account ones. */
+export const COMMUNITY_ADMIN_AUDIENCE = 'space.maintainers.community'
+
+/**
+ * Signs that `did` administers the forge organisation `owner`, which the server has just asked
+ * the forge. A community link record carries it as proof that its author may set up a community
+ * for the organisation. Returns `null` when no signing key is configured.
+ */
+export async function signCommunityAdminAttestation(input: {
+  origin: string
+  did: string
+  provider: string
+  owner: string
+  host?: string
+}): Promise<{ attestation: string; attestedBy: string } | null> {
+  const key = await loadKey()
+  if (!key) return null
+
+  const claims: Record<string, string> = { owner: input.owner, provider: input.provider }
+  if (input.host) claims.host = input.host
+  const attestation = await new SignJWT(claims)
+    .setProtectedHeader({ alg: ALG, kid: key.kid, typ: 'JWT' })
+    .setIssuer(input.origin)
+    .setSubject(input.did)
+    .setAudience(COMMUNITY_ADMIN_AUDIENCE)
+    .setIssuedAt()
+    .sign(key.privateKey)
+
+  return { attestation, attestedBy: input.origin }
+}
+
 /** Public JWKS for verifiers. Empty `keys` when no key is configured. */
 export async function getAttestationJwks(): Promise<{ keys: JWK[] }> {
   const key = await loadKey()
