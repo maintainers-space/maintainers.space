@@ -9,6 +9,12 @@
 // connectivity, reopening later — not just in-memory navigation. When the
 // device is offline, `cached()` never attempts the network at all: it serves
 // whatever it has (memory, or IndexedDB on a cold start) instead of failing.
+//
+// Persisted entries carry the format version they were written with. An entry
+// from another version is treated as missing, so a cached value in an old shape
+// is refetched rather than handed to code that expects the new one. That covers
+// the previous app version too, which can keep running until the service worker
+// swaps it out and keep writing its own format.
 
 import { idbClear, idbDelete, idbDeletePrefix, idbGet, idbSet } from '~/lib/idb-store'
 
@@ -18,6 +24,12 @@ export const TTL = {
   /** ~5 minutes — timelines, trending, following, profiles. */
   MEDIUM: 300_000
 } as const
+
+/**
+ * Bump whenever the shape of a cached value changes, e.g. a new forge model. Entries written
+ * under any other version, or before versioning, are ignored and refetched.
+ */
+const CACHE_VERSION = 2
 
 interface Entry<T> {
   value: T
@@ -36,8 +48,18 @@ function isOffline(): boolean {
 }
 
 /** Strip the in-flight promise before writing to IndexedDB — it isn't cloneable. */
-function persistable<T>(entry: Entry<T>): Omit<Entry<T>, 'pending'> {
-  return { value: entry.value, fresh: entry.fresh, dead: entry.dead }
+function persistable<T>(entry: Entry<T>): Persisted<T> {
+  return { value: entry.value, fresh: entry.fresh, dead: entry.dead, v: CACHE_VERSION }
+}
+
+type Persisted<T> = Omit<Entry<T>, 'pending'> & { v?: number }
+
+/** The entry stored in IndexedDB for `key`, unless another app version wrote it. */
+async function readPersisted<T>(key: string): Promise<Omit<Entry<T>, 'pending'> | undefined> {
+  const persisted = await idbGet<Persisted<T>>(key)
+  if (!persisted || persisted.v !== CACHE_VERSION) return undefined
+  const { v: _v, ...entry } = persisted
+  return entry
 }
 
 export interface CacheOptions<T> {
@@ -78,7 +100,7 @@ export async function cached<T>(
   // Cold start (nothing in memory yet this session): hydrate from IndexedDB
   // before deciding whether to hit the network.
   if (!existing && opts.persist !== false) {
-    const persisted = await idbGet<Omit<Entry<T>, 'pending'>>(key)
+    const persisted = await readPersisted<T>(key)
     if (persisted) {
       existing = persisted
       store.set(key, persisted)
@@ -161,7 +183,7 @@ export async function prefetch<T>(
   if (isOffline()) {
     const mem = store.get(key)
     if (mem?.value !== undefined) return mem.value as T
-    return persistedValue(await idbGet<Omit<Entry<T>, 'pending'>>(key))
+    return persistedValue(await readPersisted<T>(key))
   }
 
   const mem = store.get(key)
@@ -171,7 +193,7 @@ export async function prefetch<T>(
   if (!opts.force && mem?.value !== undefined) return mem.value as T
 
   // IndexedDB stores the envelope `{ value, fresh, dead }` (see persistable).
-  const persisted = await idbGet<Omit<Entry<T>, 'pending'>>(key)
+  const persisted = await readPersisted<T>(key)
   if (!opts.force && persisted?.value !== undefined) {
     store.set(key, persisted as unknown as Entry<T>)
     return persisted.value
@@ -204,7 +226,7 @@ function hasValue(key: string): boolean {
 /** Whether an entry exists for `key` in memory or IndexedDB (offline readable). */
 export async function cacheExists(key: string): Promise<boolean> {
   if (hasValue(key)) return true
-  return (await idbGet<unknown>(key)) !== undefined
+  return (await readPersisted(key)) !== undefined
 }
 
 /** Drop a single key (or every key with the given prefix when `prefix` is true). */
