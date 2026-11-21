@@ -66,7 +66,10 @@ export default defineNuxtConfig({
     public: {
       // OAuth client id for production; overridden per-env. Empty => localhost dev client.
       atprotoClientId: '',
-      appUrl: ''
+      // This deployment's public origin, e.g. https://maintainers.space. Previews and preview images
+      // point at it, and account verifications are only trusted when signed there. Set
+      // NUXT_PUBLIC_SITE_URL.
+      siteUrl: ''
     }
   },
 
