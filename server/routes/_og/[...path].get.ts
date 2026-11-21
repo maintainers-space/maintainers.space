@@ -12,7 +12,7 @@ export default defineEventHandler(async (event) => {
   }
   const route = pathname.replace(/^\/_og/, '').replace(/\.png$/, '')
   const target = resolveOgTarget(route === '/index' ? '/' : route)
-  const png = await renderOgPng(await loadOgCard(target))
+  const png = await renderOgPng(await loadOgCard(target), pathname)
 
   setResponseHeader(event, 'Content-Type', 'image/png')
   setCacheHeaders(event, CACHE_OG)

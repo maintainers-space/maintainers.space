@@ -5,7 +5,8 @@ import { prepareImages } from '@takumi-rs/helpers'
 import { extractEmojis } from '@takumi-rs/helpers/emoji'
 import { fromHtml } from '@takumi-rs/helpers/html'
 
-import { OG_HEIGHT, OG_WIDTH, renderCard, type OgCard } from './cards'
+import { renderCard, type OgCard } from './cards'
+import { OG_HEIGHT, OG_WIDTH } from './cards-size'
 
 const FONTS = ['geist-latin-wght-normal.woff2', 'geist-latin-ext-wght-normal.woff2']
 
@@ -34,9 +35,10 @@ function getSetup(): Promise<Setup> {
   return setup
 }
 
-export async function renderOgPng(card: OgCard): Promise<Buffer> {
+/** `seed` picks the card's honeycomb; the image path keeps each route's pattern stable. */
+export async function renderOgPng(card: OgCard, seed: string): Promise<Buffer> {
   const { logo, renderer } = await getSetup()
-  const parsed = fromHtml(renderCard(card, logo))
+  const parsed = fromHtml(renderCard(card, { logo, seed }))
   // Emoji in titles become Twemoji images; avatars and emoji are fetched before rendering, and an
   // image that fails or takes too long is left out rather than failing the card.
   const node = extractEmojis(parsed.node, 'twemoji')

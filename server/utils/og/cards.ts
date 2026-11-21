@@ -1,12 +1,18 @@
-// The OG cards, as HTML that Takumi renders to a 1200x630 PNG. Every card shares one frame: the
-// app's near-black background, a soft yellow glow in the corner, the forge in the footer and the
-// maintainers.space mark beside it. Data arrives already fetched (see ./data), so these stay pure.
+// The OG cards, as HTML that Takumi renders to a 1200x630 PNG. Every card shares one frame: a
+// honeycomb seeded by the route and tinted by what the card is about (./pattern), the forge in the
+// footer and the maintainers.space mark beside it. Data arrives already fetched (see ./data), so
+// these stay pure.
+import { OG_HEIGHT, OG_WIDTH } from './cards-size'
 import { compact, esc, fitTitle, icon, shortDate } from './html'
 import type { OgIconName } from './icon-data'
 import { languageColor } from './language-colors'
+import { patternSvg, type Rect } from './pattern'
 
-export const OG_WIDTH = 1200
-export const OG_HEIGHT = 630
+/** What every card needs besides its data: the logo, and the seed that picks its pattern. */
+export interface OgAssets {
+  logo: string
+  seed: string
+}
 
 const COLOR = {
   bg: '#09090b',
@@ -97,44 +103,71 @@ export interface OgPageCard {
 
 export type OgCard = OgRepoCard | OgThreadCard | OgOwnerCard | OgProfileCard | OgPageCard
 
-export function renderCard(card: OgCard, logo: string): string {
+export function renderCard(card: OgCard, assets: OgAssets): string {
   switch (card.kind) {
     case 'repo':
-      return repoCard(card, logo)
+      return repoCard(card, assets)
     case 'issue':
     case 'pull':
     case 'discussion':
-      return threadCard(card, logo)
+      return threadCard(card, assets)
     case 'owner':
-      return ownerCard(card, logo)
+      return ownerCard(card, assets)
     case 'profile':
-      return profileCard(card, logo)
+      return profileCard(card, assets)
     case 'page':
-      return pageCard(card, logo)
+      return pageCard(card, assets)
   }
 }
 
 // --- Shared pieces --------------------------------------------------------------------------
 
+/** The footer marks, which the pattern keeps clear of. */
+const FOOTER_AVOID: Rect[] = [
+  { height: 80, width: 340, x: 820, y: 520 },
+  { height: 70, width: 300, x: 60, y: 525 }
+]
+
 function frame(
   content: string,
-  options: { logo: string; forge?: OgForge; stripe?: string }
+  options: {
+    assets: OgAssets
+    tint: string
+    avoid: Rect[]
+    forge?: OgForge
+    stripe?: string
+  }
 ): string {
-  const forgeGlow = options.forge?.color ?? '#3b82f6'
+  // The pattern is a positioned image, and positioned elements paint above in-flow ones, so the
+  // content, footer and stripe after it are positioned too.
+  const pattern = patternSvg({
+    avoid: [...options.avoid, ...FOOTER_AVOID],
+    seed: options.assets.seed,
+    tint: options.tint
+  })
   return `<div style="display:flex;flex-direction:column;position:relative;width:${OG_WIDTH}px;height:${OG_HEIGHT}px;overflow:hidden;background-color:${COLOR.bg};color:${COLOR.text};font-family:Geist">
-    <div style="position:absolute;top:-340px;right:-260px;width:820px;height:820px;border-radius:9999px;background-image:radial-gradient(circle, rgba(251,191,36,0.24) 0%, rgba(245,158,11,0.10) 32%, rgba(234,88,12,0.03) 52%, rgba(234,88,12,0) 68%)"></div>
-    <div style="position:absolute;bottom:-420px;left:-300px;width:820px;height:820px;border-radius:9999px;background-image:radial-gradient(circle, ${withAlpha(forgeGlow, 0.16)} 0%, ${withAlpha(forgeGlow, 0)} 65%)"></div>
-    <div style="display:flex;flex-direction:column;flex-grow:1;padding:64px 72px 0 72px">${content}</div>
-    ${footer(options.logo, options.forge)}
+    <img src="data:image/svg+xml,${encodeURIComponent(pattern)}" style="position:absolute;top:0;left:0;width:${OG_WIDTH}px;height:${OG_HEIGHT}px" />
+    <div style="display:flex;flex-direction:column;flex-grow:1;position:relative;padding:64px 72px 0 72px">${content}</div>
+    ${footer(options.assets.logo, options.forge)}
     ${options.stripe ?? brandStripe()}
   </div>`
+}
+
+/** A hex colour for the pattern; unmapped languages get an `hsl()` fallback, so they use the forge's. */
+function hexOr(color: string | undefined, fallback: string): string {
+  return color && /^#[0-9a-f]{6}$/i.test(color) ? color : fallback
+}
+
+/** A rough width for a line of text, enough to keep the pattern off it. */
+function textWidth(length: number, size: number, factor = 0.56): number {
+  return length * size * factor
 }
 
 function footer(logo: string, forge?: OgForge): string {
   const left = forge
     ? `<div style="display:flex;align-items:center;gap:12px;font-size:24px;color:${COLOR.muted}">${forgeIcon(forge.id, 28, COLOR.soft)}<span>${esc(forge.label)}</span></div>`
     : '<div style="display:flex"></div>'
-  return `<div style="display:flex;align-items:center;justify-content:space-between;padding:0 72px 40px 72px">
+  return `<div style="display:flex;align-items:center;justify-content:space-between;position:relative;padding:0 72px 40px 72px">
     ${left}
     <div style="display:flex;align-items:center;gap:14px">
       <div style="display:flex;align-items:center;justify-content:center;width:44px;height:44px;border-radius:12px;background-color:${COLOR.brand}"><img src="${logo}" style="width:28px;height:28px" /></div>
@@ -144,7 +177,7 @@ function footer(logo: string, forge?: OgForge): string {
 }
 
 function brandStripe(): string {
-  return `<div style="display:flex;height:10px;background-image:linear-gradient(90deg, #facc15, #f59e0b 55%, #fde047)"></div>`
+  return `<div style="display:flex;position:relative;height:10px;background-image:linear-gradient(90deg, #facc15, #f59e0b 55%, #fde047)"></div>`
 }
 
 function languageStripe(languages: OgLanguage[]): string {
@@ -155,7 +188,7 @@ function languageStripe(languages: OgLanguage[]): string {
         `<div style="display:flex;flex-grow:${(l.share / total).toFixed(4)};flex-basis:0;background-color:${languageColor(l.name)}"></div>`
     )
     .join('')
-  return `<div style="display:flex;height:10px">${segments}</div>`
+  return `<div style="display:flex;position:relative;height:10px">${segments}</div>`
 }
 
 const FORGE_ICON: Record<string, OgIconName> = {
@@ -202,7 +235,7 @@ function withAlpha(hex: string, alpha: number): string {
 
 // --- Repository ----------------------------------------------------------------------------
 
-function repoCard(card: OgRepoCard, logo: string): string {
+function repoCard(card: OgRepoCard, assets: OgAssets): string {
   const fullLength = card.owner.length + card.name.length + 1
   const size = fitTitle(fullLength, [
     [18, 84],
@@ -258,9 +291,15 @@ function repoCard(card: OgRepoCard, logo: string): string {
       ${legend ? `<div style="display:flex;gap:22px;font-size:22px;color:${COLOR.muted}">${legend}</div>` : ''}
     </div>`
   return frame(content, {
+    assets,
+    avoid: [
+      { height: 220, width: 220, x: 925, y: 45 },
+      { height: 70, width: 440, x: 720, y: 455 },
+      { height: 300, width: Math.min(1100, textWidth(fullLength, size) + 40), x: 60, y: 50 }
+    ],
     forge: card.forge,
-    logo,
-    stripe: languages.length ? languageStripe(languages) : undefined
+    stripe: languages.length ? languageStripe(languages) : undefined,
+    tint: hexOr(languages[0] ? languageColor(languages[0].name) : undefined, card.forge.color)
   })
 }
 
@@ -286,7 +325,7 @@ const STATE_STYLE: Record<
   }
 }
 
-function threadCard(card: OgThreadCard, logo: string): string {
+function threadCard(card: OgThreadCard, assets: OgAssets): string {
   const state = STATE_STYLE[card.kind][card.state] ?? STATE_STYLE[card.kind].open!
   const size = fitTitle(card.title.length, [
     [32, 68],
@@ -332,7 +371,26 @@ function threadCard(card: OgThreadCard, logo: string): string {
     ${labels ? `<div style="display:flex;gap:12px;margin-top:28px">${labels}</div>` : ''}
     <div style="display:flex;flex-grow:1"></div>
     <div style="display:flex;align-items:center;gap:36px;padding-bottom:36px;font-size:26px;color:${COLOR.muted}">${meta}</div>`
-  return frame(content, { forge: card.forge, logo })
+  const titleWidth = textWidth(card.title.length + card.number.length + 2, size, 0.58)
+  const titleLines = Math.max(1, Math.min(3, Math.ceil(titleWidth / 1056)))
+  return frame(content, {
+    assets,
+    avoid: [
+      { height: 100, width: 240, x: 920, y: 45 },
+      {
+        height: titleLines * size * 1.15 + 20,
+        width: titleLines > 1 ? 1100 : titleWidth + 40,
+        x: 60,
+        y: 150
+      },
+      ...(labels
+        ? [{ height: 60, width: 640, x: 60, y: 160 + titleLines * size * 1.15 + 20 }]
+        : []),
+      { height: 70, width: 900, x: 60, y: 445 }
+    ],
+    forge: card.forge,
+    tint: card.state === 'draft' ? '#64748b' : state.bg
+  })
 }
 
 /** GitHub's five diff squares: green for the share of additions, red for deletions. */
@@ -348,7 +406,7 @@ function diffSquares(additions: number, deletions: number): string {
 
 // --- Owners ----------------------------------------------------------------------------------
 
-function ownerCard(card: OgOwnerCard, logo: string): string {
+function ownerCard(card: OgOwnerCard, assets: OgAssets): string {
   const count = `${compact(card.repoCount)}${card.repoCountIsLowerBound ? '+' : ''} ${card.repoCount === 1 ? 'repository' : 'repositories'}`
   const repos = card.topRepos
     .slice(0, 3)
@@ -379,12 +437,25 @@ function ownerCard(card: OgOwnerCard, logo: string): string {
     </div>
     <div style="display:flex;flex-grow:1"></div>
     ${repos ? `<div style="display:flex;gap:24px;padding-bottom:36px">${repos}</div>` : ''}`
-  return frame(content, { forge: card.forge, logo })
+  return frame(content, {
+    assets,
+    avoid: [
+      {
+        height: 200,
+        width: 300 + Math.max(textWidth(card.owner.length, size, 0.6), 520),
+        x: 60,
+        y: 50
+      },
+      ...(repos ? [{ height: 150, width: 1100, x: 60, y: 360 }] : [])
+    ],
+    forge: card.forge,
+    tint: card.forge.color
+  })
 }
 
 // --- atproto profiles -------------------------------------------------------------------------
 
-function profileCard(card: OgProfileCard, logo: string): string {
+function profileCard(card: OgProfileCard, assets: OgAssets): string {
   const name = card.displayName?.trim() || card.handle
   const size = fitTitle(name.length, [
     [16, 80],
@@ -414,12 +485,25 @@ function profileCard(card: OgProfileCard, logo: string): string {
     <div style="display:flex;flex-grow:1"></div>
     <div style="display:flex;flex-wrap:wrap;gap:14px;padding-bottom:36px">${accounts}</div>`
     : `<div style="display:flex;flex-direction:column;justify-content:center;flex-grow:1;padding-bottom:24px">${header}</div>`
-  return frame(content, { logo })
+  const nameWidth = Math.max(
+    textWidth(name.length, size, 0.6),
+    textWidth(card.handle.length + 1, 30)
+  )
+  const top = accounts ? 50 : 150
+  return frame(content, {
+    assets,
+    avoid: [
+      { height: 230, width: 300 + nameWidth, x: 60, y: top },
+      ...(card.description ? [{ height: 90, width: 800, x: 300, y: top + 180 }] : []),
+      ...(accounts ? [{ height: 80, width: 1100, x: 60, y: 430 }] : [])
+    ],
+    tint: COLOR.brand
+  })
 }
 
 // --- Everything else ----------------------------------------------------------------------------
 
-function pageCard(card: OgPageCard, logo: string): string {
+function pageCard(card: OgPageCard, assets: OgAssets): string {
   const forges = card.forges
     .map(
       (f) =>
@@ -432,5 +516,9 @@ function pageCard(card: OgPageCard, logo: string): string {
       <div style="display:block;max-width:900px;font-size:34px;line-height:1.4;color:${COLOR.muted}">${esc(card.subtitle)}</div>
       <div style="display:flex;gap:16px;margin-top:12px">${forges}</div>
     </div>`
-  return frame(content, { logo })
+  return frame(content, {
+    assets,
+    avoid: [{ height: 440, width: 900, x: 60, y: 80 }],
+    tint: COLOR.brand
+  })
 }
