@@ -39,6 +39,13 @@ export const CACHE_LONG: CachePolicy = { browser: 600, cdn: 3600, netlify: 86_40
  */
 export const CACHE_SEARCH: CachePolicy = { browser: 300, cdn: 900, netlify: 3600, swr: 1800 }
 
+/**
+ * Social preview images. Stars and titles drift slowly, and crawlers fetch an image once per
+ * share, so the durable edge keeps each one for a day and serves it stale for a week while it
+ * re-renders in the background.
+ */
+export const CACHE_OG: CachePolicy = { browser: 3600, cdn: 21_600, netlify: 86_400, swr: 604_800 }
+
 /** Explicitly opt out of shared caching (authenticated / per-user responses). */
 export function setNoStore(event: H3Event): void {
   setResponseHeader(event, 'Cache-Control', 'private, no-store')

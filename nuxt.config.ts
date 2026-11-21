@@ -57,6 +57,12 @@ export default defineNuxtConfig({
     oauth: {
       previewOrigins: ''
     },
+    // Social preview images (server-only). An optional GitHub token for the server's own reads,
+    // so previews draw on its 5,000 requests an hour instead of the anonymous 60. Any token with
+    // no scopes works. Set NUXT_OG_GITHUB_TOKEN.
+    og: {
+      githubToken: ''
+    },
     public: {
       // OAuth client id for production; overridden per-env. Empty => localhost dev client.
       atprotoClientId: '',
