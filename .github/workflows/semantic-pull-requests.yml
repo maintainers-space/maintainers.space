@@ -51,6 +51,8 @@ jobs:
             appearance
             commands
             offline
+            cache
+            config
             docs
             deps
             ci
