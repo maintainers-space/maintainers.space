@@ -41,6 +41,20 @@
 }
 
 /*
+ * Soft and subtle controls put primary text on a 10% primary tint. In light mode that falls
+ * short of WCAG AA (4.3:1 for the yellow brand), so the text is darkened there. Mixing from
+ * `--ui-primary` keeps it working for every accent colour.
+ */
+:root:not(.dark) .bg-primary\/10.text-primary {
+  color: color-mix(in oklab, var(--ui-primary), black 30%);
+}
+
+/* Inactive tabs sit on the elevated tab background, where muted text is 4.4:1 in light mode. */
+:root:not(.dark) [role='tablist'] [role='tab'][data-state='inactive'] {
+  color: var(--color-zinc-600);
+}
+
+/*
  * Badge rows in rendered markdown (shields.io-style status badges: a link
  * wrapping nothing but an image). Typography's default `.prose img` styling
  * treats every image as a full-width illustration — block-level with large
