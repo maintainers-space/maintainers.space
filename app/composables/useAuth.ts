@@ -12,6 +12,7 @@ import type { ActorIdentifier, Did } from '@atcute/lexicons'
 import { OAUTH_SCOPE } from '#shared/atproto-oauth'
 import { fetchPublicProfile } from '~/lib/atproto/public'
 import { clearCache } from '~/lib/cache'
+import { rememberReturnPath } from '~/lib/return-path'
 import { resetForgeAccounts } from '~/composables/useForgeAccounts'
 import { clearForgeTokens } from '~/composables/useForgeTokens'
 import { clearOfflineState } from '~/composables/useOfflineRepos'
@@ -95,10 +96,11 @@ async function revalidateSession(sub: Did): Promise<void> {
 export function useAuth() {
   const isAuthenticated = computed(() => !!_agent.value)
 
-  /** Kick off the OAuth redirect flow for a given handle or DID. */
-  async function loginWithHandle(identifier: string): Promise<void> {
+  /** Kick off the OAuth redirect flow for a given handle or DID, returning to `returnTo` afterwards. */
+  async function loginWithHandle(identifier: string, returnTo?: string): Promise<void> {
     const clean = identifier.trim().replace(/^@/, '')
     if (!clean) throw new Error('Please enter a handle or DID.')
+    rememberReturnPath(returnTo)
     const url = await createAuthorizationUrl({
       target: { type: 'account', identifier: clean as ActorIdentifier },
       scope: OAUTH_SCOPE
