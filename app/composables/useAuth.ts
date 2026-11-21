@@ -96,6 +96,13 @@ async function revalidateSession(sub: Did): Promise<void> {
 export function useAuth() {
   const isAuthenticated = computed(() => !!_agent.value)
 
+  /**
+   * The scope the PDS actually granted, which is not the scope that was requested: `include:`
+   * permission sets come back expanded into the permissions they cover. Anything deciding whether a
+   * feature may run has to read this rather than what was asked for.
+   */
+  const grantedScope = computed(() => _agent.value?.session.token.scope)
+
   /** Kick off the OAuth redirect flow for a given handle or DID, returning to `returnTo` afterwards. */
   async function loginWithHandle(identifier: string, returnTo?: string): Promise<void> {
     const clean = identifier.trim().replace(/^@/, '')
@@ -106,6 +113,23 @@ export function useAuth() {
       scope: OAUTH_SCOPE
     })
     // Give freshly-stored PKCE/DPoP state a tick to persist before navigating away.
+    await new Promise((resolve) => setTimeout(resolve, 200))
+    window.location.assign(url.toString())
+  }
+
+  /**
+   * Re-runs authorization for the account that is already signed in, so the session picks up
+   * scopes it does not hold yet. The identity carries over, so nobody re-enters their handle, and
+   * abandoning the consent screen keeps the current session.
+   */
+  async function requestScopes(scope: string, returnTo?: string): Promise<void> {
+    const sub = _did.value
+    if (!sub) throw new Error('Not authenticated')
+    rememberReturnPath(returnTo)
+    const url = await createAuthorizationUrl({
+      target: { type: 'account', identifier: sub as ActorIdentifier },
+      scope
+    })
     await new Promise((resolve) => setTimeout(resolve, 200))
     window.location.assign(url.toString())
   }
@@ -173,12 +197,16 @@ export function useAuth() {
   }
 
   return {
-    agent: readonly(_agent),
+    // shallowReadonly: a deep `readonly()` proxy would hand out a Proxy around OAuthUserAgent,
+    // whose methods read `#private` fields that a Proxy cannot reach.
+    agent: shallowReadonly(_agent),
     did: readonly(_did),
     profile: readonly(_profile),
     restoring: readonly(_restoring),
     isAuthenticated,
+    grantedScope,
     loginWithHandle,
+    requestScopes,
     completeCallback,
     restore,
     logout,

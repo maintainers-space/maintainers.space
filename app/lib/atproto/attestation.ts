@@ -101,3 +101,42 @@ export function verifyForgeAttestation(
   )
   return promise
 }
+
+/** Must match COMMUNITY_ADMIN_AUDIENCE in server/utils/attestation.ts. */
+const COMMUNITY_ADMIN_AUDIENCE = 'space.maintainers.community'
+
+/**
+ * Checks a server-signed proof that `did` administers the forge organisation `owner`, as a
+ * Community link carries it. Resolves `false` for anything missing, untrusted or invalid.
+ */
+export async function verifyCommunityAdminAttestation(
+  proof: { attestation?: string; attestedBy?: string },
+  did: string,
+  forge: { provider: string; owner: string; host?: string }
+): Promise<boolean> {
+  const { attestation, attestedBy } = proof
+  if (!attestation || !attestedBy || !did) return false
+  let issuerOrigin: string
+  try {
+    issuerOrigin = new URL(attestedBy).origin
+  } catch {
+    return false
+  }
+  if (!trustedIssuers().has(issuerOrigin)) return false
+  try {
+    const { payload } = await jwtVerify(attestation, jwksFor(issuerOrigin), {
+      algorithms: ['ES256'],
+      audience: COMMUNITY_ADMIN_AUDIENCE,
+      issuer: attestedBy
+    })
+    const claims = payload as Record<string, unknown>
+    return (
+      payload.sub === did &&
+      claims.provider === forge.provider &&
+      String(claims.owner).toLowerCase() === forge.owner.toLowerCase() &&
+      (claims.host ?? undefined) === (forge.host || undefined)
+    )
+  } catch {
+    return false
+  }
+}

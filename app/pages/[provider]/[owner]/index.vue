@@ -63,6 +63,15 @@ const webUrl = computed(() => ownerWebUrl(provider.value, owner.value))
             </p>
           </div>
           <UButton
+            :to="`/community/${provider}/${owner}`"
+            color="neutral"
+            variant="outline"
+            size="sm"
+            icon="i-lucide-messages-square"
+            label="Community"
+            class="shrink-0"
+          />
+          <UButton
             v-if="webUrl"
             :to="webUrl"
             target="_blank"

@@ -1,0 +1,92 @@
+{
+  "lexicon": 1,
+  "id": "space.maintainers.community",
+  "defs": {
+    "main": {
+      "type": "record",
+      "description": "Links a forge owner (a user or organisation on GitHub, GitLab, Tangled and the like) to the Colibri community that serves it. Lives in the repo of the person who set the community up. Anyone can write one, so readers must check 'proof' and that the record owner holds the community's Owner role before trusting it. Indexed by Constellation through 'forgeUrl'.",
+      "key": "any",
+      "record": {
+        "type": "object",
+        "required": ["forge", "forgeUrl", "community", "proof", "createdAt"],
+        "properties": {
+          "forge": { "type": "ref", "ref": "#forge" },
+          "forgeUrl": {
+            "type": "string",
+            "format": "uri",
+            "description": "The owner's canonical web URL in lowercase, e.g. 'https://github.com/nuxt'. Readers find every community claimed for an owner by looking up backlinks to this URL.",
+            "maxLength": 512
+          },
+          "community": {
+            "type": "string",
+            "format": "at-uri",
+            "description": "The community, as 'at://<community did>/social.colibri.community/self'."
+          },
+          "proof": {
+            "type": "union",
+            "refs": [
+              "#forgeAccountProof",
+              "#keytraceProof",
+              "#adminAttestationProof",
+              "#atprotoIdentityProof"
+            ],
+            "description": "Why the record owner may speak for the forge owner."
+          },
+          "createdAt": { "type": "string", "format": "datetime" },
+          "updatedAt": { "type": "string", "format": "datetime" }
+        }
+      }
+    },
+    "forge": {
+      "type": "object",
+      "required": ["provider", "owner"],
+      "properties": {
+        "provider": {
+          "type": "string",
+          "description": "Forge provider identifier, e.g. 'github', 'gitlab', 'codeberg', 'tangled'.",
+          "maxLength": 64
+        },
+        "host": {
+          "type": "string",
+          "description": "Host for self-hosted instances. Omit for the provider's canonical host.",
+          "maxLength": 253
+        },
+        "owner": {
+          "type": "string",
+          "description": "The user or organisation name on the forge.",
+          "maxLength": 256
+        }
+      }
+    },
+    "forgeAccountProof": {
+      "type": "object",
+      "description": "The owner is the record owner's own forge account: points at their attested space.maintainers.forgeAccount record for it.",
+      "required": ["uri"],
+      "properties": { "uri": { "type": "string", "format": "at-uri" } }
+    },
+    "keytraceProof": {
+      "type": "object",
+      "description": "The owner is the record owner's own forge account, proven with a keytrace.dev claim (dev.keytrace.claim) in the same repo.",
+      "required": ["uri"],
+      "properties": { "uri": { "type": "string", "format": "at-uri" } }
+    },
+    "atprotoIdentityProof": {
+      "type": "object",
+      "description": "The owner is the record owner's own atproto account, as on Tangled, where an owner is an atproto handle or DID that resolves to the record owner.",
+      "properties": {}
+    },
+    "adminAttestationProof": {
+      "type": "object",
+      "description": "The record owner administers the organisation: a compact JWS (ES256) issued by a maintainers.space server after asking the forge, with audience 'space.maintainers.community' and payload { sub: <record owner did>, provider, owner, host? }.",
+      "required": ["attestation", "attestedBy"],
+      "properties": {
+        "attestation": { "type": "string", "maxLength": 4096 },
+        "attestedBy": {
+          "type": "string",
+          "format": "uri",
+          "description": "Origin of the issuing server; its keys are at '<attestedBy>/.well-known/jwks.json'."
+        }
+      }
+    }
+  }
+}

@@ -8,7 +8,7 @@
 // would break any host besides the production apex, e.g. the main branch deploy
 // at main.maintainers.space. Building it from the request origin keeps every
 // host's client consistent with itself. Served at /client-metadata.json.
-import { buildAtprotoClientMetadata } from '#shared/atproto-oauth'
+import { buildAtprotoClientMetadata, communityScope } from '#shared/atproto-oauth'
 
 export default defineEventHandler((event) => {
   const { origin } = getRequestURL(event)
@@ -16,5 +16,7 @@ export default defineEventHandler((event) => {
   // The document is fetched by the PDS once per flow; correctness (origin match)
   // matters more than edge caching, so never cache it.
   setResponseHeader(event, 'cache-control', 'no-store')
-  return buildAtprotoClientMetadata(origin)
+  // Declares the Community scope too: sign-in asks for less, and Community asks for the rest.
+  const { colibriAppviewUrl } = useRuntimeConfig(event).public
+  return buildAtprotoClientMetadata(origin, communityScope(colibriAppviewUrl))
 })

@@ -58,6 +58,30 @@ export async function fetchPublicProfile(actor: string): Promise<PublicProfile> 
 }
 
 /**
+ * One public record, read from the PDS that hosts `did`. `null` when it doesn't exist or can't be
+ * read, so callers checking someone's claim treat an unreadable proof as no proof.
+ */
+export async function getPublicRecord<T = Record<string, unknown>>(
+  did: string,
+  collection: string,
+  rkey: string
+): Promise<{ uri: string; value: T } | null> {
+  try {
+    const ident = await resolveIdentity(did)
+    return await getJson<{ uri: string; value: T }>(
+      `${ident.pds}/xrpc/com.atproto.repo.getRecord`,
+      {
+        collection,
+        repo: ident.did,
+        rkey
+      }
+    )
+  } catch {
+    return null
+  }
+}
+
+/**
  * Public, unauthenticated read of a repository collection from an actor's PDS.
  * Works for any atproto account regardless of which PDS hosts it. Returns [] on
  * failure so profile pages degrade gracefully.

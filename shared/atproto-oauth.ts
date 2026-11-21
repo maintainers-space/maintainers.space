@@ -1,3 +1,5 @@
+import { appViewDid, buildColibriScopes } from './utils/colibri'
+
 // Single source of truth for the atproto OAuth client's scope and metadata
 // document shape, shared by the browser OAuth setup (app/lib/atproto/oauth.ts)
 // and the PDS-facing client-metadata endpoint (server/routes/client-metadata.json.get.ts).
@@ -35,6 +37,29 @@ export const OAUTH_SCOPE = [
   'repo:sh.tangled.feed.star'
 ].join(' ')
 
+/** Where an owner's link to its community lives, in the maintainer's own repo. */
+export const COMMUNITY_COLLECTION = 'space.maintainers.community'
+
+/**
+ * Everything Community needs on top of {@link OAUTH_SCOPE}: the community link record, and
+ * Colibri's own scopes for chatting and managing a community through its AppView. Requested only
+ * when someone opens a Community, so signing in never grants access to messages. The client
+ * metadata still declares this full set, because an authorization request may narrow the declared
+ * scope but never exceed it.
+ *
+ * Colibri's `include:` permission sets pin the AppView's `did:web` by exact string, and a PDS
+ * silently drops one it cannot resolve, so `appviewUrl` must be the public, canonical AppView.
+ */
+export function communityScope(appviewUrl: string): string {
+  return [
+    ...new Set([
+      ...OAUTH_SCOPE.split(' '),
+      `repo:${COMMUNITY_COLLECTION}`,
+      ...buildColibriScopes(appViewDid(appviewUrl))
+    ])
+  ].join(' ')
+}
+
 /** The `client_id` document URL atproto fetches for a given origin/host. */
 export function clientMetadataUrl(origin: string): string {
   return `${origin}/client-metadata.json`
@@ -59,13 +84,16 @@ export interface AtprotoClientMetadata {
 }
 
 /** Build the atproto client metadata document for the current origin. */
-export function buildAtprotoClientMetadata(origin: string): AtprotoClientMetadata {
+export function buildAtprotoClientMetadata(
+  origin: string,
+  scope: string = OAUTH_SCOPE
+): AtprotoClientMetadata {
   return {
     client_id: clientMetadataUrl(origin),
     client_name: 'maintainers.space',
     client_uri: origin,
     redirect_uris: [oauthRedirectUri(origin)],
-    scope: OAUTH_SCOPE,
+    scope,
     grant_types: ['authorization_code', 'refresh_token'],
     response_types: ['code'],
     token_endpoint_auth_method: 'none',

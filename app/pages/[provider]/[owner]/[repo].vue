@@ -163,6 +163,14 @@ const tabs = computed(() => {
       active: startsWith('discussions'),
       disabled: unavailableOffline('discussions')
     })
+  // Community belongs to maintainers.space, not to the forge, so every repository has the tab.
+  items.push({
+    label: 'Community',
+    icon: isOnline.value ? 'i-lucide-messages-square' : 'i-lucide-wifi-off',
+    to: `${base.value}/community`,
+    active: startsWith('community'),
+    disabled: !isOnline.value
+  })
   return items
 })
 

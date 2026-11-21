@@ -69,7 +69,15 @@ export default defineNuxtConfig({
       // This deployment's public origin, e.g. https://maintainers.space. Previews and preview images
       // point at it, and account verifications are only trusted when signed there. Set
       // NUXT_PUBLIC_SITE_URL.
-      siteUrl: ''
+      siteUrl: '',
+      // The Colibri AppView behind Community. Its host becomes the `did:web` that Colibri's
+      // permission sets and service-auth tokens pin to, so it must be a host a PDS can resolve: a
+      // PDS silently drops every `include:` scope whose audience it cannot resolve. Set
+      // NUXT_PUBLIC_COLIBRI_APPVIEW_URL.
+      colibriAppviewUrl: 'https://api.colibri.social',
+      // Where our own AppView calls go when that differs from the identity above, e.g. a local
+      // AppView in development. Set NUXT_PUBLIC_COLIBRI_APPVIEW_DIAL_URL.
+      colibriAppviewDialUrl: ''
     }
   },
 
@@ -94,7 +102,8 @@ export default defineNuxtConfig({
     '/settings': { headers: { 'x-robots-tag': 'noindex, nofollow' } },
     '/settings/**': { headers: { 'x-robots-tag': 'noindex, nofollow' } },
     '/tangled/**': { headers: { 'x-robots-tag': 'noindex, nofollow' } },
-    '/timeline': { headers: { 'x-robots-tag': 'noindex, nofollow' } }
+    '/timeline': { headers: { 'x-robots-tag': 'noindex, nofollow' } },
+    '/community/**': { headers: { 'x-robots-tag': 'noindex, nofollow' } }
   },
 
   // Prerender the (route-agnostic, since ssr:false) app shell to a static
