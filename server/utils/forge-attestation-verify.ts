@@ -4,7 +4,7 @@
 // app bundle but fails Nitro's server-side typecheck (no DOM lib there) since
 // importing it pulls the whole file into the server TS project. The verification
 // logic itself (JWS check against the issuer's published JWKS) is duplicated
-// here in a form that only ever trusts `runtimeConfig.public.appUrl` — there's
+// here in a form that only ever trusts `runtimeConfig.public.siteUrl` — there's
 // no server-side equivalent of "the current browser origin" to fall back to.
 import { jwtVerify, createRemoteJWKSet, type JWTVerifyGetKey } from 'jose'
 
@@ -56,11 +56,11 @@ export async function verifyForgeAttestationServer(
     return 'invalid'
   }
 
-  const appUrl = useRuntimeConfig().public.appUrl as string
+  const siteUrl = useRuntimeConfig().public.siteUrl as string
   const trusted = new Set<string>()
-  if (appUrl) {
+  if (siteUrl) {
     try {
-      trusted.add(new URL(appUrl).origin)
+      trusted.add(new URL(siteUrl).origin)
     } catch {
       /* ignore malformed config */
     }

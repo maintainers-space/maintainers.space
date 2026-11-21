@@ -45,7 +45,7 @@ export default defineEventHandler(async (event) => {
     throw createError({
       statusCode: 503,
       statusMessage:
-        'This deployment trusts no attestation issuer. Set NUXT_PUBLIC_APP_URL to the origin that signs them.'
+        'This deployment trusts no attestation issuer. Set NUXT_PUBLIC_SITE_URL to the origin that signs them.'
     })
   }
   if (verdict !== 'ok') {
