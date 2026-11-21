@@ -12,7 +12,7 @@ export default defineNitroPlugin((nitroApp) => {
     const url = getRequestURL(event)
     // Prerendering (the offline shell at `/`) has no real request origin to point the image at.
     const origin =
-      useRuntimeConfig(event).public.appUrl ||
+      useRuntimeConfig(event).public.siteUrl ||
       (import.meta.prerender ? PRODUCTION_ORIGIN : url.origin)
     const tags = await ogMetaTags(resolveOgTarget(url.pathname), origin, `${origin}${url.pathname}`)
     response.body = response.body.replace('</head>', `${tags}\n</head>`)

@@ -27,10 +27,10 @@ export interface AttestableAccount {
 function trustedIssuers(): Set<string> {
   const set = new Set<string>()
   if (import.meta.client) set.add(window.location.origin)
-  const appUrl = useRuntimeConfig().public.appUrl
-  if (appUrl) {
+  const siteUrl = useRuntimeConfig().public.siteUrl
+  if (siteUrl) {
     try {
-      set.add(new URL(appUrl).origin)
+      set.add(new URL(siteUrl).origin)
     } catch {
       /* ignore malformed config */
     }
