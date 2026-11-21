@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { safeReturnPath } from '~/lib/return-path'
 import * as z from 'zod'
 import type { FormSubmitEvent } from '@nuxt/ui'
 
@@ -10,7 +11,7 @@ const toast = useToast()
 
 onMounted(() => {
   if (isAuthenticated.value) {
-    navigateTo((route.query.redirect as string) || '/')
+    navigateTo(safeReturnPath(route.query.redirect) ?? '/')
   }
 })
 
@@ -32,7 +33,7 @@ async function onSubmit(event: FormSubmitEvent<Schema>) {
   loading.value = true
   networkHint.value = false
   try {
-    await loginWithHandle(event.data.handle)
+    await loginWithHandle(event.data.handle, route.query.redirect as string | undefined)
     // The browser is redirected to the identity provider on success.
   } catch (error) {
     loading.value = false
