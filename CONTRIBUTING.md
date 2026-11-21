@@ -136,6 +136,16 @@ and set the output as a single environment variable:
 NUXT_ATTESTATION_PRIVATE_KEY='{"kty":"EC","crv":"P-256",...}'
 ```
 
+### Social preview images
+
+Shared links get a preview image rendered on demand at `/_og/<route>.png`, and every page's HTML carries the matching `og:*` and `twitter:*` tags (`server/plugins/og-meta.ts`). The server reads the data for them from each forge without signing in, so GitHub limits it to 60 requests an hour. Netlify's durable cache keeps each image for a day, which covers most traffic, but a busy deployment should set a token with no permissions:
+
+```bash
+NUXT_OG_GITHUB_TOKEN=github_pat_...
+```
+
+To look at a card while working on it, open `http://localhost:3000/_og/github/nuxt/nuxt.png`, or any other route with `/_og` in front and `.png` at the end.
+
 ## Project structure
 
 ```
