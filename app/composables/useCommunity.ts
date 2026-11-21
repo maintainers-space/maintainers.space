@@ -1,7 +1,6 @@
 import { ok } from '@atcute/client'
 import type { Did, Nsid } from '@atcute/lexicons'
 import { getClaimsForDid } from '@keytrace/claims'
-import { getMissingScopeSets } from '@colibri-social/client/scopes'
 import { COMMUNITY_COLLECTION, communityScope } from '#shared/atproto-oauth'
 import { verifyForgeAttestation } from '~/lib/atproto/attestation'
 import { resolveHandleToDid } from '~/lib/atproto/public'
@@ -63,7 +62,7 @@ export function useCommunityAccess() {
   const missing = computed(() => {
     const granted = grantedScope.value
     if (!granted) return ['session']
-    const sets = getMissingScopeSets(granted)
+    const sets = missingColibriScopeSets(granted)
     if (!granted.split(' ').includes(`repo:${COMMUNITY_COLLECTION}`))
       sets.push(COMMUNITY_COLLECTION)
     return sets

@@ -14,8 +14,9 @@ const forge = computed<ForgeOwner | undefined>(() =>
 )
 const ownerPage = computed(() => `/community/${provider.value}/${owner.value}`)
 
-const { isAuthenticated, restoring } = useAuth()
-const { hasAccess } = useCommunityAccess()
+const { restoring } = useAuth()
+/** A channel picked inside the tab; until then, the repository's own. */
+const picked = ref<string | null>(null)
 const { community, error, pending, refresh } = useCommunity(forge)
 
 /** The channel the sync made for this repository, matched by its URL. */
@@ -46,23 +47,15 @@ const channel = computed(() => {
 
   <template v-else-if="community">
     <div
-      v-if="hasAccess"
       class="h-[calc(100dvh-18rem)] min-h-[28rem] overflow-hidden rounded-lg border border-default"
     >
-      <CommunityColibriEmbed
-        :community-uri="community.record.community"
-        :channel="channel"
-        class="h-full"
+      <CommunityShell
+        :community="community"
+        :channel="picked ?? channel"
+        compact
+        @navigate="picked = $event"
       />
     </div>
-    <CommonSignInPrompt
-      v-else-if="!isAuthenticated"
-      :message="`Sign in with your atproto account to talk about ${name} in the ${owner} Community.`"
-    />
-    <CommunityAccessPrompt
-      v-else
-      :message="`Allow Community access to talk about ${name} in the ${owner} Community.`"
-    />
     <div class="mt-2 flex justify-end">
       <UButton
         :to="ownerPage"

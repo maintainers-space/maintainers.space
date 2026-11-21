@@ -1,5 +1,4 @@
-import { buildScopes } from '@colibri-social/client/scopes'
-import { appViewDid } from './utils/colibri'
+import { appViewDid, buildColibriScopes } from './utils/colibri'
 
 // Single source of truth for the atproto OAuth client's scope and metadata
 // document shape, shared by the browser OAuth setup (app/lib/atproto/oauth.ts)
@@ -56,7 +55,7 @@ export function communityScope(appviewUrl: string): string {
     ...new Set([
       ...OAUTH_SCOPE.split(' '),
       `repo:${COMMUNITY_COLLECTION}`,
-      ...buildScopes(appViewDid(appviewUrl))
+      ...buildColibriScopes(appViewDid(appviewUrl))
     ])
   ].join(' ')
 }

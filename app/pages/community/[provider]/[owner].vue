@@ -47,9 +47,9 @@ const {
 
 const syncOpen = ref(false)
 
-function onNavigate(rkey: string | undefined): void {
+function onNavigate(rkey: string): void {
   if (rkey === channel.value) return
-  void router.replace({ query: { ...route.query, channel: rkey } })
+  void router.push({ query: { channel: rkey } })
 }
 
 function onCreated(created: ResolvedCommunity): void {
@@ -66,7 +66,7 @@ async function onSynced(): Promise<void> {
 <template>
   <UDashboardPanel
     :id="`community-${provider}`"
-    :ui="{ body: community && hasAccess ? 'p-0 sm:p-0 overflow-hidden' : undefined }"
+    :ui="{ body: community ? 'p-0 sm:p-0 overflow-hidden' : undefined }"
   >
     <template #header>
       <UDashboardNavbar :title="`${owner} Community`">
@@ -127,23 +127,7 @@ async function onSynced(): Promise<void> {
       </div>
 
       <template v-else-if="community">
-        <CommunityColibriEmbed
-          v-if="hasAccess"
-          :community-uri="community.record.community"
-          :channel="channel"
-          class="h-full min-h-0"
-          @navigate="onNavigate"
-        />
-        <div v-else class="mx-auto w-full max-w-4xl py-2">
-          <CommonSignInPrompt
-            v-if="!isAuthenticated"
-            :message="`Sign in with your atproto account to join the ${owner} Community.`"
-          />
-          <CommunityAccessPrompt
-            v-else
-            :message="`Allow Community access to read and join the ${owner} Community.`"
-          />
-        </div>
+        <CommunityShell :community="community" :channel="channel" @navigate="onNavigate" />
         <CommunitySyncModal
           v-if="isManager"
           v-model:open="syncOpen"

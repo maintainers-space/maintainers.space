@@ -8,6 +8,7 @@
 import { ok } from '@atcute/client'
 import type {} from '@atcute/atproto'
 import type { Nsid } from '@atcute/lexicons'
+import type { ColibriRichTextFacet } from './richtext/facets'
 
 export const CHANNEL_TYPE = {
   forum: 'social.colibri.channel.forum',
@@ -49,13 +50,64 @@ export interface RoleView {
   color?: string
   permissions?: string[]
   position?: number
+  hoisted?: boolean
   protected?: boolean
 }
 
-export interface MemberView {
+/** A blob reference as the AppView returns it. */
+export interface BlobRef {
+  $type?: 'blob'
+  mimeType?: string
+  ref?: { $link: string }
+  cid?: string
+  size?: number
+}
+
+export interface ActorData {
+  displayName?: string
+  avatar?: BlobRef
+  description?: string
+  isBot?: boolean
+  onlineState?: 'online' | 'away' | 'dnd' | 'offline'
+  status?: { text?: string; emoji?: string }
+}
+
+export interface ActorView {
   did: string
   handle?: string
+  data?: ActorData
+}
+
+export interface MemberView extends ActorView {
   roles?: string[]
+  nickname?: string
+}
+
+export interface AttachmentView {
+  blob: BlobRef
+  name?: string
+  width?: number
+  height?: number
+}
+
+export interface ReactionView {
+  emoji: string
+  count: number
+  reactorDIDs?: string[]
+}
+
+export interface MessageView {
+  uri: string
+  text: string
+  facets?: ColibriRichTextFacet[]
+  channel: string
+  community?: string
+  author: ActorView
+  parent?: MessageView
+  attachments?: AttachmentView[]
+  reactions?: ReactionView[]
+  createdAt: string
+  edited?: boolean
 }
 
 export interface CommunityData {
@@ -84,7 +136,7 @@ type Params = Record<string, string | number | boolean | string[] | undefined>
  * own atproto session. Its `aud` must match the one Colibri's permission sets were granted for,
  * so it always derives from the canonical AppView URL, never the dial URL.
  */
-async function serviceAuthToken(lxm: string): Promise<string> {
+export async function serviceAuthToken(lxm: string): Promise<string> {
   const { runAuthed } = useAuth()
   const aud = appViewServiceRef(useRuntimeConfig().public.colibriAppviewUrl)
   const out = await runAuthed((rpc) =>
@@ -97,7 +149,7 @@ async function serviceAuthToken(lxm: string): Promise<string> {
   return out.token
 }
 
-async function call<T>(
+export async function call<T>(
   nsid: string,
   params: Params,
   options: { method?: 'GET' | 'POST'; auth?: boolean } = {}
@@ -206,4 +258,46 @@ export function roleCreate(input: {
   mentionable?: boolean
 }): Promise<{ uri: string }> {
   return call('social.colibri.role.create', input, { method: 'POST' })
+}
+
+/** A page of a channel's messages, newest first. Public. */
+export function listMessages(
+  channel: string,
+  options: { cursor?: string; limit?: number } = {}
+): Promise<{ messages: MessageView[]; cursor?: string }> {
+  return call(
+    'social.colibri.channel.listMessages',
+    { channel, cursor: options.cursor, limit: options.limit ?? 50 },
+    { auth: false }
+  )
+}
+
+/** Leaves a community. */
+export function communityLeave(community: string): Promise<unknown> {
+  return call('social.colibri.community.leave', { community }, { method: 'POST' })
+}
+
+/** Where the AppView serves a blob, such as an avatar or an attachment. */
+export function blobUrl(
+  did: string,
+  blob: BlobRef | undefined,
+  variant?: 'small' | 'base' | 'large'
+): string | undefined {
+  const cid = blob?.ref?.$link ?? blob?.cid
+  if (!cid) return undefined
+  const config = useRuntimeConfig().public
+  const base = appViewDialUrl(config.colibriAppviewUrl, config.colibriAppviewDialUrl)
+  const url = new URL('/xrpc/com.atproto.sync.getBlob', base)
+  url.searchParams.set('did', did)
+  url.searchParams.set('cid', cid)
+  if (variant) url.searchParams.set('variant', variant)
+  return url.toString()
+}
+
+/** The icon for a channel, the same in the channel list and the header. */
+export function channelIcon(channel: Pick<ChannelView, 'type' | 'ownerOnly'>): string {
+  if (channel.ownerOnly) return 'i-lucide-megaphone'
+  if (channel.type === CHANNEL_TYPE.forum) return 'i-lucide-messages-square'
+  if (channel.type === CHANNEL_TYPE.voice) return 'i-lucide-volume-2'
+  return 'i-lucide-hash'
 }

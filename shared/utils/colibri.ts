@@ -21,3 +21,39 @@ export function appViewServiceRef(url: string): string {
 export function appViewNotifRef(url: string): string {
   return `${appViewDid(url)}#colibri_notif`
 }
+
+// Colibri's OAuth scopes and how to tell which of them a session holds, from
+// @colibri-social/client's `scopes` module (MIT, Copyright (c) 2026 Louis Escher, Reuben Tier).
+// The permission sets are pinned to the AppView's `did:web`, so they are built per AppView.
+
+/** Every scope Colibri needs, for the AppView identified by `did`. */
+export function buildColibriScopes(did: string): string[] {
+  return [
+    'atproto',
+    'blob:*/*',
+    'rpc:app.bsky.actor.getProfile?aud=*',
+    'rpc:com.atproto.identity.resolveDid?aud=*',
+    `include:social.colibri.permissionAccount?aud=${did}#colibri_appview`,
+    `include:social.colibri.permissionCommunity?aud=${did}#colibri_appview`,
+    `include:social.colibri.permissionMessaging?aud=${did}#colibri_appview`,
+    `include:social.colibri.permissionNotification?aud=${did}#colibri_appview`
+  ]
+}
+
+/**
+ * A PDS grants a permission set expanded into the permissions it covers, so each set is
+ * recognised by one permission it always contains.
+ */
+const PERMISSION_SET_MARKERS: Record<string, string> = {
+  'social.colibri.permissionAccount': 'social.colibri.actor.deleteAccount',
+  'social.colibri.permissionCommunity': 'social.colibri.community.getData',
+  'social.colibri.permissionMessaging': 'social.colibri.membership',
+  'social.colibri.permissionNotification': 'social.colibri.notification.listNotifications'
+}
+
+/** The Colibri permission sets a granted scope lacks. */
+export function missingColibriScopeSets(grantedScope: string): string[] {
+  return Object.entries(PERMISSION_SET_MARKERS)
+    .filter(([, marker]) => !grantedScope.includes(marker))
+    .map(([nsid]) => nsid)
+}
