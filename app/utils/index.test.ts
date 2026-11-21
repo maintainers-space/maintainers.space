@@ -6,12 +6,10 @@ import {
   formatDate,
   formatDuration,
   formatRelativeTime,
-  issuePath,
+  ciEventLabel,
   pullsTerm,
   repoPath,
-  shortDid,
-  userLabel,
-  userPath
+  shortDid
 } from './index'
 
 describe('formatCompactNumber', () => {
@@ -140,24 +138,6 @@ describe('shortDid', () => {
   })
 })
 
-describe('userLabel', () => {
-  it('returns an empty string for a null user', () => {
-    expect(userLabel(null)).toBe('')
-  })
-
-  it('prefers displayName when present', () => {
-    expect(userLabel({ login: 'evan', displayName: 'Evan You' })).toBe('Evan You')
-  })
-
-  it('shortens a DID-style login when there is no displayName', () => {
-    expect(userLabel({ login: 'did:plc:wshs7t2adsemcrrd4snkeqli' })).toBe('did:plc:wshs…eqli')
-  })
-
-  it('falls back to the plain login', () => {
-    expect(userLabel({ login: 'evan' })).toBe('evan')
-  })
-})
-
 describe('encodePathSegments', () => {
   it('percent-encodes each segment while preserving slashes', () => {
     expect(encodePathSegments('a b/c#d')).toBe('a%20b/c%23d')
@@ -186,12 +166,6 @@ describe('repoPath', () => {
   })
 })
 
-describe('userPath', () => {
-  it('builds a user profile path', () => {
-    expect(userPath({ provider: 'github', login: 'evan' })).toBe('/github/evan')
-  })
-})
-
 describe('pullsTerm', () => {
   it('calls it "merge request" on GitLab and "pull request" elsewhere', () => {
     expect(pullsTerm('gitlab')).toBe('merge request')
@@ -209,25 +183,13 @@ describe('pullsTerm', () => {
   })
 })
 
-describe('issuePath', () => {
-  it('returns "#" when the issue has no repo', () => {
-    expect(issuePath({ provider: 'github', id: '1' })).toBe('#')
-  })
-
-  it('routes to /issues for a plain issue', () => {
-    expect(issuePath({ provider: 'github', id: '42', repo: { owner: 'nuxt', name: 'nuxt' } })).toBe(
-      '/github/nuxt/nuxt/issues/42'
-    )
-  })
-
-  it('routes to /pulls when isPull is true', () => {
-    expect(
-      issuePath({
-        provider: 'github',
-        id: '42',
-        isPull: true,
-        repo: { owner: 'nuxt', name: 'nuxt' }
-      })
-    ).toBe('/github/nuxt/nuxt/pulls/42')
+describe('ciEventLabel', () => {
+  it.each([
+    ['workflow_run', 'Workflow run'],
+    ['pull_request', 'Pull request'],
+    ['push', 'Push'],
+    ['merge-request', 'Merge request']
+  ])('turns %s into %s', (raw, label) => {
+    expect(ciEventLabel(raw)).toBe(label)
   })
 })

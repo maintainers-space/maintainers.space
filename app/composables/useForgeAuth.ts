@@ -1,4 +1,6 @@
-import type { ForgeId } from '~/types/forge'
+import { createAppProvider } from '~/lib/forges/providers'
+import { getViewer } from '~/lib/forges/gaps/viewer'
+import { getForge } from '~/lib/forges/registry'
 
 /** What we need out of a forge's "who am I" endpoint to link a verified account. */
 export interface ForgeAuthUser {
@@ -8,109 +10,32 @@ export interface ForgeAuthUser {
   profileUrl?: string
 }
 
-interface GithubUser {
-  login: string
-  name?: string
-  avatar_url?: string
-  html_url?: string
-}
-
-async function fetchAuthedGithubUser(token: string): Promise<ForgeAuthUser> {
-  const u = await $fetch<GithubUser>('https://api.github.com/user', {
-    headers: { Accept: 'application/vnd.github+json', Authorization: `Bearer ${token}` }
-  })
-  return { username: u.login, displayName: u.name, avatarUrl: u.avatar_url, profileUrl: u.html_url }
-}
-
-interface GitlabUser {
-  username: string
-  name?: string
-  avatar_url?: string
-  web_url?: string
-}
-
-async function fetchAuthedGitlabUser(token: string): Promise<ForgeAuthUser> {
-  const u = await $fetch<GitlabUser>('https://gitlab.com/api/v4/user', {
-    headers: { Authorization: `Bearer ${token}` }
-  })
+/** Reads the account a freshly issued token belongs to, through a provider built just for it. */
+async function fetchAuthedUser(providerId: string, token: string): Promise<ForgeAuthUser> {
+  const descriptor = getForge(providerId)
+  if (!descriptor) throw new Error(`Unknown forge "${providerId}".`)
+  const provider = createAppProvider(descriptor, { tokens: { [providerId]: token } })
+  const viewer = await getViewer(provider)
   return {
-    username: u.username,
-    displayName: u.name,
-    avatarUrl: u.avatar_url,
-    profileUrl: u.web_url
-  }
-}
-
-interface CodebergUser {
-  login: string
-  full_name?: string
-  avatar_url?: string
-  html_url?: string
-}
-
-async function fetchAuthedCodebergUser(token: string): Promise<ForgeAuthUser> {
-  const u = await $fetch<CodebergUser>('https://codeberg.org/api/v1/user', {
-    headers: { Authorization: `Bearer ${token}` }
-  })
-  return {
-    username: u.login,
-    displayName: u.full_name,
-    avatarUrl: u.avatar_url,
-    profileUrl: u.html_url
-  }
-}
-
-interface GiteaUser {
-  login: string
-  full_name?: string
-  avatar_url?: string
-  html_url?: string
-}
-
-async function fetchAuthedGiteaUser(token: string): Promise<ForgeAuthUser> {
-  const u = await $fetch<GiteaUser>('https://gitea.com/api/v1/user', {
-    headers: { Authorization: `Bearer ${token}` }
-  })
-  return {
-    username: u.login,
-    displayName: u.full_name,
-    avatarUrl: u.avatar_url,
-    profileUrl: u.html_url
-  }
-}
-
-interface BitbucketUser {
-  nickname?: string
-  uuid?: string
-  display_name?: string
-  links?: { avatar?: { href?: string }; html?: { href?: string } }
-}
-
-async function fetchAuthedBitbucketUser(token: string): Promise<ForgeAuthUser> {
-  const u = await $fetch<BitbucketUser>('https://api.bitbucket.org/2.0/user', {
-    headers: { Authorization: `Bearer ${token}` }
-  })
-  return {
-    username: u.nickname ?? u.uuid ?? '',
-    displayName: u.display_name,
-    avatarUrl: u.links?.avatar?.href,
-    profileUrl: u.links?.html?.href
+    avatarUrl: viewer.avatarUrl,
+    displayName: viewer.name,
+    profileUrl: viewer.url,
+    username: viewer.login
   }
 }
 
 interface ForgeAuthClientConfig {
   /** Recorded on the linked-account record for disambiguation (see useForgeAccounts). */
   host?: string
-  fetchUser: (token: string) => Promise<ForgeAuthUser>
 }
 
 // Client-side half of each forge's OAuth flow (server side: server/utils/oauth-providers.ts).
-const FORGE_AUTH_CLIENTS: Partial<Record<ForgeId, ForgeAuthClientConfig>> = {
-  github: { fetchUser: fetchAuthedGithubUser },
-  gitlab: { host: 'gitlab.com', fetchUser: fetchAuthedGitlabUser },
-  codeberg: { host: 'codeberg.org', fetchUser: fetchAuthedCodebergUser },
-  gitea: { host: 'gitea.com', fetchUser: fetchAuthedGiteaUser },
-  bitbucket: { host: 'bitbucket.org', fetchUser: fetchAuthedBitbucketUser }
+const FORGE_AUTH_CLIENTS: Record<string, ForgeAuthClientConfig> = {
+  github: {},
+  gitlab: { host: 'gitlab.com' },
+  codeberg: { host: 'codeberg.org' },
+  gitea: { host: 'gitea.com' },
+  bitbucket: { host: 'bitbucket.org' }
 }
 
 /**
@@ -118,12 +43,12 @@ const FORGE_AUTH_CLIENTS: Partial<Record<ForgeId, ForgeAuthClientConfig>> = {
  * `completeCallback()` runs on the return page to persist the token and record
  * a *verified* forge-account link against the user's atproto identity.
  */
-export function useForgeAuth(providerId: ForgeId) {
+export function useForgeAuth(providerId: string) {
   const client = FORGE_AUTH_CLIENTS[providerId]
   if (!client) {
     throw new Error(`No OAuth client configured for forge "${providerId}".`)
   }
-  const { fetchUser, host } = client
+  const { host } = client
 
   const { get, set, remove } = useForgeTokens()
   const { did, restoring } = useAuth()
@@ -137,9 +62,23 @@ export function useForgeAuth(providerId: ForgeId) {
     const to =
       returnTo ?? (import.meta.client ? location.pathname + location.search : '/settings/accounts')
     const params = new URLSearchParams({ redirect: to })
+
+    // If we're on a deployment preview, we must route the OAuth flow through the production domain
+    // because the OAuth app only whitelists the production callback URL.
+    if (
+      import.meta.client &&
+      location.hostname !== 'localhost' &&
+      location.hostname !== '127.0.0.1' &&
+      location.hostname !== 'maintainers.space'
+    ) {
+      params.set('preview', location.origin)
+    }
+
     // Bind the attestation to the signed-in atproto identity when available.
     if (did.value) params.set('did', did.value)
-    window.location.assign(`/api/auth/${providerId}/login?${params.toString()}`)
+
+    const baseAuthUrl = params.has('preview') ? 'https://maintainers.space' : ''
+    window.location.assign(`${baseAuthUrl}/api/auth/${providerId}/login?${params.toString()}`)
   }
 
   function disconnect(): void {
@@ -160,7 +99,7 @@ export function useForgeAuth(providerId: ForgeId) {
     set(providerId, token)
 
     // Verify who the token belongs to, then link it as a verified account.
-    const user = await fetchUser(token)
+    const user = await fetchAuthedUser(providerId, token)
 
     // Unforgeable proof (signed by our server) that this forge account belongs
     // to the current DID. Absent when the server has no signing key configured.

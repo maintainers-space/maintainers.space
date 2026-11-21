@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import type { ForgeBlob } from '~/types/forge'
+import type { BlobData } from '~/lib/forges/reads'
 import { useRepoContext } from '~/composables/useRepoContext'
+import { readBlob } from '~/lib/forges/reads'
 
 const route = useRoute()
-const { provider, owner, name, forge, locator, defaultBranch } = useRepoContext()
+const { provider, owner, name, forge, meta, defaultBranch } = useRepoContext()
 const base = computed(() =>
   repoPath({ provider: provider.value, owner: owner.value, name: name.value })
 )
@@ -21,13 +22,13 @@ const parentDir = computed(() => {
   return `${base.value}/tree/${encodeURIComponent(gitRef.value)}${p ? '/' + encodePathSegments(p) : ''}`
 })
 
-const { data, pending, error } = useLiveAsyncData<ForgeBlob | null>(
+const { data, pending, error } = useLiveAsyncData<BlobData | null>(
   () => `blob:${provider.value}:${owner.value}:${name.value}:${gitRef.value}:${path.value}`,
   async () => {
-    if (!forge.value?.getBlob) return null
-    return await forge.value.getBlob(locator.value, gitRef.value, path.value)
+    if (!forge.value || !meta.value) return null
+    return await readBlob(forge.value, meta.value, gitRef.value, path.value)
   },
-  { lazy: true, watch: [() => route.fullPath] }
+  { lazy: true, watch: [() => route.fullPath, meta] }
 )
 </script>
 
@@ -55,7 +56,7 @@ const { data, pending, error } = useLiveAsyncData<ForgeBlob | null>(
       variant="subtle"
       icon="i-lucide-circle-alert"
       title="Could not load file"
-      :description="error?.message"
+      :description="forgeErrorMessage(error)"
     />
     <ForgeBlobView v-else-if="data" :blob="data" />
   </div>

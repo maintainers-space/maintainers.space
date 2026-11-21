@@ -1,9 +1,12 @@
 <script setup lang="ts">
-import type { ForgeMergeQueueStats, ForgePull, ForgePullState } from '~/types/forge'
+import type { Thread } from 'forges'
 import { useRepoContext } from '~/composables/useRepoContext'
 import { cached, TTL } from '~/lib/cache'
+import { loadThreads } from '~/lib/forges/loaders'
+import { getMergeQueue } from '~/lib/forges/gaps/merge-queue'
+import type { MergeQueue } from '~/lib/forges/gaps/merge-queue'
 
-const { provider, owner, name, forge, locator, meta } = useRepoContext()
+const { provider, owner, name, forge, meta } = useRepoContext()
 const base = computed(() =>
   repoPath({ provider: provider.value, owner: owner.value, name: name.value })
 )
@@ -11,11 +14,11 @@ const base = computed(() =>
 const termPlural = computed(() => pullsTerm(provider.value, { plural: true }))
 
 const state = ref<'open' | 'closed' | 'merged'>('open')
-const items = ref<ForgePull[]>([])
+const items = ref<Thread[]>([])
 const loading = ref(false)
 const error = ref<string | null>(null)
 const q = ref('')
-const mergeQueue = ref<ForgeMergeQueueStats | null>(null)
+const mergeQueue = ref<MergeQueue | null>(null)
 
 const filtered = computed(() => {
   const term = q.value.trim().toLowerCase()
@@ -23,43 +26,38 @@ const filtered = computed(() => {
   return items.value.filter(
     (it) =>
       it.title.toLowerCase().includes(term) ||
-      String(it.number ?? '').includes(term) ||
-      (it.author ? userLabel(it.author).toLowerCase().includes(term) : false)
+      threadNumberOf(it.ref).includes(term) ||
+      (it.author ? actorLabel(it.author).toLowerCase().includes(term) : false)
   )
 })
 
 async function load(): Promise<void> {
   const f = forge.value
-  if (!f?.listPulls) return
+  const repo = meta.value
+  if (!f || !repo || !f.can('threads.list', 'pull_request')) return
   loading.value = true
   error.value = null
   try {
     const key = `pulls:${provider.value}:${owner.value}:${name.value}:${state.value}`
-    const page = await cached(
-      key,
-      () => f.listPulls!(locator.value, { state: state.value, limit: 30 }),
-      {
-        ttl: TTL.SHORT
-      }
-    )
-    items.value = page.items
+    items.value = await cached(key, () => loadThreads(f, repo, 'pull_request', state.value), {
+      ttl: TTL.SHORT
+    })
   } catch (e) {
-    error.value = e instanceof Error ? e.message : `Failed to load ${termPlural.value}.`
+    error.value = forgeErrorMessage(e, `Failed to load ${termPlural.value}.`)
   } finally {
     loading.value = false
   }
 }
 
-watch([provider, owner, name, state], load)
+watch([provider, owner, name, state, meta], load)
 onMounted(load)
 
 async function loadMergeQueue(): Promise<void> {
   mergeQueue.value = null
   const f = forge.value
-  if (!f?.getMergeQueue || !f.capabilities.mergeQueue) return
-  if (!meta.value) return
+  if (!f || !meta.value) return
   try {
-    mergeQueue.value = await f.getMergeQueue(locator.value, meta.value.defaultBranch || undefined)
+    mergeQueue.value = await getMergeQueue(f, meta.value)
   } catch {
     mergeQueue.value = null
   }
@@ -84,14 +82,19 @@ function mqStatusColor(s: string): 'error' | 'warning' | 'success' | 'neutral' {
   return 'neutral'
 }
 
-function itemLink(it: ForgePull): string {
-  return `${base.value}/pulls/${encodeURIComponent(it.id)}`
+function itemLink(it: Thread): string {
+  return threadPathOf(it.ref)
 }
 
-function icon(s: ForgePullState): string {
-  return PULL_STATE_ICON[s] ?? 'i-lucide-git-pull-request'
+function itemCacheKey(it: Thread): string {
+  return `pull:${provider.value}:${owner.value}:${name.value}:${threadRouteId(it.ref)}`
 }
-function color(s: ForgePullState): string {
+
+function icon(it: Thread): string {
+  return PULL_STATE_ICON[uiStateOf(it)] ?? 'i-lucide-git-pull-request'
+}
+function color(it: Thread): string {
+  const s = uiStateOf(it)
   if (s === 'open') return 'text-success'
   if (s === 'merged') return 'text-primary'
   return 'text-muted'
@@ -200,30 +203,37 @@ function color(s: ForgePullState): string {
     </div>
 
     <ul v-else class="divide-y divide-default overflow-hidden rounded-lg border border-default">
-      <li v-for="it in filtered" :key="it.id">
-        <NuxtLink
+      <li v-for="it in filtered" :key="it.ref.number">
+        <CommonOfflineLink
           :to="itemLink(it)"
+          :cache-key="itemCacheKey(it)"
           class="flex items-start gap-3 px-4 py-3 transition hover:bg-elevated/40"
         >
-          <UIcon :name="icon(it.state)" class="mt-0.5 size-4 shrink-0" :class="color(it.state)" />
-          <div class="min-w-0 flex-1">
-            <p class="truncate text-sm font-medium text-default">{{ it.title }}</p>
-            <div class="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-muted">
-              <span v-if="it.number">#{{ it.number }}</span>
-              <span v-if="it.author">· {{ userLabel(it.author) }}</span>
-              <span v-if="it.sourceBranch && it.targetBranch" class="font-mono"
-                >· {{ it.sourceBranch }} → {{ it.targetBranch }}</span
-              >
-              <span v-if="it.updatedAt">· {{ formatRelativeTime(it.updatedAt) }}</span>
+          <template #default="{ offline }">
+            <UIcon
+              :name="offline ? 'i-lucide-wifi-off' : icon(it)"
+              class="mt-0.5 size-4 shrink-0"
+              :class="offline ? 'text-muted' : color(it)"
+            />
+            <div class="min-w-0 flex-1">
+              <p class="truncate text-sm font-medium text-default">{{ it.title }}</p>
+              <div class="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-muted">
+                <span>#{{ threadNumberOf(it.ref) }}</span>
+                <span v-if="it.author">· {{ actorLabel(it.author) }}</span>
+                <span v-if="it.branches" class="font-mono"
+                  >· {{ it.branches.head.ref }} → {{ it.branches.base.ref }}</span
+                >
+                <span v-if="it.updatedAt">· {{ formatRelativeTime(it.updatedAt) }}</span>
+              </div>
             </div>
-          </div>
-          <span
-            v-if="it.commentCount"
-            class="inline-flex shrink-0 items-center gap-1 text-xs text-muted"
-          >
-            <UIcon name="i-lucide-message-square" class="size-3.5" />{{ it.commentCount }}
-          </span>
-        </NuxtLink>
+            <span
+              v-if="it.commentCount"
+              class="inline-flex shrink-0 items-center gap-1 text-xs text-muted"
+            >
+              <UIcon name="i-lucide-message-square" class="size-3.5" />{{ it.commentCount }}
+            </span>
+          </template>
+        </CommonOfflineLink>
       </li>
     </ul>
   </div>

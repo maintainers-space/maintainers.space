@@ -9,7 +9,7 @@ const message = ref('Completing sign-in…')
 onMounted(async () => {
   try {
     await completeCallback()
-    await navigateTo(consumeReturnPath() ?? '/', { replace: true })
+    await navigateTo('/', { replace: true })
   } catch (error) {
     status.value = 'error'
     message.value = error instanceof Error ? error.message : 'Sign-in could not be completed.'

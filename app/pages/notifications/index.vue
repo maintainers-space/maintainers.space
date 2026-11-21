@@ -1,9 +1,8 @@
 <script setup lang="ts">
-import type { ForgeInboxItem } from '~/types/forge'
+import type { InboxItem } from '~/lib/inbox'
 
 const {
   inboxItems,
-  dependencyCount,
   ciGroups,
   ciCount,
   resolvedItems,
@@ -17,14 +16,29 @@ const {
   markManyRead,
   completeCiGroup
 } = useNotifications()
+const {
+  totalCount: dependencyCount,
+  loadedOnce: dependencyLoadedOnce,
+  load: loadDependencies,
+  notes: dependencyNotes,
+  loading: dependencyLoading
+} = useDependencyUpdates()
 const { isAuthenticated } = useAuth()
 
 onMounted(() => {
   if (!loadedOnce.value) load()
+  if (isAuthenticated.value && !dependencyLoadedOnce.value) loadDependencies()
 })
 
+const allNotes = computed(() => [...notes.value, ...dependencyNotes.value])
+
+function onRefresh(): void {
+  load(true)
+  loadDependencies(true)
+}
+
 /** Icon + tint for a resolved thread's final state. */
-function resolvedMeta(item: ForgeInboxItem): { icon: string; class: string } {
+function resolvedMeta(item: InboxItem): { icon: string; class: string } {
   if (item.kind === 'pull') {
     if (item.state === 'merged') return { icon: 'i-lucide-git-merge', class: 'text-primary' }
     return { icon: 'i-lucide-git-pull-request-closed', class: 'text-error' }
@@ -45,7 +59,7 @@ function resolvedMeta(item: ForgeInboxItem): { icon: string; class: string } {
             {{ unreadCount }} unread
           </UBadge>
         </template>
-        <template #right>
+        <template v-if="isAuthenticated" #right>
           <UButton
             v-if="inboxItems.length"
             icon="i-lucide-check-check"
@@ -60,8 +74,9 @@ function resolvedMeta(item: ForgeInboxItem): { icon: string; class: string } {
             color="neutral"
             variant="ghost"
             size="sm"
-            :loading="loading"
-            @click="load(true)"
+            :loading="loading || dependencyLoading"
+            aria-label="Refresh notifications"
+            @click="onRefresh"
           />
         </template>
       </UDashboardNavbar>
@@ -69,18 +84,15 @@ function resolvedMeta(item: ForgeInboxItem): { icon: string; class: string } {
 
     <template #body>
       <div class="mx-auto w-full max-w-3xl space-y-4 py-2">
-        <div
+        <CommonSignInPrompt
           v-if="!isAuthenticated"
-          class="rounded-lg border border-dashed border-default py-16 text-center"
-        >
-          <UIcon name="i-lucide-lock" class="mx-auto size-8 text-muted" />
-          <p class="mt-3 text-sm text-muted">Sign in to bundle notifications across your forges.</p>
-        </div>
+          message="Sign in to bundle notifications across your forges."
+        />
 
         <template v-else>
-          <div v-if="notes.length" class="space-y-2">
+          <div v-if="allNotes.length" class="space-y-2">
             <CommonDismissibleAlert
-              v-for="(n, i) in notes"
+              v-for="(n, i) in allNotes"
               :key="i"
               :storage-key="`notifications-note:${n}`"
               :description="n"
@@ -99,7 +111,7 @@ function resolvedMeta(item: ForgeInboxItem): { icon: string; class: string } {
 
           <NuxtLink
             v-if="dependencyCount"
-            to="/notifications/dependencies"
+            to="/dependencies"
             class="flex items-center gap-3 rounded-lg border border-default bg-elevated/30 px-4 py-3 transition hover:bg-elevated/60"
           >
             <div
@@ -120,13 +132,20 @@ function resolvedMeta(item: ForgeInboxItem): { icon: string; class: string } {
             <UIcon name="i-lucide-chevron-right" class="size-4 shrink-0 text-muted" />
           </NuxtLink>
 
-          <div v-if="loading && !inboxItems.length" class="space-y-3">
+          <div
+            v-if="(loading || dependencyLoading) && !inboxItems.length && !dependencyCount"
+            class="space-y-3"
+          >
             <USkeleton v-for="i in 4" :key="i" class="h-16 w-full" />
           </div>
 
           <div
             v-else-if="
-              !inboxItems.length && !dependencyCount && !ciCount && !resolvedCount && !notes.length
+              !inboxItems.length &&
+              !dependencyCount &&
+              !ciCount &&
+              !resolvedCount &&
+              !allNotes.length
             "
             class="space-y-4"
           >

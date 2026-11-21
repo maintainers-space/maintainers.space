@@ -115,3 +115,27 @@ export async function idbClear(): Promise<void> {
     }
   })
 }
+
+/** List every key in the store, optionally restricted to `prefix`. */
+export async function idbKeys(prefix = ''): Promise<string[]> {
+  const db = await openDb()
+  if (!db) return []
+  return new Promise((resolve) => {
+    const keys: string[] = []
+    try {
+      const tx = db.transaction(STORE_NAME, 'readonly')
+      const req = tx.objectStore(STORE_NAME).openCursor()
+      req.addEventListener('success', () => {
+        const cursor = req.result
+        if (!cursor) return
+        const key = String(cursor.key)
+        if (!prefix || key.startsWith(prefix)) keys.push(key)
+        cursor.continue()
+      })
+      tx.addEventListener('complete', () => resolve(keys))
+      tx.addEventListener('error', () => resolve(keys))
+    } catch {
+      resolve(keys)
+    }
+  })
+}

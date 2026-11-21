@@ -1,39 +1,54 @@
 <script setup lang="ts">
-import { getForge, isForgeId } from '~/lib/forges'
-import type { ForgeRepo } from '~/types/forge'
+import type { Repo } from 'forges'
+import { isForgeId } from '~/lib/forges/registry'
+import { fetchRepo, repoSections } from '~/lib/forges/reads'
+import { toRepoCard } from '~/lib/forges/view'
+import { cacheExists, invalidateRepoCache } from '~/lib/cache'
 import { provideRepoContext, useRepoParams } from '~/composables/useRepoContext'
 
 const route = useRoute()
-const { provider, owner, name, forge, locator } = useRepoParams()
+const { provider, owner, name, forge } = useRepoParams()
 
 const {
   data: meta,
   pending,
   error,
   refresh
-} = useLiveAsyncData<ForgeRepo | null>(
+} = useLiveAsyncData<Repo | null>(
   () => `repo-meta:${provider.value}:${owner.value}:${name.value}`,
   async () => {
-    const f = getForge(provider.value)
+    const f = forge.value
     if (!f)
       throw createError({ statusCode: 404, statusMessage: `Unknown provider "${provider.value}"` })
-    if (f.getRepo) return await f.getRepo(owner.value, name.value)
-    const ov = await f.getOverview(owner.value, name.value)
-    return ov.repo
+    return await fetchRepo(f, owner.value, name.value)
   },
   { lazy: true, watch: [provider, owner, name], default: () => null }
 )
 
 const defaultBranch = computed(() => meta.value?.defaultBranch ?? 'main')
 
-provideRepoContext({ provider, owner, name, forge, locator, meta, defaultBranch })
+provideRepoContext({ provider, owner, name, forge, meta, defaultBranch })
 
 // Track visits locally so signed-in users get a personal recent/favourite feed.
 const { record, recordSection } = useRepoVisits()
+const offline = useOfflineRepos()
 watch(
   meta,
   (m) => {
-    if (m) record(m)
+    if (m) {
+      const card = toRepoCard(m)
+      record(card)
+      if (card.isPrivate) {
+        // Metadata is the first response that can identify visibility. Remove
+        // any current or legacy IndexedDB entries before child pages load.
+        invalidateRepoCache(card.provider, card.owner, card.name)
+        return
+      }
+      // Fill the repo's bounded offline surface after the visible header has
+      // loaded; the prefetcher deduplicates these entries with the page's own
+      // requests and stays within the configured repository/request limits.
+      offline.visit(card)
+    }
   },
   { immediate: true }
 )
@@ -41,7 +56,48 @@ watch(
 const base = computed(() =>
   repoPath({ provider: provider.value, owner: owner.value, name: name.value })
 )
-const caps = computed(() => forge.value?.capabilities)
+const sections = computed(() =>
+  forge.value ? repoSections(forge.value, meta.value ?? undefined) : null
+)
+const isOnline = useOnline()
+const { get: getToken } = useForgeTokens()
+const sectionAvailability = ref<Record<string, boolean>>({})
+
+const sectionCacheKeys = computed<Record<string, string>>(() => ({
+  code: `repo-code:${provider.value}:${owner.value}:${name.value}`,
+  issues: `issues:${provider.value}:${owner.value}:${name.value}:open`,
+  pulls: `pulls:${provider.value}:${owner.value}:${name.value}:open`,
+  actions: `actions:${provider.value}:${owner.value}:${name.value}`,
+  discussions: `discussions:${provider.value}:${owner.value}:${name.value}:${
+    getToken(provider.value) ? 'auth' : 'anon'
+  }`
+}))
+
+async function checkSectionAvailability(): Promise<void> {
+  if (!import.meta.client || isOnline.value) {
+    sectionAvailability.value = {}
+    return
+  }
+  const entries = await Promise.all(
+    Object.entries(sectionCacheKeys.value).map(async ([section, key]) => [
+      section,
+      await cacheExists(key)
+    ])
+  )
+  sectionAvailability.value = Object.fromEntries(entries)
+}
+
+watch([isOnline, provider, owner, name], () => void checkSectionAvailability(), {
+  immediate: true
+})
+
+function unavailableOffline(section: string): boolean {
+  return !isOnline.value && !sectionAvailability.value[section]
+}
+
+function tabIcon(section: string, normal: string): string {
+  return unavailableOffline(section) ? 'i-lucide-wifi-off' : normal
+}
 
 function startsWith(seg: string): boolean {
   return route.path === `${base.value}/${seg}` || route.path.startsWith(`${base.value}/${seg}/`)
@@ -56,7 +112,7 @@ const currentSection = computed<string | null>(() => {
 watch(
   [meta, currentSection],
   ([m, section]) => {
-    if (m && section) recordSection(m, section)
+    if (m && section) recordSection(toRepoCard(m), section)
   },
   { immediate: true }
 )
@@ -65,53 +121,67 @@ const isCode = computed(
   () => route.path === base.value || ['tree', 'blob', 'commits', 'commit'].some(startsWith)
 )
 
-// Forge-level capability says this provider supports the feature at all;
-// per-repo `features` (when the forge reports it, e.g. GitHub Discussions is
-// opt-in per repo) says whether *this* repo actually has it turned on.
-// `undefined` means the forge didn't report it — don't hide on a guess.
-const features = computed(() => meta.value?.features)
-
 const tabs = computed(() => {
-  const items = [{ label: 'Code', icon: 'i-lucide-code', to: base.value, active: isCode.value }]
-  if (caps.value?.issues && features.value?.issues !== false)
+  const items = [
+    {
+      label: 'Code',
+      icon: tabIcon('code', 'i-lucide-code'),
+      to: base.value,
+      active: isCode.value,
+      disabled: unavailableOffline('code')
+    }
+  ]
+  if (sections.value?.issues)
     items.push({
       label: 'Issues',
-      icon: 'i-lucide-circle-dot',
+      icon: tabIcon('issues', 'i-lucide-circle-dot'),
       to: `${base.value}/issues`,
-      active: startsWith('issues')
+      active: startsWith('issues'),
+      disabled: unavailableOffline('issues')
     })
-  if (caps.value?.pulls && features.value?.pulls !== false)
+  if (sections.value?.pulls)
     items.push({
       label: pullsTerm(provider.value, { plural: true, capitalize: true }),
-      icon: 'i-lucide-git-pull-request',
+      icon: tabIcon('pulls', 'i-lucide-git-pull-request'),
       to: `${base.value}/pulls`,
-      active: startsWith('pulls')
+      active: startsWith('pulls'),
+      disabled: unavailableOffline('pulls')
     })
-  if (caps.value?.actions)
+  if (sections.value?.actions)
     items.push({
       label: 'Actions',
-      icon: 'i-lucide-play',
+      icon: tabIcon('actions', 'i-lucide-play'),
       to: `${base.value}/actions`,
-      active: startsWith('actions')
+      active: startsWith('actions'),
+      disabled: unavailableOffline('actions')
     })
-  if (caps.value?.discussions && features.value?.discussions !== false)
+  if (sections.value?.discussions)
     items.push({
       label: 'Discussions',
-      icon: 'i-lucide-messages-square',
+      icon: tabIcon('discussions', 'i-lucide-messages-square'),
       to: `${base.value}/discussions`,
-      active: startsWith('discussions')
+      active: startsWith('discussions'),
+      disabled: unavailableOffline('discussions')
     })
-  // Chat is a maintainers.space-native feature, not a forge capability — every
-  // repo can potentially get one, gated by whether its owner has enabled it
-  // (see the chat/ page's own empty state), not by what the forge supports.
-  items.push({
-    label: 'Chat',
-    icon: 'i-lucide-message-circle',
-    to: `${base.value}/chat`,
-    active: startsWith('chat')
-  })
   return items
 })
+
+// On narrow screens the tab bar scrolls sideways, so a deep link to a later tab (Actions, say)
+// would leave the active tab out of view. Only the bar scrolls, never the page.
+const tabBar = useTemplateRef<HTMLElement>('tabBar')
+watch(
+  [() => route.path, meta],
+  () => {
+    const bar = tabBar.value?.querySelector('nav')
+    const active = bar?.querySelector('[data-active]')
+    if (!bar || !active) return
+    const barBox = bar.getBoundingClientRect()
+    const box = active.getBoundingClientRect()
+    if (box.left < barBox.left) bar.scrollLeft -= barBox.left - box.left
+    else if (box.right > barBox.right) bar.scrollLeft += box.right - barBox.right
+  },
+  { flush: 'post' }
+)
 </script>
 
 <template>
@@ -137,9 +207,7 @@ const tabs = computed(() => {
           variant="subtle"
           icon="i-lucide-circle-alert"
           :title="isForgeId(provider) ? 'Repository not found' : `Unknown provider: ${provider}`"
-          :description="
-            error?.statusMessage || error?.message || 'We could not load this repository.'
-          "
+          :description="forgeErrorMessage(error, 'We could not load this repository.')"
         >
           <template #actions>
             <UButton color="error" variant="soft" label="Retry" @click="refresh()" />
@@ -147,8 +215,20 @@ const tabs = computed(() => {
         </UAlert>
 
         <template v-else-if="meta">
-          <ForgeRepoHeader :repo="meta" />
-          <UNavigationMenu :items="tabs" highlight class="mt-5 border-b border-default" />
+          <ForgeRepoHeader :repo="meta" :show-topics="route.path === base" />
+          <div ref="tabBar">
+            <UNavigationMenu
+              :items="tabs"
+              highlight
+              aria-label="Repository"
+              class="mt-5 border-b border-default"
+              :ui="{
+                root: 'overflow-x-auto [scrollbar-width:none]',
+                list: 'min-w-max',
+                linkLabel: 'overflow-visible'
+              }"
+            />
+          </div>
           <div class="mt-6">
             <NuxtPage />
           </div>

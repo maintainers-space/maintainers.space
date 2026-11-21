@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import type { ForgeRepo } from '~/types/forge'
+import type { RepoCard } from '~/lib/forges/view'
 import { useRepoContextMenu } from '~/composables/useRepoContextMenu'
 
-const props = defineProps<{ repo: ForgeRepo }>()
+const props = defineProps<{ repo: RepoCard }>()
 const { items } = useRepoContextMenu(() => props.repo)
 </script>
 

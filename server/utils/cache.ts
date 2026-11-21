@@ -40,19 +40,11 @@ export const CACHE_LONG: CachePolicy = { browser: 600, cdn: 3600, netlify: 86_40
 export const CACHE_SEARCH: CachePolicy = { browser: 300, cdn: 900, netlify: 3600, swr: 1800 }
 
 /**
- * ~1 day–1 year class. For the Explore social graph: who follows whom, who
- * contributes to a repo, a person's linked forge accounts. These change
- * rarely, and building the graph fans out to many such reads per person, so
- * they're held far longer than any other cache tier — a ~1 week
- * stale-while-revalidate window means a stale answer is still served
- * instantly while a fresh one is fetched in the background.
+ * Social preview images. Stars and titles drift slowly, and crawlers fetch an image once per
+ * share, so the durable edge keeps each one for a day and serves it stale for a week while it
+ * re-renders in the background.
  */
-export const CACHE_SOCIAL_GRAPH: CachePolicy = {
-  browser: 86_400,
-  cdn: 604_800,
-  netlify: 31_536_000,
-  swr: 604_800
-}
+export const CACHE_OG: CachePolicy = { browser: 3600, cdn: 21_600, netlify: 86_400, swr: 604_800 }
 
 /**
  * ~1 year class, for third-party static assets proxied through this origin: an

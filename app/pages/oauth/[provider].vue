@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { getForge, isForgeId } from '~/lib/forges'
+import { getForge, isForgeId } from '~/lib/forges/registry'
 
 definePageMeta({ layout: false })
 

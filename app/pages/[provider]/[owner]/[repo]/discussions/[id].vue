@@ -1,24 +1,42 @@
 <script setup lang="ts">
-import type { ForgeDiscussionDetail } from '~/types/forge'
 import { useRepoContext } from '~/composables/useRepoContext'
+import { loadThreadDetail } from '~/lib/forges/loaders'
+import type { ThreadDetail } from '~/lib/forges/loaders'
 
 const route = useRoute()
-const { provider, owner, name, forge, locator } = useRepoContext()
-const { get: getToken } = useForgeTokens()
+const { provider, owner, name, forge, meta } = useRepoContext()
 const base = computed(() =>
   repoPath({ provider: provider.value, owner: owner.value, name: name.value })
 )
 const id = computed(() => String(route.params.id))
 
-const { data, pending, error } = useLiveAsyncData<ForgeDiscussionDetail | null>(
-  () => `discussion:${provider.value}:${owner.value}:${name.value}:${id.value}`,
-  async () => {
-    if (!forge.value?.getDiscussion) return null
-    return await forge.value.getDiscussion(locator.value, id.value, {
-      token: getToken(provider.value)
-    })
+const offline = useOfflineRepos()
+const watchItem = offline.watch
+const itemKey = computed(
+  () => `discussion:${provider.value}:${owner.value}:${name.value}:${id.value}`
+)
+
+// Any discussion you open is remembered so it can be kept offline once its repo is.
+watch(
+  itemKey,
+  (k) => {
+    const [, , , , iid] = k.split(':')
+    if (iid) {
+      watchItem('discussion', provider.value, owner.value, name.value, iid)
+      void offline.auto()
+    }
   },
-  { lazy: true, watch: [() => route.fullPath] }
+  { immediate: true }
+)
+
+const { data, pending, error } = useLiveAsyncData<ThreadDetail | null>(
+  () => itemKey.value,
+  async () => {
+    const f = forge.value
+    if (!f || !meta.value || !f.can('threads.get', 'discussion')) return null
+    return await loadThreadDetail(f, meta.value, 'discussion', id.value)
+  },
+  { lazy: true, watch: [() => route.fullPath, meta] }
 )
 </script>
 
@@ -44,33 +62,28 @@ const { data, pending, error } = useLiveAsyncData<ForgeDiscussionDetail | null>(
       variant="subtle"
       icon="i-lucide-circle-alert"
       title="Could not load discussion"
-      :description="error?.message"
+      :description="forgeErrorMessage(error)"
     />
 
     <template v-else-if="data">
       <div class="space-y-2 border-b border-default pb-4">
-        <h1 class="text-xl font-semibold text-highlighted">
-          {{ data.title }}
-          <span v-if="data.number" class="font-normal text-muted">#{{ data.number }}</span>
-        </h1>
+        <h2 class="text-xl font-semibold text-highlighted">
+          {{ data.thread.title }}
+          <span class="font-normal text-muted">#{{ threadNumberOf(data.thread.ref) }}</span>
+        </h2>
         <div class="flex flex-wrap items-center gap-2 text-sm text-muted">
           <UBadge
-            v-if="data.category"
-            :label="data.category"
-            color="neutral"
-            variant="subtle"
-            size="xs"
-          />
-          <UBadge
-            v-if="data.answered"
+            v-if="data.thread.stateReason === 'resolved'"
             label="Answered"
             color="success"
             variant="subtle"
             size="xs"
             icon="i-lucide-check-circle"
           />
-          <UserLink :user="data.author" />
-          <span v-if="data.createdAt">started {{ formatRelativeTime(data.createdAt) }}</span>
+          <UserLink :user="data.thread.author" />
+          <span v-if="data.thread.createdAt"
+            >started {{ formatRelativeTime(data.thread.createdAt) }}</span
+          >
         </div>
       </div>
 
@@ -78,25 +91,21 @@ const { data, pending, error } = useLiveAsyncData<ForgeDiscussionDetail | null>(
         <header
           class="flex items-center gap-2 border-b border-default bg-elevated/40 px-4 py-2 text-sm"
         >
-          <UserLink :user="data.author" />
-          <span v-if="data.createdAt" class="text-muted">{{
-            formatRelativeTime(data.createdAt)
+          <UserLink :user="data.thread.author" />
+          <span v-if="data.thread.createdAt" class="text-muted">{{
+            formatRelativeTime(data.thread.createdAt)
           }}</span>
         </header>
         <div class="px-4 py-3">
-          <MarkdownBody :content="data.body ?? ''" empty="No content." />
+          <MarkdownBody :content="data.thread.body ?? ''" empty="No content." />
         </div>
-        <ReactionBar
-          :reactions="data.reactions"
-          :target="{ kind: 'discussion', threadId: data.id }"
-        />
+        <ReactionBar :reactions="data.thread.reactions" :target="data.thread.ref" />
       </article>
 
       <CommentThread
         v-if="data.comments.length"
         :comments="data.comments"
-        thread-kind="discussion"
-        :thread-id="data.id"
+        :thread="data.thread.ref"
       />
     </template>
   </div>

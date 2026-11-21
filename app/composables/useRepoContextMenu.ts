@@ -1,6 +1,6 @@
 import type { ContextMenuItem } from '@nuxt/ui'
-import { getForge } from '~/lib/forges'
-import type { ForgeRepo } from '~/types/forge'
+import { getForge, repoRefOf } from '~/lib/forges/registry'
+import type { RepoCard } from '~/lib/forges/view'
 
 async function copy(
   text: string,
@@ -16,28 +16,31 @@ async function copy(
 }
 
 /** npmx-style context menu for a repository row/card. */
-export function useRepoContextMenu(repo: MaybeRefOrGetter<ForgeRepo>) {
+export function useRepoContextMenu(repo: MaybeRefOrGetter<RepoCard>) {
   const toast = useToast()
+  const { providerFor } = useForges()
 
   const items = computed<ContextMenuItem[][]>(() => {
     const r = toValue(repo)
     const base = repoPath(r)
-    const forge = getForge(r.provider)
-    const caps = forge?.capabilities
+    const descriptor = getForge(r.provider)
+    const ref = repoRefOf(r.provider, r.owner, r.name)
+    const forge = ref ? providerFor(ref) : undefined
 
     const nav: ContextMenuItem[] = [
       { label: 'Open repository', icon: 'i-lucide-book-marked', to: base },
       { label: 'View commits', icon: 'i-lucide-history', to: `${base}/commits` }
     ]
-    if (caps?.issues && r.features?.issues !== false)
+    if (forge?.can('threads.list', 'issue'))
       nav.push({ label: 'Issues', icon: 'i-lucide-circle-dot', to: `${base}/issues` })
-    if (caps?.pulls && r.features?.pulls !== false)
+    if (forge?.can('threads.list', 'pull_request'))
       nav.push({
         label: pullsTerm(r.provider, { plural: true, capitalize: true }),
         icon: 'i-lucide-git-pull-request',
         to: `${base}/pulls`
       })
-    if (caps?.actions) nav.push({ label: 'Actions', icon: 'i-lucide-play', to: `${base}/actions` })
+    if (forge?.can('ci.runs'))
+      nav.push({ label: 'Actions', icon: 'i-lucide-play', to: `${base}/actions` })
 
     const clip: ContextMenuItem[] = [
       {
@@ -55,17 +58,10 @@ export function useRepoContextMenu(repo: MaybeRefOrGetter<ForgeRepo>) {
         to: `/search?q=${encodeURIComponent(`owner:${r.owner}`)}`
       }
     ]
-    if (r.language) {
-      discover.push({
-        label: `Explore ${r.language}`,
-        icon: 'i-lucide-code',
-        to: `/explore?lang=${encodeURIComponent(r.language)}`
-      })
-    }
 
     const external: ContextMenuItem[] = [
       {
-        label: `Open on ${forge?.label ?? r.provider}`,
+        label: `Open on ${descriptor?.label ?? r.provider}`,
         icon: 'i-lucide-external-link',
         to: r.url,
         target: '_blank'

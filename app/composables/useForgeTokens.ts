@@ -4,9 +4,6 @@
 // provider features (e.g. GitHub code search, higher rate limits). Tokens live in
 // localStorage on the user's device and are never sent anywhere but the forge.
 
-import type { ForgeId } from '~/types/forge'
-import { syncForgeTokens } from '~/lib/forges/token-store'
-
 const STORAGE_PREFIX = 'maintainers.space:forge-token:'
 
 const _tokens = ref<Record<string, string>>({})
@@ -23,32 +20,47 @@ function load(): void {
     }
   }
   _tokens.value = out
-  syncForgeTokens(out)
+  _loaded = true
+}
+
+/** Forget every forge token on this device, e.g. on sign-out, so the next account can't use them. */
+export function clearForgeTokens(): void {
+  if (import.meta.client) {
+    const keys: string[] = []
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i)
+      if (key?.startsWith(STORAGE_PREFIX)) keys.push(key)
+    }
+    for (const key of keys) localStorage.removeItem(key)
+  }
+  _tokens.value = {}
   _loaded = true
 }
 
 export function useForgeTokens() {
   load()
 
-  function get(provider: ForgeId): string | undefined {
-    return _tokens.value[provider] || undefined
+  /** The repo-scoped override for `repoFullName` when one exists, else the provider-wide token. */
+  function get(provider: string, repoFullName?: string): string | undefined {
+    const override = repoFullName ? _tokens.value[`${provider}:${repoFullName}`] : undefined
+    return override || _tokens.value[provider] || undefined
   }
 
-  function set(provider: ForgeId, token: string): void {
+  function set(provider: string, token: string, repoFullName?: string): void {
     const clean = token.trim()
-    if (!clean) return remove(provider)
-    localStorage.setItem(STORAGE_PREFIX + provider, clean)
-    _tokens.value = { ..._tokens.value, [provider]: clean }
-    syncForgeTokens(_tokens.value)
+    const key = repoFullName ? `${provider}:${repoFullName}` : provider
+    if (!clean) return remove(provider, repoFullName)
+    localStorage.setItem(STORAGE_PREFIX + key, clean)
+    _tokens.value = { ..._tokens.value, [key]: clean }
   }
 
-  function remove(provider: ForgeId): void {
-    localStorage.removeItem(STORAGE_PREFIX + provider)
+  function remove(provider: string, repoFullName?: string): void {
+    const key = repoFullName ? `${provider}:${repoFullName}` : provider
+    localStorage.removeItem(STORAGE_PREFIX + key)
     const next = { ..._tokens.value }
     // eslint-disable-next-line @typescript-eslint/no-dynamic-delete
-    delete next[provider]
+    delete next[key]
     _tokens.value = next
-    syncForgeTokens(next)
   }
 
   return { tokens: readonly(_tokens), get, set, remove }

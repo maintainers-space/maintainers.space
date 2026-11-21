@@ -1,22 +1,28 @@
+import { ForbiddenError, ForgeNetworkError, NotFoundError, RateLimitedError } from 'forges'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { describeForgeError } from './forge-errors'
-
-function fetchError(status: number, message: string, headers: Record<string, string> = {}) {
-  return {
-    message,
-    response: { status, headers: new Headers(headers) }
-  }
-}
+import { describeForgeError, forgeErrorMessage, isForgeRateLimit } from './forge-errors'
 
 describe('describeForgeError', () => {
   it('passes through a plain message unchanged', () => {
-    expect(describeForgeError({ message: 'Not found' })).toEqual({ description: 'Not found' })
+    expect(describeForgeError(new Error('Not found'))).toEqual({ description: 'Not found' })
   })
 
-  it('recognizes GitHub OAuth App access restrictions and links to GitHub settings', () => {
-    const hint = describeForgeError({ message: 'OAuth App access restrictions are enabled' })
-    expect(hint.to).toBe('https://github.com/settings/connections/applications')
-    expect(hint.description).toContain("hasn't approved maintainers.space")
+  it('offers a repo-scoped token for organisation OAuth restrictions', () => {
+    const error = new ForbiddenError('Forbidden', 403, '', 'org_restriction')
+    const hint = describeForgeError(error, { provider: 'github', owner: 'nuxt', name: 'nuxt' })
+    expect(hint.to).toBe('/settings/accounts?pat=github%3Anuxt%2Fnuxt')
+    expect(hint.linkLabel).toBe('Provide a repo-scoped token')
+    expect(hint.description).toContain('restricts third-party OAuth apps')
+  })
+
+  it('links to account settings for OAuth restrictions without a known repository', () => {
+    const hint = describeForgeError(new ForbiddenError('Forbidden', 403, '', 'org_restriction'))
+    expect(hint.to).toBe('/settings/accounts')
+  })
+
+  it('does not treat other forbidden reasons as an OAuth restriction', () => {
+    const hint = describeForgeError(new ForbiddenError('Archived', 403, '', 'resource_protected'))
+    expect(hint).toEqual({ description: 'Archived' })
   })
 
   describe('rate limiting', () => {
@@ -28,53 +34,65 @@ describe('describeForgeError', () => {
       vi.useRealTimers()
     })
 
-    it('treats 429 as a rate limit even without a body message', () => {
-      const hint = describeForgeError(fetchError(429, ''))
-      expect(hint.description).toMatch(/rate limit/i)
+    it('reports the reset ETA the forge sent', () => {
+      const resetAt = new Date(Date.now() + 5 * 60_000)
+      const hint = describeForgeError(new RateLimitedError('Limited', 429, '', { resetAt }))
+      expect(hint.description).toContain('about 5 minutes')
       expect(hint.to).toBe('/settings/accounts')
     })
 
-    it('treats 403 as a rate limit only when the body says so', () => {
-      const rateLimited = describeForgeError(fetchError(403, 'API rate limit exceeded'))
-      expect(rateLimited.description).toMatch(/rate limit/i)
-
-      const forbidden = describeForgeError(fetchError(403, 'Resource not accessible'))
-      expect(forbidden.description).toBe('Resource not accessible')
-    })
-
-    it('computes the reset ETA from X-RateLimit-Reset (GitHub-style, unix seconds)', () => {
-      const resetAt = Math.floor(new Date('2024-01-01T00:05:00Z').getTime() / 1000)
-      const hint = describeForgeError(fetchError(429, '', { 'X-RateLimit-Reset': String(resetAt) }))
-      expect(hint.description).toContain('about 5 minutes')
-    })
-
-    it('computes the reset ETA from RateLimit-Reset (GitLab-style, no X- prefix)', () => {
-      const resetAt = Math.floor(new Date('2024-01-01T00:02:00Z').getTime() / 1000)
-      const hint = describeForgeError(fetchError(429, '', { 'RateLimit-Reset': String(resetAt) }))
-      expect(hint.description).toContain('about 2 minutes')
-    })
-
-    it('falls back to Retry-After in delta-seconds form (Bitbucket-style)', () => {
-      const hint = describeForgeError(fetchError(429, '', { 'Retry-After': '120' }))
-      expect(hint.description).toContain('about 2 minutes')
-    })
-
-    it('falls back to Retry-After as an HTTP-date', () => {
-      const hint = describeForgeError(
-        fetchError(429, '', { 'Retry-After': 'Mon, 01 Jan 2024 00:03:00 GMT' })
-      )
-      expect(hint.description).toContain('about 3 minutes')
-    })
-
-    it('uses singular "minute" for a 1-minute wait', () => {
-      const resetAt = Math.floor(new Date('2024-01-01T00:01:00Z').getTime() / 1000)
-      const hint = describeForgeError(fetchError(429, '', { 'X-RateLimit-Reset': String(resetAt) }))
-      expect(hint.description).toContain('about 1 minute,')
-    })
-
-    it('falls back to a generic wait message when no usable header is present', () => {
-      const hint = describeForgeError(fetchError(429, ''))
+    it('falls back to a generic wait without a reset time', () => {
+      const hint = describeForgeError(new RateLimitedError('Limited', 429, ''))
       expect(hint.description).toContain('try again shortly')
     })
+
+    it('detects rate limits by error class', () => {
+      expect(isForgeRateLimit(new RateLimitedError('Limited', 429, ''))).toBe(true)
+      expect(isForgeRateLimit(new Error('rate limit'))).toBe(false)
+    })
+  })
+})
+
+describe('forgeErrorMessage', () => {
+  const notFound = new NotFoundError(
+    'Nothing found at GET http://127.0.0.1:3000/api/tangled/xrpc/sh.tangled.repo.tree?repo=at%3A%2F%2Fdid, or the credential cannot see it',
+    404,
+    ''
+  )
+
+  it('never shows the request URL of a missing resource', () => {
+    const message = forgeErrorMessage(notFound)
+    expect(message).toBe(
+      "This doesn't exist, or it's private and your connected account can't see it."
+    )
+    expect(message).not.toContain('http')
+  })
+
+  it('reads the forge error behind the Nuxt error that useAsyncData reports', () => {
+    const wrapped = Object.assign(new Error(notFound.message), {
+      cause: notFound,
+      statusMessage: notFound.message
+    })
+    expect(forgeErrorMessage(wrapped)).not.toContain('http')
+  })
+
+  it('tells people when the forge could not be reached', () => {
+    const error = new ForgeNetworkError('fetch failed: GET https://api.github.com/repos/a/b')
+    expect(forgeErrorMessage(error)).toBe(
+      "Couldn't reach the forge. Check your connection and try again."
+    )
+  })
+
+  it('keeps the messages the app writes itself', () => {
+    expect(forgeErrorMessage(new Error('You appear to be offline.'), 'Fallback')).toBe(
+      'You appear to be offline.'
+    )
+    expect(forgeErrorMessage({ statusMessage: 'Repository "x" was not found.' })).toBe(
+      'Repository "x" was not found.'
+    )
+  })
+
+  it('falls back when there is nothing to show', () => {
+    expect(forgeErrorMessage(null, 'Failed to load issues.')).toBe('Failed to load issues.')
   })
 })

@@ -1,9 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { ForgeId } from '~/types/forge'
 
 const DOMINANCE: Record<string, number> = { a: 1, b: 1, c: 3 }
 
-vi.mock('./forges', () => ({
+vi.mock('./forges/registry', () => ({
   getForge: (id: string) => {
     const dominance = DOMINANCE[id]
     return dominance == null ? undefined : { dominance }
@@ -13,12 +12,12 @@ vi.mock('./forges', () => ({
 const { balanceByDominance } = await import('./forge-balance')
 
 interface Item {
-  provider: ForgeId
+  provider: string
   id: string
 }
 
 function item(provider: string, id: string): Item {
-  return { provider: provider as ForgeId, id }
+  return { provider: provider, id }
 }
 
 describe('balanceByDominance', () => {

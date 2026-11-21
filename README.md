@@ -1,6 +1,7 @@
 # maintainers.space
 
 [![Nuxt UI](https://img.shields.io/badge/Made%20with-Nuxt%20UI-00DC82?logo=nuxt&labelColor=020420)](https://ui.nuxt.com)
+[![Netlify Status](https://api.netlify.com/api/v1/badges/7d17e60d-2bfd-4ab5-9242-ac429624bcd6/deploy-status)](https://app.netlify.com/projects/maintainers/deploys)
 
 maintainers.space pulls your work across Git hosts into one place. Repos, issues, pull requests and notifications from GitHub, GitLab, Codeberg, Gitea, Bitbucket and [Tangled](https://tangled.org), all in one dashboard. You sign in with your AT Protocol (Bluesky) identity, and maintainers.space uses that same identity to find your accounts on each of them. Built with [Nuxt](https://nuxt.com) and [Nuxt UI](https://ui.nuxt.com).
 
@@ -11,6 +12,40 @@ Not every forge does everything — Bitbucket has no issue tracker (Atlassian is
 ## Contributing
 
 Bug reports, feature requests and pull requests are all welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for local setup, the OAuth apps you'll need to register, and the project's conventions.
+
+## Quality checks
+
+Every pull request and merge-queue group runs the same required quality gate:
+
+- Oxlint, Oxfmt, TypeScript, Knip and a production Nuxt build.
+- Vitest unit tests with V8 coverage thresholds measured broadly across app and server logic. The baseline stays explicit in `vitest.config.ts` so untested forge clients are not hidden by a selective badge.
+- Playwright checks across desktop and mobile Chromium, including anonymous browsing, repository navigation, sign-in helpers, legal pages and axe-core WCAG A/AA scans.
+- Lighthouse CI on the indexable home, privacy and terms pages, with minimum scores of 0.75 performance and 0.90 accessibility, best practices and SEO.
+- CodeQL extended security queries, dependency review and zizmor's pedantic GitHub Actions audit.
+
+Run the principal checks locally with:
+
+```bash
+pnpm run test:coverage
+pnpm exec playwright install chromium
+pnpm run test:e2e
+pnpm run build
+pnpm run test:lighthouse
+```
+
+`pnpm run check:all` runs every local check back-to-back in a fixed sequential order — lint, format, typecheck, unit tests with coverage, knip, dependency audit, end-to-end tests, a fresh production build and the Lighthouse audit. It is intentionally serial (`&&`) so the checks can't interfere with each other's build output, test state or the `:3000` port; it just takes a while because the build, E2E and Lighthouse each need a full browser/production run.
+
+Playwright traces, screenshots and videos are retained only on failure. CI uploads the Playwright and Lighthouse HTML reports for 14 days.
+
+The pre-commit hook uses the dependency-free `nano-staged` runner to format and lint only staged files. The pre-push hook runs the complete local quality gate, including browser tests.
+
+## Release flow
+
+`main` is the development branch. Release-relevant pull requests add a Changesets v3 entry with `pnpm changeset`; GitHub-linked changelog entries are accumulated there until a release is ready.
+
+After changes land on `main`, Changesets Action v2 creates or updates a semantic version pull request. Merging it records the version and GitHub-linked changelog on `main`; Changesets then creates and pushes the `vX.Y.Z` tag and publishes the GitHub release, and the workflow fast-forwards the `release` branch to that exact release commit, so `release` history stays identical to `main`. Production should deploy only from `release`.
+
+Protect both branches with the required quality, CodeQL, dependency-review, semantic-title and zizmor checks. Repository Actions settings must allow GitHub Actions to create pull requests so the release workflow can maintain its PR. The local `commit-msg` hook rejects non-Conventional Commit messages; squash merging preserves the validated semantic PR title.
 
 ## License
 

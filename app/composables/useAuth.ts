@@ -9,25 +9,14 @@ import {
   listStoredSessions
 } from '@atcute/oauth-browser-client'
 import type { ActorIdentifier, Did } from '@atcute/lexicons'
-import { getBaseScope } from '~/lib/atproto/oauth'
+import { OAUTH_SCOPE } from '#shared/atproto-oauth'
 import { fetchPublicProfile } from '~/lib/atproto/public'
 import { clearCache } from '~/lib/cache'
+import { resetForgeAccounts } from '~/composables/useForgeAccounts'
+import { clearForgeTokens } from '~/composables/useForgeTokens'
+import { clearOfflineState } from '~/composables/useOfflineRepos'
 
 const CURRENT_DID_KEY = 'maintainers.space:current-did'
-const RETURN_TO_KEY = 'maintainers.space:oauth-return-to'
-
-/**
- * Where to land once an OAuth round trip finishes, read and cleared by
- * `pages/oauth/callback.vue`. sessionStorage rather than a ref or the URL: the
- * redirect leaves the SPA entirely, so in-memory state does not survive, and the
- * callback URL's own params are reserved for the authorization response.
- */
-export function consumeReturnPath(): string | null {
-  if (!import.meta.client) return null
-  const path = sessionStorage.getItem(RETURN_TO_KEY)
-  if (path) sessionStorage.removeItem(RETURN_TO_KEY)
-  return path
-}
 
 export interface AtpProfile {
   did: string
@@ -66,8 +55,13 @@ function clearLocalSession(sub?: Did | null): void {
   _did.value = null
   _profile.value = null
   // So another account signing in on the same device never reads this
-  // account's cached repos/issues/notifications.
+  // account's cached repos/issues/notifications, nor its offline pinning/watched
+  // state (which would leak which repos/issues the previous account followed),
+  // nor its forge tokens and linked accounts.
   clearCache()
+  clearOfflineState()
+  clearForgeTokens()
+  resetForgeAccounts()
   const dead =
     sub ?? (import.meta.client ? (localStorage.getItem(CURRENT_DID_KEY) as Did | null) : null)
   if (dead) {
@@ -101,40 +95,13 @@ async function revalidateSession(sub: Did): Promise<void> {
 export function useAuth() {
   const isAuthenticated = computed(() => !!_agent.value)
 
-  /**
-   * The scope the PDS actually granted, which is not the scope that was
-   * requested: `include:` permission sets come back expanded into the concrete
-   * permissions they cover. Anything deciding whether a feature may run has to
-   * read this rather than reconstruct what was asked for.
-   */
-  const grantedScope = computed(() => _agent.value?.session.token.scope)
-
   /** Kick off the OAuth redirect flow for a given handle or DID. */
   async function loginWithHandle(identifier: string): Promise<void> {
     const clean = identifier.trim().replace(/^@/, '')
     if (!clean) throw new Error('Please enter a handle or DID.')
     const url = await createAuthorizationUrl({
       target: { type: 'account', identifier: clean as ActorIdentifier },
-      scope: getBaseScope()
-    })
-    // Give freshly-stored PKCE/DPoP state a tick to persist before navigating away.
-    await new Promise((resolve) => setTimeout(resolve, 200))
-    window.location.assign(url.toString())
-  }
-
-  /**
-   * Re-run authorization for the account that is already signed in, so a session
-   * can pick up scopes it does not hold yet. Unlike signing out and back in, the
-   * identity is carried over, so the user neither re-enters their handle nor
-   * loses the current session if they abandon the consent screen.
-   */
-  async function requestScopes(scope: string, returnTo?: string): Promise<void> {
-    const sub = _did.value
-    if (!sub) throw new Error('Not authenticated')
-    if (returnTo && import.meta.client) sessionStorage.setItem(RETURN_TO_KEY, returnTo)
-    const url = await createAuthorizationUrl({
-      target: { type: 'account', identifier: sub as ActorIdentifier },
-      scope
+      scope: OAUTH_SCOPE
     })
     // Give freshly-stored PKCE/DPoP state a tick to persist before navigating away.
     await new Promise((resolve) => setTimeout(resolve, 200))
@@ -204,20 +171,12 @@ export function useAuth() {
   }
 
   return {
-    // shallowReadonly, not readonly: `readonly()` is a deep runtime proxy, so
-    // `.value` would hand out a Proxy wrapping OAuthUserAgent rather than the
-    // instance. Its methods read `#private` fields, and a private field cannot be
-    // reached through a Proxy, so every call would fail with "can't access
-    // private field or method: object is not the right class". This still blocks
-    // assigning `.value`, which is all the readonly wrapper was for.
-    agent: shallowReadonly(_agent),
+    agent: readonly(_agent),
     did: readonly(_did),
     profile: readonly(_profile),
     restoring: readonly(_restoring),
     isAuthenticated,
-    grantedScope,
     loginWithHandle,
-    requestScopes,
     completeCallback,
     restore,
     logout,

@@ -19,7 +19,7 @@ jobs:
       contents: read
       pull-requests: read # for amannn/action-semantic-pull-request to analyze PRs
       statuses: write # for amannn/action-semantic-pull-request to mark status of analyzed PR
-    if: github.repository == 'trueberryless/maintainers.space'
+    if: github.repository == 'maintainers-space/maintainers.space'
     runs-on: ubuntu-latest
     name: 🏷️ Validate PR title
     steps:
@@ -30,6 +30,27 @@ jobs:
             ui
             server
             forge
+            github
+            gitlab
+            bitbucket
+            codeberg
+            gitea
+            tangled
+            atproto
+            auth
+            home
+            timeline
+            notifications
+            search
+            profile
+            settings
+            repo
+            pulls
+            markdown
+            nav
+            appearance
+            commands
+            offline
             docs
             deps
             ci

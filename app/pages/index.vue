@@ -1,12 +1,12 @@
 <script setup lang="ts">
-import { forgeList, getForge } from '~/lib/forges'
+import { forgeList, getForge } from '~/lib/forges/registry'
 import ConfirmModal from '~/components/ConfirmModal.vue'
 import type { ContributionEntry } from '~/components/home/ContributionList.vue'
 
 const { isAuthenticated, profile } = useAuth()
 const { jumpBackIn, clear: clearVisits } = useRepoVisits()
 const home = useHomeFeed()
-const following = useExplore()
+const following = useFollowingRepositories()
 const connectBanner = useDismissible('home-connect-account')
 const overlay = useOverlay()
 const confirmClearHistory = overlay.create(ConfirmModal)
@@ -47,7 +47,7 @@ const contributions = computed<ContributionEntry[]>(() => {
 })
 const contributionsSeen = useSeenItems('home:contributions')
 function contributionId(entry: ContributionEntry): string {
-  return `${entry.kind}:${entry.item.provider}:${entry.item.repo?.fullName}:${entry.item.id}`
+  return `${entry.kind}:${entry.item.provider}:${entry.item.repo.fullName}:${entry.item.id}`
 }
 function isNewContribution(entry: ContributionEntry): boolean {
   return contributionsSeen.isNew(contributionId(entry))
@@ -73,7 +73,7 @@ function quickSearch(): void {
 onMounted(() => {
   if (isAuthenticated.value) {
     home.load()
-    following.load({ scope: 'following', limit: 12 })
+    following.load()
   }
 })
 
@@ -81,7 +81,7 @@ onMounted(() => {
 watch(isAuthenticated, (v) => {
   if (v && !home.loaded.value) {
     home.load()
-    following.load({ scope: 'following', limit: 12 })
+    following.load()
   }
 })
 
@@ -135,9 +135,9 @@ const examples = [
       <div v-if="isAuthenticated" class="mx-auto w-full max-w-5xl space-y-8 py-6">
         <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h1 class="text-2xl font-semibold tracking-tight text-highlighted">
+            <h2 class="text-2xl font-semibold tracking-tight text-highlighted">
               {{ greetingName ? `Welcome back, ${greetingName}` : 'Welcome back' }}
-            </h1>
+            </h2>
             <p class="mt-1 text-sm text-muted">
               Pick up where you left off, or jump into what needs your attention.
             </p>
@@ -218,14 +218,11 @@ const examples = [
 
         <!-- Projects from people you follow -->
         <section v-if="followingRepos.length" class="space-y-3">
-          <div class="flex items-center justify-between">
-            <div class="flex items-center gap-2">
-              <UIcon name="i-lucide-users" class="size-4 text-muted" />
-              <h2 class="text-sm font-semibold uppercase tracking-wide text-muted">
-                Projects from people you follow
-              </h2>
-            </div>
-            <NuxtLink to="/explore" class="text-xs text-primary hover:underline">Explore</NuxtLink>
+          <div class="flex items-center gap-2">
+            <UIcon name="i-lucide-users" class="size-4 text-muted" />
+            <h2 class="text-sm font-semibold uppercase tracking-wide text-muted">
+              Projects from people you follow
+            </h2>
           </div>
           <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             <HomeRepoMiniCard
@@ -240,12 +237,12 @@ const examples = [
       <!-- ============================ Anonymous =========================== -->
       <div v-else class="mx-auto w-full max-w-3xl space-y-10 py-6">
         <div class="space-y-3 text-center">
-          <h1 class="text-3xl font-semibold tracking-tight text-highlighted">
+          <h2 class="text-3xl font-semibold tracking-tight text-highlighted">
             One place for every forge.
-          </h1>
+          </h2>
           <p class="text-muted">
-            Browse repositories across GitHub and Tangled — and link your forge accounts to your
-            atproto identity.
+            Browse repositories on GitHub, GitLab, Codeberg, Gitea, Bitbucket and Tangled, and link
+            your forge accounts to your atproto identity.
           </p>
         </div>
 

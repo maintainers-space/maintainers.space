@@ -48,6 +48,11 @@ export interface CacheOptions<T> {
   /** Bypass the cache, fetch fresh, and replace the entry. */
   force?: boolean
   /**
+   * Keep a response in memory only. Private repository data uses this so it
+   * cannot survive a reload or be visible to another signed-in account.
+   */
+  persist?: boolean
+  /**
    * Called when a *background* revalidation (triggered by serving stale data)
    * resolves with a newer value, so the UI can update in place.
    */
@@ -72,7 +77,7 @@ export async function cached<T>(
 
   // Cold start (nothing in memory yet this session): hydrate from IndexedDB
   // before deciding whether to hit the network.
-  if (!existing) {
+  if (!existing && opts.persist !== false) {
     const persisted = await idbGet<Omit<Entry<T>, 'pending'>>(key)
     if (persisted) {
       existing = persisted
@@ -91,7 +96,7 @@ export async function cached<T>(
       .then((value) => {
         const entry: Entry<T> = { value, fresh: Date.now() + ttl, dead: Date.now() + ttl + swr }
         store.set(key, entry)
-        void idbSet(key, persistable(entry))
+        if (opts.persist !== false) void idbSet(key, persistable(entry))
         return value
       })
       .catch((err) => {
@@ -125,6 +130,83 @@ export async function cached<T>(
   return runFetch()
 }
 
+export interface PrefetchOptions {
+  /**
+   * Always (re)fetch instead of skipping when an offline copy already exists.
+   * Use when the user explicitly seeds a repo and expects it ready now.
+   */
+  force?: boolean
+}
+
+/**
+ * Ensure a value exists for `key` so the page can be read offline, *without*
+ * disturbing normal staleness. Unlike {@link cached}, this never refetches
+ * just because a copy is old: offline availability only needs an entry to
+ * exist, and a normal page visit handles freshness behind
+ * stale-while-revalidate. Skips entirely while offline (returning the stored
+ * value when one exists, otherwise `undefined`), and dedupes on {@link
+ * cached}'s in-flight promise when two callers race to seed the same key.
+ * Returns the stored value if present, or the freshly-fetched one.
+ */
+/** Unwrap the IndexedDB envelope (`{ value, fresh, dead }`) or return undefined. */
+function persistedValue<T>(p: Omit<Entry<T>, 'pending'> | undefined): T | undefined {
+  return p?.value
+}
+
+export async function prefetch<T>(
+  key: string,
+  fetcher: () => Promise<T>,
+  opts: PrefetchOptions = {}
+): Promise<T | undefined> {
+  if (isOffline()) {
+    const mem = store.get(key)
+    if (mem?.value !== undefined) return mem.value as T
+    return persistedValue(await idbGet<Omit<Entry<T>, 'pending'>>(key))
+  }
+
+  const mem = store.get(key)
+  // Join a concurrent seed instead of starting a second request (boot-time
+  // auto() and a user-triggered makeAvailable() can race on the same key).
+  if (mem?.pending !== undefined) return mem.pending as Promise<T>
+  if (!opts.force && mem?.value !== undefined) return mem.value as T
+
+  // IndexedDB stores the envelope `{ value, fresh, dead }` (see persistable).
+  const persisted = await idbGet<Omit<Entry<T>, 'pending'>>(key)
+  if (!opts.force && persisted?.value !== undefined) {
+    store.set(key, persisted as unknown as Entry<T>)
+    return persisted.value
+  }
+
+  // A concurrent prefetch may have recorded its pending promise while we awaited
+  // IndexedDB above — join it rather than starting a duplicate fetch.
+  const afterHydrate = store.get(key)
+  if (afterHydrate?.pending !== undefined) return afterHydrate.pending as Promise<T>
+  if (!opts.force && afterHydrate?.value !== undefined) return afterHydrate.value as T
+
+  // Record our in-flight promise before it settles so a second concurrent
+  // prefetch for the same key joins this one instead of fetching again.
+  const inflight = cached(key, fetcher, { force: true })
+  const marker: Entry<T> = {
+    value: undefined as unknown as T,
+    fresh: 0,
+    dead: 0,
+    pending: inflight
+  }
+  store.set(key, marker)
+  return await inflight
+}
+
+/** True when `key` has a real value in memory (a failed fetch leaves a valueless entry). */
+function hasValue(key: string): boolean {
+  const e = store.get(key)
+  return e !== undefined && e.value !== undefined
+}
+/** Whether an entry exists for `key` in memory or IndexedDB (offline readable). */
+export async function cacheExists(key: string): Promise<boolean> {
+  if (hasValue(key)) return true
+  return (await idbGet<unknown>(key)) !== undefined
+}
+
 /** Drop a single key (or every key with the given prefix when `prefix` is true). */
 export function invalidate(key: string, prefix = false): void {
   if (!prefix) {
@@ -136,6 +218,33 @@ export function invalidate(key: string, prefix = false): void {
     if (k.startsWith(key)) store.delete(k)
   }
   void idbDeletePrefix(key)
+}
+
+/**
+ * Remove every cached payload belonging to one repository. This is used as
+ * soon as a repo is identified as private so old persisted data cannot remain
+ * available after the session that discovered its visibility.
+ */
+export function invalidateRepoCache(provider: string, owner: string, name: string): void {
+  const ref = `${provider}:${owner}:${name}`
+  for (const kind of ['repo-meta', 'repo-code', 'actions']) {
+    invalidate(`${kind}:${ref}`)
+  }
+  for (const kind of [
+    'issue',
+    'pull',
+    'discussion',
+    'issues',
+    'pulls',
+    'discussions',
+    'run',
+    'commits',
+    'commit',
+    'tree',
+    'blob'
+  ]) {
+    invalidate(`${kind}:${ref}:`, true)
+  }
 }
 
 /** Clear the entire cache (e.g. on sign-out, so another account can't read it). */

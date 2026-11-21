@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import type { ForgeRepo } from '~/types/forge'
+import type { RepoCard } from '~/lib/forges/view'
 
-const props = defineProps<{ repo: ForgeRepo }>()
+const props = defineProps<{ repo: RepoCard }>()
 
 const to = computed(
   () =>
@@ -34,7 +34,7 @@ const to = computed(
           <UIcon name="i-lucide-history" class="size-3.5" />{{ formatRelativeTime(repo.updatedAt) }}
         </span>
         <span
-          v-for="t in (repo.topics ?? []).slice(0, 3)"
+          v-for="t in repo.topics.slice(0, 3)"
           :key="t"
           class="rounded-full bg-elevated px-2 py-0.5"
           >{{ t }}</span

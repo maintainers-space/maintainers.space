@@ -1,14 +1,12 @@
 <script setup lang="ts">
-import type { ForgeIssue } from '~/types/forge'
+import type { Thread } from 'forges'
+import { forgeIdOf } from '~/lib/forges/registry'
 
-const props = defineProps<{ issue: ForgeIssue }>()
+const props = defineProps<{ issue: Thread }>()
+const provider = computed(() => forgeIdOf(props.issue.ref))
 
-const to = computed(() => {
-  const r = props.issue.repo
-  if (!r) return props.issue.url ?? '#'
-  const kind = props.issue.isPull ? 'pulls' : 'issues'
-  return `/${r.provider}/${encodeURIComponent(r.owner)}/${encodeURIComponent(r.name)}/${kind}/${props.issue.id}`
-})
+const to = computed(() => threadPathOf(props.issue.ref))
+const isPull = computed(() => props.issue.kind === 'pull_request')
 </script>
 
 <template>
@@ -18,7 +16,7 @@ const to = computed(() => {
   >
     <div class="flex items-start gap-2">
       <UIcon
-        :name="issue.isPull ? 'i-lucide-git-pull-request' : 'i-lucide-circle-dot'"
+        :name="isPull ? 'i-lucide-git-pull-request' : 'i-lucide-circle-dot'"
         class="mt-0.5 size-4 shrink-0"
         :class="issue.state === 'open' ? 'text-success' : 'text-muted'"
       />
@@ -27,13 +25,10 @@ const to = computed(() => {
           <span class="truncate font-medium text-default">{{ issue.title }}</span>
         </div>
         <div class="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted">
-          <ForgeIcon :provider="issue.provider" class="size-3.5" />
-          <span v-if="issue.repo"
-            >{{ issue.repo.fullName
-            }}<template v-if="issue.number">#{{ issue.number }}</template></span
-          >
+          <ForgeIcon :provider="provider" class="size-3.5" />
+          <span>{{ repoFullName(issue.ref.repo) }}#{{ threadNumberOf(issue.ref) }}</span>
           <span v-if="issue.author" class="inline-flex items-center gap-1">
-            <UIcon name="i-lucide-user" class="size-3" />{{ userLabel(issue.author) }}
+            <UIcon name="i-lucide-user" class="size-3" />{{ actorLabel(issue.author) }}
           </span>
           <span v-if="issue.commentCount" class="inline-flex items-center gap-1">
             <UIcon name="i-lucide-message-square" class="size-3" />{{ issue.commentCount }}

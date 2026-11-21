@@ -22,6 +22,36 @@
 
 :root {
   --ui-radius: 0.5rem;
+  --ui-primary: var(--color-brand-700);
+  --ui-text-dimmed: var(--color-zinc-600);
+}
+
+.dark {
+  --ui-primary: var(--color-brand-400);
+  --ui-text-dimmed: var(--color-zinc-400);
+}
+
+/* Solid controls use a dark primary in light mode and a bright primary in dark mode. */
+.bg-primary.text-neutral-900 {
+  color: white;
+}
+
+.dark .bg-primary.text-neutral-900 {
+  color: var(--color-neutral-900);
+}
+
+/*
+ * Soft and subtle controls put primary text on a 10% primary tint. In light mode that falls
+ * short of WCAG AA (4.3:1 for the yellow brand), so the text is darkened there. Mixing from
+ * `--ui-primary` keeps it working for every accent colour.
+ */
+:root:not(.dark) .bg-primary\/10.text-primary {
+  color: color-mix(in oklab, var(--ui-primary), black 30%);
+}
+
+/* Inactive tabs sit on the elevated tab background, where muted text is 4.4:1 in light mode. */
+:root:not(.dark) [role='tablist'] [role='tab'][data-state='inactive'] {
+  color: var(--color-zinc-600);
 }
 
 /*
@@ -40,4 +70,123 @@
 .prose :where(a):has(> img:only-child) img {
   display: inline;
   margin: 0;
+}
+
+/*
+ * GitHub alerts are standalone `[!TYPE]` blockquote markers. The parser adds
+ * these classes only after Markdown is parsed, so markers in fenced code stay
+ * literal.
+ */
+.prose .github-markdown-alert {
+  --github-markdown-alert-accent: var(--color-blue-800);
+  --github-markdown-alert-background: var(--color-blue-50);
+
+  margin-block: 1rem;
+  border-inline-start: 0.25rem solid var(--github-markdown-alert-accent);
+  border-radius: 0.25rem;
+  background: var(--github-markdown-alert-background);
+  padding: 0.75rem 1rem;
+  font-style: normal;
+  font-weight: inherit;
+}
+
+.prose .github-markdown-alert[data-github-alert='tip'] {
+  --github-markdown-alert-accent: var(--color-green-800);
+  --github-markdown-alert-background: var(--color-green-50);
+}
+
+.prose .github-markdown-alert[data-github-alert='important'] {
+  --github-markdown-alert-accent: var(--color-purple-800);
+  --github-markdown-alert-background: var(--color-purple-50);
+}
+
+.prose .github-markdown-alert[data-github-alert='warning'] {
+  --github-markdown-alert-accent: var(--color-amber-800);
+  --github-markdown-alert-background: var(--color-amber-50);
+}
+
+.prose .github-markdown-alert[data-github-alert='caution'] {
+  --github-markdown-alert-accent: var(--color-red-800);
+  --github-markdown-alert-background: var(--color-red-50);
+}
+
+.dark .prose .github-markdown-alert {
+  --github-markdown-alert-accent: var(--color-blue-400);
+  --github-markdown-alert-background: var(--color-blue-950);
+}
+
+.dark .prose .github-markdown-alert[data-github-alert='tip'] {
+  --github-markdown-alert-accent: var(--color-green-400);
+  --github-markdown-alert-background: var(--color-green-950);
+}
+
+.dark .prose .github-markdown-alert[data-github-alert='important'] {
+  --github-markdown-alert-accent: var(--color-purple-400);
+  --github-markdown-alert-background: var(--color-purple-950);
+}
+
+.dark .prose .github-markdown-alert[data-github-alert='warning'] {
+  --github-markdown-alert-accent: var(--color-amber-400);
+  --github-markdown-alert-background: var(--color-amber-950);
+}
+
+.dark .prose .github-markdown-alert[data-github-alert='caution'] {
+  --github-markdown-alert-accent: var(--color-red-400);
+  --github-markdown-alert-background: var(--color-red-950);
+}
+
+.prose .github-markdown-alert p:first-child {
+  margin-top: 0;
+}
+
+.prose .github-markdown-alert p:last-child {
+  margin-bottom: 0;
+}
+
+.prose .github-markdown-alert p:first-of-type::before,
+.prose .github-markdown-alert p:first-of-type::after {
+  content: none;
+}
+
+.prose .github-markdown-alert__title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--github-markdown-alert-accent);
+  font-weight: 600;
+}
+
+.prose .github-markdown-alert__title + br {
+  display: none;
+}
+
+.prose .markdown-suggestion {
+  margin-block: 1rem;
+  overflow: hidden;
+  border: 1px solid color-mix(in oklab, var(--ui-success) 40%, transparent);
+  border-radius: var(--ui-radius);
+}
+
+.prose .markdown-suggestion__title {
+  margin: 0;
+  border-bottom: 1px solid color-mix(in oklab, var(--ui-success) 40%, transparent);
+  background: color-mix(in oklab, var(--ui-success) 8%, transparent);
+  padding: 0.375rem 0.75rem;
+  color: var(--ui-text-highlighted);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.prose .markdown-suggestion pre {
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  background: color-mix(in oklab, var(--ui-success) 10%, var(--ui-bg));
+}
+
+.prose .markdown-suggestion__empty {
+  margin: 0;
+  padding: 0.5rem 0.75rem;
+  color: var(--ui-text-muted);
+  font-size: 0.75rem;
 }

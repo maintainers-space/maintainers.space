@@ -39,7 +39,10 @@ export function formatRelativeTime(input?: string | number | Date | null): strin
   return ''
 }
 
-export function formatDuration(startedAt?: string | null, completedAt?: string | null): string {
+export function formatDuration(
+  startedAt?: string | Date | null,
+  completedAt?: string | Date | null
+): string {
   if (!startedAt || !completedAt) return ''
   const ms = new Date(completedAt).getTime() - new Date(startedAt).getTime()
   if (!Number.isFinite(ms) || ms < 0) return ''
@@ -69,14 +72,6 @@ export function shortDid(did?: string | null): string {
   return `${prefix}${rest.slice(0, 4)}…${rest.slice(-4)}`
 }
 
-/** Best display label for a forge user reference. */
-export function userLabel(user?: { login?: string; displayName?: string | null } | null): string {
-  if (!user) return ''
-  if (user.displayName) return user.displayName
-  const login = user.login ?? ''
-  return login.startsWith('did:') ? shortDid(login) : login
-}
-
 const seg = (s: string): string => encodeURIComponent(s)
 
 /** Encode a slash-delimited path, preserving separators. */
@@ -91,10 +86,6 @@ export function repoPath(loc: { provider: string; owner: string; name: string },
 }
 
 /** Canonical in-app path for a user/org profile. */
-export function userPath(user: { provider: string; login: string }): string {
-  return `/${user.provider}/${seg(user.login)}`
-}
-
 /** GitLab calls them "merge requests" — every other forge says "pull requests". Same route, different word. */
 export function pullsTerm(
   provider: string,
@@ -105,16 +96,10 @@ export function pullsTerm(
   return opts.capitalize ? withPlural.charAt(0).toUpperCase() + withPlural.slice(1) : withPlural
 }
 
-/** Canonical in-app path for an issue or pull request. */
-export function issuePath(issue: {
-  provider: string
-  id: string
-  isPull?: boolean
-  repo?: { owner: string; name: string } | null
-}): string {
-  if (!issue.repo) return '#'
-  const kind = issue.isPull ? 'pulls' : 'issues'
-  return `/${issue.provider}/${seg(issue.repo.owner)}/${seg(issue.repo.name)}/${kind}/${seg(issue.id)}`
+/** A forge's raw CI trigger name for display: `workflow_run` becomes "Workflow run". */
+export function ciEventLabel(raw: string): string {
+  const words = raw.replace(/[_-]+/g, ' ').trim()
+  return words.charAt(0).toUpperCase() + words.slice(1)
 }
 
 /** Lucide icon per pull-request state — shared by StateBadge and the pulls list. */
@@ -133,5 +118,7 @@ export const PULL_STATE_ICON: Record<string, string> = {
 export const PROSE_CLASSES = [
   'prose prose-sm max-w-none dark:prose-invert',
   'prose-pre:bg-muted prose-pre:text-highlighted prose-pre:border prose-pre:border-default',
-  'prose-code:text-highlighted'
+  'prose-code:text-highlighted prose-code:[overflow-wrap:anywhere]',
+  // Typography wraps inline code in literal backticks; forges render it as a plain chip.
+  'prose-code:before:content-none prose-code:after:content-none'
 ].join(' ')

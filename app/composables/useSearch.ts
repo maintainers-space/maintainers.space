@@ -1,44 +1,34 @@
-import { getForge, isForgeId, forgeList } from '~/lib/forges'
-import { parseQuery, type ParsedQuery, type QueryNode, type ResultType } from '~/lib/search/parser'
+import type { ForgeProvider, RepoSearchQuery, Thread, ThreadSearchQuery } from 'forges'
+
+import {
+  canSearchCode,
+  canSearchDiscussions,
+  canSearchUsers,
+  searchCode,
+  searchDiscussions,
+  searchUsers
+} from '~/lib/forges/gaps/search-extra'
+import type { CodeHit, DiscussionHit, UserHit } from '~/lib/forges/gaps/search-extra'
+import { listOwnerRepos } from '~/lib/forges/reads'
+import { forgeList, getForge, isForgeId, repoRefOf } from '~/lib/forges/registry'
+import { toRepoCard } from '~/lib/forges/view'
+import type { RepoCard } from '~/lib/forges/view'
 import { astToGitHubQuery } from '~/lib/search/adapters/github'
 import { astToClientFilterPlan, clientFilterMatches } from '~/lib/search/adapters/generic'
-import { balanceByDominance } from '~/lib/forge-balance'
-import type {
-  ForgeId,
-  ForgeDiscussion,
-  ForgeIssue,
-  ForgeRepo,
-  ForgeSearchCode,
-  ForgeSearchOptions,
-  ForgeUser
-} from '~/types/forge'
+import { parseQuery, type ParsedQuery, type QueryNode, type ResultType } from '~/lib/search/parser'
 
 export interface SearchResults {
-  repos: ForgeRepo[]
-  issues: ForgeIssue[]
-  code: ForgeSearchCode[]
-  users: ForgeUser[]
-  discussions: ForgeDiscussion[]
+  repos: RepoCard[]
+  issues: Thread[]
+  code: CodeHit[]
+  users: UserHit[]
+  discussions: DiscussionHit[]
 }
 
 const DEFAULT_TYPES: ResultType[] = ['repos', 'issues', 'users']
 
-/**
- * Forges with no server-side search API at all: the AST is compiled into a
- * scope (owner/workspace) plus a client-side term filter over listRepos/listIssues
- * instead of a real query. Keyed by which qualifiers resolve the scope.
- */
-const CLIENT_FILTER_SCOPES: Partial<Record<ForgeId, string[]>> = {
-  tangled: ['owner', 'user', 'org', 'handle', 'from', 'author'],
-  bitbucket: ['workspace', 'ws', 'owner']
-}
-
-/** Qualifier-rich AST -> native query string, for forges with a search DSL beyond plain text. */
-const QUERY_ADAPTERS: Partial<
-  Record<ForgeId, (root: QueryNode | null) => { query: string; dropped: string[] }>
-> = {
-  github: astToGitHubQuery
-}
+/** Qualifier keys that scope a repository search to one account. */
+const OWNER_KEYS = ['owner', 'user', 'org', 'workspace', 'ws', 'handle']
 
 /** Flatten an AST to its free-text terms — most forges' search takes plain text. */
 function astToPlainText(node: QueryNode | null): string {
@@ -56,17 +46,67 @@ function astToPlainText(node: QueryNode | null): string {
   }
 }
 
-function sortOption(parsed: ParsedQuery): ForgeSearchOptions['sort'] {
+/** Top-level `key:value` qualifiers, which map onto the package's structured search fields. */
+function collectTopLevelQualifiers(node: QueryNode | null): Map<string, string[]> {
+  const out = new Map<string, string[]>()
+  const visit = (n: QueryNode | null): void => {
+    if (!n) return
+    if (n.type === 'qualifier') out.set(n.key, [...(out.get(n.key) ?? []), n.value])
+    else if (n.type === 'and') n.nodes.forEach(visit)
+  }
+  visit(node)
+  return out
+}
+
+function threadFields(root: QueryNode | null): Partial<ThreadSearchQuery> {
+  const q = collectTopLevelQualifiers(root)
+  const first = (...keys: string[]) => keys.flatMap((k) => q.get(k) ?? [])[0]
+  const is = q.get('is') ?? []
+  const state = first('state') ?? is.find((v) => ['open', 'closed'].includes(v))
+  return {
+    assignee: first('assignee'),
+    author: first('author'),
+    involves: first('involves'),
+    kind:
+      is.includes('pr') || is.includes('pull')
+        ? 'pull_request'
+        : is.includes('issue')
+          ? 'issue'
+          : undefined,
+    labels: q.get('label'),
+    state: state === 'open' || state === 'closed' ? state : undefined
+  }
+}
+
+function repoFields(root: QueryNode | null): Partial<RepoSearchQuery> {
+  const q = collectTopLevelQualifiers(root)
+  return {
+    language: (q.get('language') ?? q.get('lang') ?? [])[0],
+    owner: OWNER_KEYS.flatMap((k) => q.get(k) ?? [])[0]
+  }
+}
+
+function repoSort(parsed: ParsedQuery): RepoSearchQuery['sort'] {
   switch (parsed.sortKey) {
     case 'stars':
       return 'stars'
-    case 'forks':
-      return 'forks'
     case 'updated':
-    case 'pushed':
       return 'updated'
     case 'created':
       return 'created'
+    default:
+      return undefined
+  }
+}
+
+function threadSort(parsed: ParsedQuery): ThreadSearchQuery['sort'] {
+  switch (parsed.sortKey) {
+    case 'updated':
+      return 'updated'
+    case 'created':
+      return 'created'
+    case 'comments':
+      return 'comments'
     default:
       return undefined
   }
@@ -79,24 +119,35 @@ function sortOption(parsed: ParsedQuery): ForgeSearchOptions['sort'] {
 // popularity/recency signal, so a mixed-provider group reads as one ranked list
 // instead of "whichever provider's promise resolved first."
 
+/** Lowercase, with the separators names use (`vue-router`, `nuxt.com`, `owner/name`) read as spaces. */
+function normalizeText(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/[\s\-_./]+/g, ' ')
+    .trim()
+}
+
 function textScore(query: string, ...fields: Array<string | null | undefined>): number {
-  const q = query.trim().toLowerCase()
+  const q = normalizeText(query)
   if (!q) return 0
+  const words = q.split(' ')
   let best = 0
   fields.forEach((f, i) => {
     if (!f) return
-    const hay = f.toLowerCase()
+    const hay = normalizeText(f)
     const weight = i === 0 ? 3 : 1
     let s = 0
     if (hay === q) s = 30
     else if (hay.startsWith(q)) s = 20
     else if (hay.includes(q)) s = 10
+    // A multi-word query rarely appears as one phrase, so credit each word that matches.
+    else s = (8 * words.filter((word) => hay.includes(word)).length) / words.length
     best = Math.max(best, s * weight)
   })
   return best
 }
 
-function rankRepos(list: ForgeRepo[], terms: string): ForgeRepo[] {
+export function rankRepos(list: RepoCard[], terms: string): RepoCard[] {
   return list
     .map((r) => ({
       r,
@@ -109,7 +160,7 @@ function rankRepos(list: ForgeRepo[], terms: string): ForgeRepo[] {
     .map((x) => x.r)
 }
 
-function rankIssues(list: ForgeIssue[], terms: string): ForgeIssue[] {
+function rankIssues(list: Thread[], terms: string): Thread[] {
   return list
     .map((it) => ({
       it,
@@ -117,15 +168,14 @@ function rankIssues(list: ForgeIssue[], terms: string): ForgeIssue[] {
     }))
     .sort(
       (a, b) =>
-        b.score - a.score ||
-        String(b.it.updatedAt ?? '').localeCompare(String(a.it.updatedAt ?? ''))
+        b.score - a.score || (b.it.updatedAt?.getTime() ?? 0) - (a.it.updatedAt?.getTime() ?? 0)
     )
     .map((x) => x.it)
 }
 
-function rankDiscussions(list: ForgeDiscussion[], terms: string): ForgeDiscussion[] {
+function rankDiscussions(list: DiscussionHit[], terms: string): DiscussionHit[] {
   return list
-    .map((d) => ({ d, score: textScore(terms, d.title, d.body) }))
+    .map((d) => ({ d, score: textScore(terms, d.title) }))
     .sort(
       (a, b) =>
         b.score - a.score || String(b.d.createdAt ?? '').localeCompare(String(a.d.createdAt ?? ''))
@@ -133,14 +183,14 @@ function rankDiscussions(list: ForgeDiscussion[], terms: string): ForgeDiscussio
     .map((x) => x.d)
 }
 
-function rankUsers(list: ForgeUser[], terms: string): ForgeUser[] {
+function rankUsers(list: UserHit[], terms: string): UserHit[] {
   return list
-    .map((u) => ({ u, score: textScore(terms, u.login, u.displayName) }))
+    .map((u) => ({ u, score: textScore(terms, u.login, u.name) }))
     .sort((a, b) => b.score - a.score)
     .map((x) => x.u)
 }
 
-function rankCode(list: ForgeSearchCode[], terms: string): ForgeSearchCode[] {
+function rankCode(list: CodeHit[], terms: string): CodeHit[] {
   return list
     .map((c) => ({ c, score: textScore(terms, c.path) }))
     .sort((a, b) => b.score - a.score)
@@ -148,7 +198,7 @@ function rankCode(list: ForgeSearchCode[], terms: string): ForgeSearchCode[] {
 }
 
 export function useSearch() {
-  const { get: getToken } = useForgeTokens()
+  const { providerFor } = useForges()
 
   const results = reactive<SearchResults>({
     repos: [],
@@ -157,13 +207,14 @@ export function useSearch() {
     users: [],
     discussions: []
   })
-  const totals = ref<Partial<Record<ResultType, number>>>({})
   const loading = ref(false)
   const error = ref<string | null>(null)
   const notes = ref<string[]>([])
   const parsed = ref<ParsedQuery>(parseQuery(''))
-  const activeProviders = ref<ForgeId[]>([])
+  const activeProviders = ref<string[]>([])
   const activeTypes = ref<ResultType[]>([])
+  // The package returns no result totals, so only what was fetched is counted.
+  const totals = computed<Partial<Record<ResultType, number>>>(() => ({}))
 
   let runToken = 0
 
@@ -173,12 +224,11 @@ export function useSearch() {
     results.code = []
     results.users = []
     results.discussions = []
-    totals.value = {}
     notes.value = []
     error.value = null
   }
 
-  async function run(raw: string, opts?: { limit?: number; noCache?: boolean }): Promise<void> {
+  async function run(raw: string, opts?: { limit?: number }): Promise<void> {
     const q = parseQuery(raw)
     parsed.value = q
     reset()
@@ -190,193 +240,135 @@ export function useSearch() {
     const providers = (q.providers.length ? q.providers : forgeList.map((f) => f.id)).filter(
       isForgeId
     )
-    const hasGithubToken = !!getToken('github')
-    const defaultTypes: ResultType[] = hasGithubToken
-      ? [...DEFAULT_TYPES, 'discussions']
-      : DEFAULT_TYPES
+    const defaultTypes: ResultType[] = [...DEFAULT_TYPES, 'discussions']
     const types = q.resultTypes.length ? q.resultTypes : defaultTypes
     activeProviders.value = providers
     activeTypes.value = types
-    const limit = opts?.limit ?? 20
+    const perPage = opts?.limit ?? 20
     const noteSet = new Set<string>()
-
     const plainText = astToPlainText(q.root).trim()
     const tasks: Promise<void>[] = []
 
-    for (const pid of providers) {
-      const forge = getForge(pid)
-      if (!forge) continue
+    // One list per result type, ordered by relevance across every forge: a search should put the
+    // best match first wherever it lives. This runs after every batch, so the list is ranked while
+    // slower forges are still answering instead of reshuffling at the very end.
+    const rerank = (): void => {
+      results.repos = rankRepos(results.repos, plainText)
+      results.issues = rankIssues(results.issues, plainText)
+      results.discussions = rankDiscussions(results.discussions, plainText)
+      results.users = rankUsers(results.users, plainText)
+      results.code = rankCode(results.code, plainText)
+    }
 
-      const scopeKeys = CLIENT_FILTER_SCOPES[pid]
-      if (scopeKeys) {
-        // No server-side search: list + match locally, scoped to an owner/workspace.
-        const plan = astToClientFilterPlan(q.root, { ownerKeys: scopeKeys })
+    const guard = (work: () => Promise<void>, failure: string): void => {
+      tasks.push(
+        work()
+          .then(() => {
+            if (myToken === runToken) rerank()
+          })
+          .catch(() => {
+            noteSet.add(failure)
+          })
+      )
+    }
+
+    for (const pid of providers) {
+      const descriptor = getForge(pid)
+      const ref = repoRefOf(pid, '', '')
+      const forge: ForgeProvider | undefined = ref ? providerFor(ref) : undefined
+      if (!descriptor || !forge) continue
+      const label = descriptor.label
+
+      // Forges without a search API (Tangled) are searched by listing one owner and matching locally.
+      if (!forge.can('search.repos') && !forge.can('search.threads')) {
+        const plan = astToClientFilterPlan(q.root, { ownerKeys: OWNER_KEYS })
         if (!plan.usable) {
           if (q.providers.includes(pid)) {
-            noteSet.add(`${forge.label} search needs a scope — add ${scopeKeys[0]}:<name>.`)
+            noteSet.add(`${label} search needs a scope — add owner:<name>.`)
           }
           continue
         }
-        const owner = plan.owner!
-        const token = getToken(pid)
-        if (types.includes('repos') && forge.listRepos) {
-          tasks.push(
-            forge
-              .listRepos(owner, { token })
-              .then((repos) => {
-                if (myToken !== runToken) return
-                const matched = repos.filter((r) =>
-                  clientFilterMatches(plan, r.name, r.description, r.fullName)
-                )
-                results.repos.push(...matched.slice(0, limit))
-              })
-              .catch(() => {
-                noteSet.add(`Could not list ${forge.label} repositories for ${owner}.`)
-              })
-          )
-        }
-        if (types.includes('issues') && plan.repoName && forge.listIssues) {
-          const locator = { owner, name: plan.repoName }
-          tasks.push(
-            forge
-              .listIssues(locator, { token, limit: 50 })
-              .then((r) => {
-                if (myToken !== runToken) return
-                const matched = r.items.filter((it) => clientFilterMatches(plan, it.title, it.body))
-                results.issues.push(
-                  ...matched.slice(0, limit).map((it) => ({
-                    ...it,
-                    repo: {
-                      provider: pid,
-                      owner,
-                      name: plan.repoName!,
-                      fullName: `${owner}/${plan.repoName}`
-                    }
-                  }))
-                )
-              })
-              .catch(() => {
-                /* best-effort */
-              })
-          )
+        if (types.includes('repos')) {
+          guard(async () => {
+            const repos = (await listOwnerRepos(forge, plan.owner!)).map(toRepoCard)
+            if (myToken !== runToken) return
+            results.repos.push(
+              ...repos
+                .filter((r) => clientFilterMatches(plan, r.name, r.description, r.fullName))
+                .slice(0, perPage)
+            )
+          }, `Could not list ${label} repositories for ${plan.owner}.`)
         }
         continue
       }
 
-      // Server-side search: resolve a query string (native adapter or plain text),
-      // then attempt every result type the forge supports.
-      const adapter = QUERY_ADAPTERS[pid]
-      let queryText: string
-      if (adapter) {
-        const res = adapter(q.root)
+      // GitHub takes its qualifier DSL verbatim in `text`; every other forge gets plain text
+      // plus whichever qualifiers the package can express as structured fields.
+      let text = plainText
+      if (forge.forge === 'github') {
+        const res = astToGitHubQuery(q.root)
         if (res.dropped.length) {
           noteSet.add(
-            `${forge.label} ignored unsupported qualifier${res.dropped.length > 1 ? 's' : ''}: ${res.dropped.map((d) => d + ':').join(', ')}`
+            `${label} ignored unsupported qualifier${res.dropped.length > 1 ? 's' : ''}: ${res.dropped.map((d) => d + ':').join(', ')}`
           )
         }
-        queryText = res.query.trim()
-      } else {
-        queryText = plainText
+        text = res.query.trim()
       }
-      if (!queryText) continue
+      if (!text) continue
 
-      const base: ForgeSearchOptions = {
-        limit,
-        token: getToken(pid),
-        sort: sortOption(q),
-        order: q.sortOrder,
-        noCache: opts?.noCache
+      if (types.includes('repos') && forge.can('search.repos')) {
+        guard(async () => {
+          const page = await forge.search
+            .repos({
+              direction: q.sortOrder,
+              perPage,
+              sort: repoSort(q),
+              text,
+              ...(forge.forge === 'github' ? {} : repoFields(q.root))
+            })
+            .page()
+          if (myToken === runToken) results.repos.push(...page.items.map(toRepoCard))
+        }, `${label} repository search failed or was rate-limited.`)
       }
-
-      if (types.includes('repos') && forge.searchRepos) {
-        tasks.push(
-          forge
-            .searchRepos(queryText, base)
-            .then((r) => {
-              if (myToken !== runToken) return
-              results.repos.push(...r.items)
-              if (r.total != null)
-                totals.value = { ...totals.value, repos: (totals.value.repos ?? 0) + r.total }
+      if (types.includes('issues') && forge.can('search.threads')) {
+        guard(async () => {
+          const page = await forge.search
+            .threads({
+              direction: q.sortOrder,
+              perPage,
+              sort: threadSort(q),
+              text,
+              ...(forge.forge === 'github' ? {} : threadFields(q.root))
             })
-            .catch(() => {
-              noteSet.add(`${forge.label} repository search failed or was rate-limited.`)
-            })
-        )
+            .page()
+          if (myToken === runToken) results.issues.push(...page.items)
+        }, `${label} issue search failed or was rate-limited.`)
       }
-      if (types.includes('issues') && forge.searchIssues) {
-        tasks.push(
-          forge
-            .searchIssues(queryText, base)
-            .then((r) => {
-              if (myToken !== runToken) return
-              results.issues.push(...r.items)
-              if (r.total != null)
-                totals.value = { ...totals.value, issues: (totals.value.issues ?? 0) + r.total }
-            })
-            .catch(() => {
-              noteSet.add(`${forge.label} issue search failed or was rate-limited.`)
-            })
-        )
+      if (types.includes('users') && canSearchUsers(forge)) {
+        guard(async () => {
+          const users = await searchUsers(forge, text, perPage)
+          if (myToken === runToken) results.users.push(...users)
+        }, `${label} people search failed or was rate-limited.`)
       }
-      if (types.includes('users') && forge.searchUsers) {
-        tasks.push(
-          forge
-            .searchUsers(queryText, base)
-            .then((r) => {
-              if (myToken !== runToken) return
-              results.users.push(...r.items)
-              if (r.total != null)
-                totals.value = { ...totals.value, users: (totals.value.users ?? 0) + r.total }
-            })
-            .catch(() => {
-              noteSet.add(`${forge.label} people search failed or was rate-limited.`)
-            })
-        )
-      }
-      if (types.includes('code') && forge.searchCode) {
-        if (!base.token) {
-          noteSet.add(
-            `Add a ${forge.label} token in Settings → Access tokens to enable code search.`
-          )
+      if (types.includes('code') && forge.forge === 'github') {
+        if (!canSearchCode(forge)) {
+          noteSet.add(`Add a ${label} token in Settings → Access tokens to enable code search.`)
         } else {
-          tasks.push(
-            forge
-              .searchCode(queryText, base)
-              .then((r) => {
-                if (myToken !== runToken) return
-                results.code.push(...r.items)
-                if (r.total != null)
-                  totals.value = { ...totals.value, code: (totals.value.code ?? 0) + r.total }
-              })
-              .catch(() => {
-                noteSet.add(`${forge.label} code search failed.`)
-              })
-          )
+          guard(async () => {
+            const hits = await searchCode(forge, text, perPage)
+            if (myToken === runToken) results.code.push(...hits)
+          }, `${label} code search failed.`)
         }
       }
-      if (types.includes('discussions') && forge.searchDiscussions) {
-        if (!base.token) {
-          noteSet.add(
-            `Add a ${forge.label} token in Settings → Access tokens to search Discussions.`
-          )
-        } else {
-          tasks.push(
-            forge
-              .searchDiscussions(queryText, base)
-              .then((r) => {
-                if (myToken !== runToken) return
-                results.discussions.push(...r.items)
-                if (r.total != null)
-                  totals.value = {
-                    ...totals.value,
-                    discussions: (totals.value.discussions ?? 0) + r.total
-                  }
-              })
-              .catch(() => {
-                noteSet.add(`${forge.label} discussion search failed.`)
-              })
-          )
-        }
+      if (
+        types.includes('discussions') &&
+        forge.forge === 'github' &&
+        canSearchDiscussions(forge)
+      ) {
+        guard(async () => {
+          const hits = await searchDiscussions(forge, text, perPage)
+          if (myToken === runToken) results.discussions.push(...hits)
+        }, `${label} discussion search failed.`)
       }
     }
 
@@ -384,16 +376,6 @@ export function useSearch() {
       await Promise.all(tasks)
     } finally {
       if (myToken === runToken) {
-        const terms = plainText
-        // Rank within each provider first, then interleave providers by
-        // dominance so results read as one fair, forge-agnostic list rather
-        // than "GitHub, then everyone else" once relevance ties are broken by
-        // GitHub's much larger star counts.
-        results.repos = balanceByDominance(rankRepos(results.repos, terms))
-        results.issues = balanceByDominance(rankIssues(results.issues, terms))
-        results.discussions = balanceByDominance(rankDiscussions(results.discussions, terms))
-        results.users = balanceByDominance(rankUsers(results.users, terms))
-        results.code = balanceByDominance(rankCode(results.code, terms))
         notes.value = [...noteSet]
         loading.value = false
       }

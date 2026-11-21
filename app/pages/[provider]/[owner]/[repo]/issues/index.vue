@@ -1,15 +1,16 @@
 <script setup lang="ts">
-import type { ForgeIssue, ForgeIssueState } from '~/types/forge'
+import type { Thread } from 'forges'
 import { useRepoContext } from '~/composables/useRepoContext'
 import { cached, TTL } from '~/lib/cache'
+import { loadThreads } from '~/lib/forges/loaders'
 
-const { provider, owner, name, forge, locator } = useRepoContext()
+const { provider, owner, name, forge, meta } = useRepoContext()
 const base = computed(() =>
   repoPath({ provider: provider.value, owner: owner.value, name: name.value })
 )
 
-const state = ref<ForgeIssueState>('open')
-const items = ref<ForgeIssue[]>([])
+const state = ref<'open' | 'closed'>('open')
+const items = ref<Thread[]>([])
 const loading = ref(false)
 const error = ref<string | null>(null)
 const q = ref('')
@@ -20,38 +21,38 @@ const filtered = computed(() => {
   return items.value.filter(
     (it) =>
       it.title.toLowerCase().includes(term) ||
-      String(it.number ?? '').includes(term) ||
-      (it.author ? userLabel(it.author).toLowerCase().includes(term) : false)
+      threadNumberOf(it.ref).includes(term) ||
+      (it.author ? actorLabel(it.author).toLowerCase().includes(term) : false)
   )
 })
 
 async function load(): Promise<void> {
   const f = forge.value
-  if (!f?.listIssues) return
+  const repo = meta.value
+  if (!f || !repo || !f.can('threads.list', 'issue')) return
   loading.value = true
   error.value = null
   try {
     const key = `issues:${provider.value}:${owner.value}:${name.value}:${state.value}`
-    const page = await cached(
-      key,
-      () => f.listIssues!(locator.value, { state: state.value, limit: 30 }),
-      {
-        ttl: TTL.SHORT
-      }
-    )
-    items.value = page.items
+    items.value = await cached(key, () => loadThreads(f, repo, 'issue', state.value), {
+      ttl: TTL.SHORT
+    })
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Failed to load issues.'
+    error.value = forgeErrorMessage(e, 'Failed to load issues.')
   } finally {
     loading.value = false
   }
 }
 
-watch([provider, owner, name, state], load)
+watch([provider, owner, name, state, meta], load)
 onMounted(load)
 
-function itemLink(it: ForgeIssue): string {
-  return `${base.value}/issues/${encodeURIComponent(it.id)}`
+function itemLink(it: Thread): string {
+  return threadPathOf(it.ref)
+}
+
+function itemCacheKey(it: Thread): string {
+  return `issue:${provider.value}:${owner.value}:${name.value}:${threadRouteId(it.ref)}`
 }
 </script>
 
@@ -102,31 +103,42 @@ function itemLink(it: ForgeIssue): string {
     </div>
 
     <ul v-else class="divide-y divide-default overflow-hidden rounded-lg border border-default">
-      <li v-for="it in filtered" :key="it.id">
-        <NuxtLink
+      <li v-for="it in filtered" :key="it.ref.number">
+        <CommonOfflineLink
           :to="itemLink(it)"
+          :cache-key="itemCacheKey(it)"
           class="flex items-start gap-3 px-4 py-3 transition hover:bg-elevated/40"
         >
-          <UIcon
-            :name="it.state === 'open' ? 'i-lucide-circle-dot' : 'i-lucide-check-circle'"
-            class="mt-0.5 size-4 shrink-0"
-            :class="it.state === 'open' ? 'text-success' : 'text-primary'"
-          />
-          <div class="min-w-0 flex-1">
-            <p class="truncate text-sm font-medium text-default">{{ it.title }}</p>
-            <div class="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-muted">
-              <span v-if="it.number">#{{ it.number }}</span>
-              <span v-if="it.author">· {{ userLabel(it.author) }}</span>
-              <span v-if="it.updatedAt">· {{ formatRelativeTime(it.updatedAt) }}</span>
+          <template #default="{ offline }">
+            <UIcon
+              :name="
+                offline
+                  ? 'i-lucide-wifi-off'
+                  : it.state === 'open'
+                    ? 'i-lucide-circle-dot'
+                    : 'i-lucide-check-circle'
+              "
+              class="mt-0.5 size-4 shrink-0"
+              :class="
+                offline ? 'text-muted' : it.state === 'open' ? 'text-success' : 'text-primary'
+              "
+            />
+            <div class="min-w-0 flex-1">
+              <p class="truncate text-sm font-medium text-default">{{ it.title }}</p>
+              <div class="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-muted">
+                <span>#{{ threadNumberOf(it.ref) }}</span>
+                <span v-if="it.author">· {{ actorLabel(it.author) }}</span>
+                <span v-if="it.updatedAt">· {{ formatRelativeTime(it.updatedAt) }}</span>
+              </div>
             </div>
-          </div>
-          <span
-            v-if="it.commentCount"
-            class="inline-flex shrink-0 items-center gap-1 text-xs text-muted"
-          >
-            <UIcon name="i-lucide-message-square" class="size-3.5" />{{ it.commentCount }}
-          </span>
-        </NuxtLink>
+            <span
+              v-if="it.commentCount"
+              class="inline-flex shrink-0 items-center gap-1 text-xs text-muted"
+            >
+              <UIcon name="i-lucide-message-square" class="size-3.5" />{{ it.commentCount }}
+            </span>
+          </template>
+        </CommonOfflineLink>
       </li>
     </ul>
   </div>

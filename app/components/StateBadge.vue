@@ -1,8 +1,6 @@
 <script setup lang="ts">
 import type { BadgeProps } from '@nuxt/ui'
-import type { ForgeIssueState, ForgePullState, ForgeRunStatus } from '~/types/forge'
-
-type AnyState = ForgeIssueState | ForgePullState | ForgeRunStatus | string
+type AnyState = string
 
 const props = withDefaults(
   defineProps<{ state: AnyState; kind?: 'issue' | 'pull' | 'run'; size?: 'xs' | 'sm' | 'md' }>(),

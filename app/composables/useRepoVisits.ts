@@ -7,7 +7,7 @@
 // actions, ...) you've actually engaged with, not just how many times you
 // glanced at the overview. Kept indefinitely — `clear()` is the only way out,
 // wired to a "Clear history" control on the home page.
-import type { ForgeRepo } from '~/types/forge'
+import type { RepoCard } from '~/lib/forges/view'
 
 const STORAGE_KEY = 'maintainers.space:repo-visits'
 const MAX_ENTRIES = 80
@@ -81,7 +81,7 @@ export function useRepoVisits() {
   /** Record a visit to a repository (called from the repo shell page). */
   function record(
     r: Pick<
-      ForgeRepo,
+      RepoCard,
       'provider' | 'owner' | 'name' | 'fullName' | 'description' | 'language' | 'stars'
     >
   ): void {
@@ -105,7 +105,7 @@ export function useRepoVisits() {
   }
 
   /** Record that a specific section (issues/pulls/actions/...) of an already-visited repo was opened. */
-  function recordSection(r: Pick<ForgeRepo, 'provider' | 'owner' | 'name'>, section: string): void {
+  function recordSection(r: Pick<RepoCard, 'provider' | 'owner' | 'name'>, section: string): void {
     if (!import.meta.client || !r?.owner || !r?.name) return
     const k = keyOf(r)
     const prev = _visits.value[k]

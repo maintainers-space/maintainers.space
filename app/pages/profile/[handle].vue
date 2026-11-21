@@ -1,11 +1,20 @@
 <script setup lang="ts">
-import { getForge } from '~/lib/forges'
+import type { Thread } from 'forges'
 import { fetchPublicProfile, listPublicRecords } from '~/lib/atproto/public'
 import { FORGE_ACCOUNT_COLLECTION, type ForgeAccountRecord } from '~/composables/useForgeAccounts'
-import type { ForgeIssue, ForgeRepo } from '~/types/forge'
+import { listOwnerRepos } from '~/lib/forges/reads'
+import { ownerWebUrl, repoRefOf } from '~/lib/forges/registry'
+import { toRepoCard } from '~/lib/forges/view'
+import type { RepoCard } from '~/lib/forges/view'
+import { toWorkItem, type WorkItem } from '~/lib/work'
 
 const route = useRoute()
-const { get: getToken } = useForgeTokens()
+const { providerFor } = useForges()
+
+function forgeFor(providerId: string) {
+  const ref = repoRefOf(providerId, '', '')
+  return ref ? providerFor(ref) : undefined
+}
 const handle = computed(() => String(route.params.handle))
 
 const {
@@ -90,7 +99,7 @@ interface LinkedAccountView {
 
 /** Public profile URL on the provider's own site. Linked accounts point here. */
 function externalProfileUrl(provider: string, username: string, profileUrl?: string): string {
-  return profileUrl || getForge(provider)?.ownerWebUrl?.(username) || '#'
+  return profileUrl || ownerWebUrl(provider, username) || '#'
 }
 
 // The atproto identity leads the list and is inherently verified; other forges
@@ -122,19 +131,19 @@ const linkedAccounts = computed<LinkedAccountView[]>(() => {
 const { data: repos, pending: reposPending } = useLiveAsyncData(
   `profile-repos:${handle.value}`,
   async () => {
-    const tangled = getForge('tangled')
-    const jobs: Promise<ForgeRepo[]>[] = []
-
-    if (tangled?.listRepos) {
-      jobs.push(tangled.listRepos(handle.value).catch(() => [] as ForgeRepo[]))
-    }
+    const jobs: Promise<RepoCard[]>[] = []
+    const lists: Array<[string, string]> = [['tangled', handle.value]]
     for (const [providerId, logins] of Object.entries(providerLogins.value)) {
-      const forge = getForge(providerId)
-      if (!forge?.listRepos) continue
-      const token = getToken(providerId)
-      for (const login of logins) {
-        jobs.push(forge.listRepos(login, { token }).catch(() => [] as ForgeRepo[]))
-      }
+      for (const login of logins) lists.push([providerId, login])
+    }
+    for (const [providerId, owner] of lists) {
+      const forge = forgeFor(providerId)
+      if (!forge) continue
+      jobs.push(
+        listOwnerRepos(forge, owner)
+          .then((list) => list.map(toRepoCard))
+          .catch(() => [] as RepoCard[])
+      )
     }
     const out = (await Promise.all(jobs)).flat()
     return out
@@ -142,38 +151,47 @@ const { data: repos, pending: reposPending } = useLiveAsyncData(
       .sort((a, b) => String(b.updatedAt ?? '').localeCompare(String(a.updatedAt ?? '')))
       .slice(0, 24)
   },
-  { watch: [handle, accounts], default: () => [] as ForgeRepo[] }
+  { watch: [handle, accounts], default: () => [] as RepoCard[] }
 )
 
 // Issues/PRs authored and commented on across every forge, pooled and mixed.
 const { data: activity, pending: activityPending } = useLiveAsyncData(
   `profile-activity:${handle.value}`,
-  async (): Promise<{ authored: ForgeIssue[]; commented: ForgeIssue[] }> => {
-    const authoredJobs: Promise<ForgeIssue[]>[] = []
-    const commentedJobs: Promise<ForgeIssue[]>[] = []
+  async (): Promise<{ authored: WorkItem[]; commented: WorkItem[] }> => {
+    const authoredJobs: Promise<Thread[]>[] = []
+    const commentedJobs: Promise<Thread[]>[] = []
     for (const [providerId, logins] of Object.entries(providerLogins.value)) {
-      const forge = getForge(providerId)
+      const forge = forgeFor(providerId)
       const primary = logins[0]
-      if (!forge?.searchIssues || !primary) continue
-      const token = getToken(providerId)
-      const opts = { token, sort: 'updated' as const, order: 'desc' as const, limit: 8 }
+      if (!forge?.can('search.threads') || !primary) continue
+      const query = { direction: 'desc' as const, perPage: 8, sort: 'updated' as const }
       authoredJobs.push(
-        forge
-          .searchIssues(`author:${primary}`, opts)
+        forge.search
+          .threads({ ...query, author: primary })
+          .page()
           .then((r) => r.items)
-          .catch(() => [] as ForgeIssue[])
+          .catch(() => [] as Thread[])
       )
       commentedJobs.push(
-        forge
-          .searchIssues(`commenter:${primary} -author:${primary}`, opts)
-          .then((r) => r.items)
-          .catch(() => [] as ForgeIssue[])
+        forge.search
+          .threads({ ...query, involves: primary })
+          .page()
+          .then((r) => r.items.filter((t) => t.author?.login !== primary))
+          .catch(() => [] as Thread[])
       )
     }
-    const byRecency = (a: ForgeIssue, b: ForgeIssue) =>
-      String(b.updatedAt ?? '').localeCompare(String(a.updatedAt ?? ''))
-    const authored = (await Promise.all(authoredJobs)).flat().sort(byRecency).slice(0, 8)
-    const commented = (await Promise.all(commentedJobs)).flat().sort(byRecency).slice(0, 8)
+    const byRecency = (a: Thread, b: Thread) =>
+      (b.updatedAt?.getTime() ?? 0) - (a.updatedAt?.getTime() ?? 0)
+    const authored = (await Promise.all(authoredJobs))
+      .flat()
+      .sort(byRecency)
+      .slice(0, 8)
+      .map(toWorkItem)
+    const commented = (await Promise.all(commentedJobs))
+      .flat()
+      .sort(byRecency)
+      .slice(0, 8)
+      .map(toWorkItem)
     return { authored, commented }
   },
   { watch: [handle, accounts], default: () => ({ authored: [], commented: [] }) }
@@ -230,9 +248,9 @@ useHead(() => ({ title: `${displayName.value} · maintainers.space` }))
               :icon="!profile.avatar ? 'i-lucide-user' : undefined"
             />
             <div class="min-w-0 flex-1">
-              <h1 class="text-2xl font-semibold tracking-tight text-highlighted">
+              <h2 class="text-2xl font-semibold tracking-tight text-highlighted">
                 {{ displayName }}
-              </h1>
+              </h2>
               <div class="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted">
                 <span>@{{ profile.handle }}</span>
                 <span class="font-mono text-xs">· {{ shortDid(profile.did) }}</span>

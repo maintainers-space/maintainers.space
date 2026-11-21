@@ -1,7 +1,9 @@
-import { forgeList } from '~/lib/forges'
 import { fetchFollows } from '~/lib/atproto/public'
 import { cached, TTL } from '~/lib/cache'
-import type { ForgeContribution } from '~/types/forge'
+import type { Contribution } from '~/lib/activity'
+import { listFollowing, listUserEvents } from '~/lib/forges/gaps/social'
+import { listTangledRepos } from '~/lib/forges/gaps/tangled'
+import { forgeIdOf } from '~/lib/forges/registry'
 
 /** Bounded-concurrency map so the friends fan-out stays responsive. */
 async function mapLimit<T, R>(
@@ -22,11 +24,11 @@ async function mapLimit<T, R>(
 }
 
 /** Drop low-signal noise: starring repos, and the generic "was active" fallback that carries no real subject. */
-function meaningful(c: ForgeContribution): boolean {
+function meaningful(c: Contribution): boolean {
   return c.kind !== 'star' && c.kind !== 'other'
 }
 
-function dedupe(items: ForgeContribution[]): ForgeContribution[] {
+function dedupe(items: Contribution[]): Contribution[] {
   const seen = new Set<string>()
   return items.filter((c) => {
     const key = `${c.provider}:${c.id}`
@@ -43,12 +45,12 @@ function dedupe(items: ForgeContribution[]): ForgeContribution[] {
  * others) can't crowd out the rest — each is capped to at most half the feed.
  * Bounded to a sane maximum. Low-signal noise (stars) is already filtered upstream.
  */
-function selectFriends(items: ForgeContribution[], cap = 6, max = 80): ForgeContribution[] {
+function selectFriends(items: Contribution[], cap = 6, max = 80): Contribution[] {
   const sorted = [...items].sort((a, b) => b.createdAt.localeCompare(a.createdAt))
   const perAuthor = new Map<string, number>()
   const perProvider = new Map<string, number>()
   const providerCap = Math.max(1, Math.ceil(max / 2))
-  const out: ForgeContribution[] = []
+  const out: Contribution[] = []
   for (const it of sorted) {
     const authorCount = perAuthor.get(it.actor.login) ?? 0
     if (authorCount >= cap) continue
@@ -64,12 +66,13 @@ function selectFriends(items: ForgeContribution[], cap = 6, max = 80): ForgeCont
 
 /** Cross-forge activity timeline: your own contributions and your friends'. */
 export function useTimeline() {
-  const { get: getToken } = useForgeTokens()
+  const { tokens } = useForgeTokens()
+  const { forges } = useForges()
   const { accounts, loaded, refresh } = useForgeAccounts()
   const { did, profile } = useAuth()
 
-  const meItems = ref<ForgeContribution[]>([])
-  const friendsItems = ref<ForgeContribution[]>([])
+  const meItems = ref<Contribution[]>([])
+  const friendsItems = ref<Contribution[]>([])
   const meLoading = ref(false)
   const friendsLoading = ref(false)
   const meLoaded = ref(false)
@@ -88,26 +91,45 @@ export function useTimeline() {
     return did.value ?? null
   }
 
+  /** Tangled has no event feed, so a person's new repositories stand in for their activity. */
+  async function tangledActivity(handle: string): Promise<Contribution[]> {
+    const tangled = forges.value.get('tangled')
+    if (!tangled) return []
+    const repos = await listTangledRepos(tangled, handle)
+    return repos.flatMap((repo) => {
+      const name = (repo.raw as { record: { name?: string } }).record.name ?? repo.ref.name
+      if (!repo.createdAt) return []
+      return [
+        {
+          actor: { login: handle },
+          createdAt: repo.createdAt.toISOString(),
+          id: `repo:${repo.ref.externalId ?? repo.ref.name}`,
+          impact: 3,
+          kind: 'create' as const,
+          provider: 'tangled',
+          refType: 'repository',
+          repo: { fullName: `${handle}/${name}`, name, owner: handle, url: repo.url },
+          title: name,
+          url: `/tangled/${handle}/${name}`
+        }
+      ]
+    })
+  }
+
   /** Pool "my recent activity" across every forge that exposes an events feed. */
-  async function gatherMe(): Promise<ForgeContribution[]> {
+  async function gatherMe(): Promise<Contribution[]> {
     if (!loaded.value) await refresh()
-    const jobs: Promise<ForgeContribution[]>[] = []
-    for (const forge of forgeList) {
-      if (!forge.listUserEvents) continue
-      if (forge.id === 'tangled') {
+    const jobs: Promise<Contribution[]>[] = []
+    for (const forge of forges.value.providers) {
+      const id = forgeIdOf(forge)
+      if (forge.forge === 'tangled') {
         const self = tangledSelf()
-        if (self)
-          jobs.push(
-            forge.listUserEvents(self, { limit: 100 }).catch(() => [] as ForgeContribution[])
-          )
+        if (self) jobs.push(tangledActivity(self).catch(() => []))
         continue
       }
-      const token = getToken(forge.id)
-      if (!token) continue
-      for (const login of loginsFor(forge.id)) {
-        jobs.push(
-          forge.listUserEvents(login, { token, limit: 100 }).catch(() => [] as ForgeContribution[])
-        )
+      if (!tokens.value[id]) continue
+      for (const login of loginsFor(id)) {
+        jobs.push(listUserEvents(forge, login).catch(() => [] as Contribution[]))
       }
     }
     const chunks = await Promise.all(jobs)
@@ -117,31 +139,26 @@ export function useTimeline() {
   }
 
   /** Pool "activity from people you follow" across every forge. */
-  async function gatherFriends(): Promise<ForgeContribution[]> {
+  async function gatherFriends(): Promise<Contribution[]> {
     if (!loaded.value) await refresh()
     const buckets = await Promise.all(
-      forgeList.map(async (forge) => {
-        if (!forge.listUserEvents) return [] as ForgeContribution[]
-
-        if (forge.id === 'tangled') {
+      forges.value.providers.map(async (forge) => {
+        if (forge.forge === 'tangled') {
           const self = did.value
-          if (!self) return [] as ForgeContribution[]
+          if (!self) return [] as Contribution[]
           const follows = await fetchFollows(self, 60).catch(() => [])
           // Bobbin's rate limit is shared across every maintainers.space user on the same
           // proxy, so keep this fan-out modest rather than bursting requests.
           const chunks = await mapLimit(follows.slice(0, 12), 3, (f) =>
-            forge.listUserEvents!(f.did, { limit: 100 }).catch(() => [] as ForgeContribution[])
+            tangledActivity(f.did).catch(() => [] as Contribution[])
           )
           return chunks.flat()
         }
 
-        const token = getToken(forge.id)
-        if (!token || !forge.listFollowing) return [] as ForgeContribution[]
-        const users = await forge.listFollowing({ token, limit: 100 }).catch(() => [])
+        if (!tokens.value[forgeIdOf(forge)]) return [] as Contribution[]
+        const users = await listFollowing(forge).catch(() => [])
         const chunks = await mapLimit(users.slice(0, 20), 6, (u) =>
-          forge.listUserEvents!(u.login, { token, limit: 100 }).catch(
-            () => [] as ForgeContribution[]
-          )
+          listUserEvents(forge, u.login).catch(() => [] as Contribution[])
         )
         return chunks.flat()
       })

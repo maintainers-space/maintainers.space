@@ -1,36 +1,35 @@
 <script setup lang="ts">
-import type { ForgeActionRun } from '~/types/forge'
+import type { CiRun } from 'forges'
 import { useRepoContext } from '~/composables/useRepoContext'
 import { cached, TTL } from '~/lib/cache'
+import { loadRuns } from '~/lib/forges/loaders'
 
-const { provider, owner, name, forge, locator } = useRepoContext()
+const { provider, owner, name, forge, meta } = useRepoContext()
 const base = computed(() =>
   repoPath({ provider: provider.value, owner: owner.value, name: name.value })
 )
 
-const items = ref<ForgeActionRun[]>([])
+const items = ref<CiRun[]>([])
 const loading = ref(false)
 const error = ref<string | null>(null)
 
 async function load(): Promise<void> {
   const f = forge.value
-  if (!f?.listActionRuns) return
+  const repo = meta.value
+  if (!f || !repo) return
   loading.value = true
   error.value = null
   try {
     const key = `actions:${provider.value}:${owner.value}:${name.value}`
-    const page = await cached(key, () => f.listActionRuns!(locator.value, { limit: 30 }), {
-      ttl: TTL.SHORT
-    })
-    items.value = page.items
+    items.value = await cached(key, () => loadRuns(f, repo), { ttl: TTL.SHORT })
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Failed to load workflow runs.'
+    error.value = forgeErrorMessage(e, 'Failed to load workflow runs.')
   } finally {
     loading.value = false
   }
 }
 
-watch([provider, owner, name], load)
+watch([provider, owner, name, meta], load)
 onMounted(load)
 </script>
 
@@ -58,25 +57,33 @@ onMounted(load)
     </div>
 
     <ul v-else class="divide-y divide-default overflow-hidden rounded-lg border border-default">
-      <li v-for="run in items" :key="run.id">
-        <NuxtLink
-          :to="`${base}/actions/${encodeURIComponent(run.id)}`"
+      <li v-for="run in items" :key="run.ref.id">
+        <CommonOfflineLink
+          :to="`${base}/actions/${encodeURIComponent(run.ref.id)}`"
+          :cache-key="`run:${provider}:${owner}:${name}:${run.ref.id}`"
           class="flex items-start gap-3 px-4 py-3 transition hover:bg-elevated/40"
         >
-          <StateBadge :state="run.status" kind="run" size="sm" class="mt-0.5 shrink-0" />
-          <div class="min-w-0 flex-1">
-            <p class="truncate text-sm font-medium text-default">
-              {{ run.name || run.commitMessage || 'Workflow run' }}
-            </p>
-            <div class="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-muted">
-              <span v-if="run.event" class="capitalize">{{ run.event }}</span>
-              <span v-if="run.branch" class="font-mono">· {{ run.branch }}</span>
-              <span v-if="run.commitSha" class="font-mono">· {{ run.commitSha.slice(0, 7) }}</span>
-              <span v-if="run.actor">· {{ userLabel(run.actor) }}</span>
-              <span v-if="run.createdAt">· {{ formatRelativeTime(run.createdAt) }}</span>
+          <template #default="{ offline }">
+            <UIcon
+              v-if="offline"
+              name="i-lucide-wifi-off"
+              class="mt-0.5 size-4 shrink-0 text-muted"
+            />
+            <StateBadge v-else :state="run.state" kind="run" size="sm" class="mt-0.5 shrink-0" />
+            <div class="min-w-0 flex-1">
+              <p class="truncate text-sm font-medium text-default">
+                {{ run.name || 'Workflow run' }}
+              </p>
+              <div class="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-muted">
+                <span v-if="run.eventRaw">{{ ciEventLabel(run.eventRaw) }}</span>
+                <span v-if="run.branch" class="font-mono">· {{ run.branch }}</span>
+                <span v-if="run.sha" class="font-mono">· {{ run.sha.slice(0, 7) }}</span>
+                <span v-if="run.actor">· {{ actorLabel(run.actor) }}</span>
+                <span v-if="run.createdAt">· {{ formatRelativeTime(run.createdAt) }}</span>
+              </div>
             </div>
-          </div>
-        </NuxtLink>
+          </template>
+        </CommonOfflineLink>
       </li>
     </ul>
   </div>

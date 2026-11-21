@@ -4,5 +4,5 @@
   "singleQuote": true,
   "trailingComma": "none",
   "sortImports": false,
-  "ignorePatterns": [".nuxt", ".output", "pnpm-lock.yaml", ".agents"]
+  "ignorePatterns": [".nuxt", ".output", "pnpm-lock.yaml", ".agents", "FORGE_MATRIX.md"]
 }

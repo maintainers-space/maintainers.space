@@ -51,6 +51,12 @@ const _accounts = ref<ForgeAccount[]>([])
 const _pending = ref(false)
 const _loaded = ref(false)
 
+/** Forget the signed-in account's linked forges, so the next account loads its own. */
+export function resetForgeAccounts(): void {
+  _accounts.value = []
+  _loaded.value = false
+}
+
 export function useForgeAccounts() {
   const { runAuthed, did } = useAuth()
 
